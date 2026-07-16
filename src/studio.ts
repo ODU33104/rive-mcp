@@ -182,6 +182,9 @@ export function startStudio(opts: StudioOptions): StudioHandle {
       if (url.pathname === "/rive.wasm") {
         return send(200, "application/wasm", readFileSync(join(ASSETS_DIR, "rive-canvas.wasm")));
       }
+      if (url.pathname === "/inter.ttf") {
+        return send(200, "font/ttf", readFileSync(join(ASSETS_DIR, "inter.ttf")));
+      }
       if (url.pathname === "/file.riv") {
         if (!existsSync(rivPath)) return send(404, "text/plain", "riv not found yet");
         return send(200, "application/octet-stream", readFileSync(rivPath));
@@ -305,95 +308,201 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 <meta charset="utf-8"><title>rive-mcp Studio</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { --bg:#14161f; --panel:#1c1f2b; --line:#2a2e3f; --fg:#e8eaf2; --dim:#8b90a5; --acc:#e94560; --acc2:#00d9ff; --sel:#20344a; }
+  @font-face { font-family:'Inter'; src:url('/inter.ttf') format('truetype'); font-display:swap; }
+  :root {
+    --bg:#141419; --panel:#1d1d24; --panel-2:#24242d; --border:#2e2e38;
+    --text:#e8e8ee; --text-dim:#9b9ba6; --text-faint:#5f5f6b;
+    --accent:#5ba7ff; --accent-2:#ff4e6b; --ok:#3ecf8e; --warn:#ffb454;
+    --radius:8px; --radius-s:5px;
+    --font:'Inter', system-ui, sans-serif;
+    --mono:ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 system-ui, "Segoe UI", sans-serif; display:flex; height:100vh; overflow:hidden; }
-  #left { width:250px; min-width:210px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; }
-  #right { width:300px; min-width:260px; background:var(--panel); border-left:1px solid var(--line); padding:12px; overflow-y:auto; }
+  body { margin:0; background:var(--bg); color:var(--text); font:12.5px/1.5 var(--font); display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  ::placeholder { color:var(--text-faint); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  /* ---- アプリバー (44px) ---- */
+  #appbar { height:44px; flex-shrink:0; display:flex; align-items:center; gap:16px; padding:0 12px;
+    background:var(--panel); border-bottom:1px solid var(--border); }
+  #appbar .ab-left { display:flex; align-items:center; gap:8px; min-width:0; flex:1; }
+  #appbar .ab-center { display:flex; align-items:center; gap:4px; }
+  #appbar .ab-right { display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end; }
+  #logo { font-size:13px; font-weight:600; letter-spacing:.02em; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  #logo .dot { width:8px; height:8px; border-radius:50%; background:var(--accent-2); display:inline-block; }
+  #fileinfo { font-size:11.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #dirtyBadge { color:var(--warn); font-size:14px; line-height:1; display:none; }
+  #connDot { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; transition:background .12s ease; }
+  #connDot.off { background:var(--accent-2); }
+  /* ---- レイアウト ---- */
+  #main { flex:1; display:flex; min-height:0; }
+  #left { width:240px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  #right { width:300px; background:var(--panel); border-left:1px solid var(--border); padding:12px; overflow-y:auto; flex-shrink:0; }
   #center { flex:1; display:flex; flex-direction:column; min-width:0; }
-  #left, #right { flex-shrink:0; }
+  .gutter { width:5px; margin:0 -2px; cursor:col-resize; flex-shrink:0; z-index:5; }
+  .gutter:hover { background:rgba(91,167,255,.25); }
   #stage { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; background:
-    repeating-conic-gradient(#191c27 0 25%, #14161f 0 50%) 0 0/24px 24px; position:relative; overflow:hidden; }
-  canvas { max-width:92%; max-height:92%; min-width:0; min-height:0; box-shadow:0 8px 40px #0008; border-radius:8px; background:transparent; }
-  #selBox { position:absolute; border:1.5px solid var(--acc2); border-radius:2px; pointer-events:none; display:none;
-    box-shadow:0 0 0 1px #0008; }
+    repeating-conic-gradient(#17171c 0 25%, #101014 0 50%) 0 0/32px 32px; position:relative; overflow:hidden; }
+  canvas { max-width:92%; max-height:92%; min-width:0; min-height:0; box-shadow:0 8px 24px rgba(0,0,0,.4); border-radius:4px; background:transparent; }
+  /* ---- 選択枠 ---- */
+  #selBox { position:absolute; border:1px solid var(--accent); border-radius:2px; pointer-events:none; display:none; }
+  #selBox.dragging { border-style:dashed; }
   #selBox::after { content:''; position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px;
-    background:var(--acc2); border-radius:50%; }
-  h1 { font-size:14px; margin:0; color:var(--acc2); letter-spacing:.5px; white-space:nowrap; }
-  h2 { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin:14px 0 6px; }
+    background:var(--accent); border-radius:50%; }
+  .rzHandle { position:absolute; width:7px; height:7px; margin:-3.5px; background:#fff; border:1px solid var(--accent);
+    border-radius:1.5px; pointer-events:auto; display:none; }
+  #selBox.rz .rzHandle { display:block; }
+  .rzHandle.nw { left:0; top:0; cursor:nwse-resize; }
+  .rzHandle.se { left:100%; top:100%; cursor:nwse-resize; }
+  .rzHandle.ne { left:100%; top:0; cursor:nesw-resize; }
+  .rzHandle.sw { left:0; top:100%; cursor:nesw-resize; }
+  body.grabbing, body.grabbing * { cursor:grabbing !important; }
+  .toolbarSep { width:1px; height:18px; background:var(--border); margin:0 4px; }
+  /* ---- 見出し・ラベル ---- */
+  h2 { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:16px 0 8px; }
   h2:first-child { margin-top:0; }
-  select, input[type=text], input[type=number], textarea { width:100%; background:#12141d; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font:inherit; }
-  input[type=color] { width:100%; height:28px; background:#12141d; border:1px solid var(--line); border-radius:6px; padding:2px; }
-  textarea { font:12px/1.4 Consolas, monospace; resize:vertical; }
+  /* ---- 入力 ---- */
+  select, input[type=text], input[type=number], textarea { width:100%; height:28px; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--border); border-radius:var(--radius-s); padding:4px 8px; font:inherit; transition:border-color .12s ease, box-shadow .12s ease; }
+  textarea { height:auto; }
+  select:focus, input:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(91,167,255,.25); }
+  input[type=color] { width:28px; height:28px; background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-s); padding:2px; flex-shrink:0; }
+  textarea { font:11.5px/1.4 var(--mono); resize:vertical; }
   #scene { min-height:140px; }
-  #aiText { min-height:60px; font-family:inherit; font-size:13px; }
-  button { background:var(--acc); color:#fff; border:0; border-radius:6px; padding:6px 11px; font:inherit; cursor:pointer; margin:2px 4px 2px 0; }
-  button.sec { background:#2a2e3f; }
-  button.mini { padding:2px 8px; font-size:12px; }
-  button:hover { filter:brightness(1.15); }
-  button:disabled { opacity:.45; cursor:default; }
-  .row { display:flex; align-items:center; gap:7px; margin:5px 0; }
-  .row label { flex:1; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .prop { display:grid; grid-template-columns:88px 1fr; align-items:center; gap:6px; margin:4px 0; }
-  .prop label { color:var(--dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  input[type=range] { flex:1.4; accent-color:var(--acc2); }
-  input[type=checkbox] { accent-color:var(--acc); width:15px; height:15px; }
-  #log { font:11px/1.5 Consolas, monospace; color:var(--dim); background:#12141d; border-radius:6px; padding:8px; max-height:110px; overflow-y:auto; white-space:pre-wrap; }
-  #toolbar { padding:7px 12px; background:var(--panel); border-top:1px solid var(--line); display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  #aiText { min-height:60px; font-family:var(--font); font-size:12.5px; }
+  /* ---- ボタン ---- */
+  button { height:28px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-s);
+    padding:0 12px; font:inherit; font-size:12.5px; cursor:pointer; margin:2px 4px 2px 0;
+    transition:border-color .12s ease, background .12s ease, color .12s ease; }
+  button:hover { border-color:var(--accent); background:rgba(91,167,255,.08); }
+  button:active { transform:translateY(1px); }
+  button:disabled { opacity:.45; cursor:default; transform:none; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover { background:#6fb2ff; }
+  button.danger { background:transparent; border-color:var(--accent-2); color:var(--accent-2); }
+  button.mini { height:24px; padding:0 8px; font-size:11.5px; }
+  button.icon { width:28px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+  button.icon svg { width:14px; height:14px; }
+  .row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .row label { flex:1; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* ---- インスペクタ ---- */
+  .isec { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:16px 0 6px; }
+  .isec:first-of-type { margin-top:8px; }
+  .prop { display:grid; grid-template-columns:84px 1fr; align-items:center; gap:8px; margin:4px 0; }
+  .prop > label { color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .prop > label.dragv { cursor:ew-resize; user-select:none; }
+  .prop2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0; }
+  .pcell { display:flex; align-items:center; gap:6px; }
+  .pcell > label { color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; min-width:14px; }
+  .pcell > label.dragv { cursor:ew-resize; user-select:none; }
+  .colorCombo { display:flex; align-items:center; gap:6px; }
+  .colorCombo input[type=text] { font-family:var(--mono); font-size:11.5px; }
+  input[type=range] { height:auto; flex:1.4; accent-color:var(--accent); padding:0; border:0; background:transparent; box-shadow:none !important; }
+  input[type=checkbox] { width:15px; height:15px; accent-color:var(--accent); }
+  /* ---- イベントログ ---- */
+  #log { font:11.5px/1.6 var(--mono); color:var(--text-dim); background:var(--panel-2); border-radius:var(--radius-s); padding:8px; max-height:110px; overflow-y:auto; }
+  .lrow { display:flex; gap:6px; align-items:baseline; white-space:pre-wrap; word-break:break-all; }
+  .ldot { width:6px; height:6px; border-radius:50%; flex-shrink:0; position:relative; top:-1px; background:var(--text-faint); }
+  .ldot.state { background:var(--accent); }
+  .ldot.event { background:var(--warn); }
+  .ldot.error { background:var(--accent-2); }
+  /* ---- ツールバー（再生列） ---- */
+  #toolbar { padding:8px 12px; background:var(--panel); border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   #toolbar input[type=range] { flex:1; min-width:110px; }
-  .badge { display:inline-block; background:#2a2e3f; border-radius:4px; padding:1px 7px; font-size:11px; color:var(--acc2); }
+  #toolbar select { width:auto; height:24px; padding:0 4px; font-size:11.5px; }
+  .badge { display:inline-block; background:var(--panel-2); border:1px solid var(--border); border-radius:4px; padding:1px 8px; font-size:11px; color:var(--accent); }
   .num { width:64px !important; }
-  .hint { font-size:12px; color:var(--dim); margin:4px 0; }
-  #topbar { display:flex; align-items:center; gap:7px; padding:10px 12px 6px; }
-  #topbar .spacer { flex:1; }
-  #treeWrap { flex:1; overflow-y:auto; padding:4px 6px 12px; }
-  .tnode { padding:2px 6px; border-radius:5px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12.5px; }
-  .tnode:hover { background:#232738; }
-  .tnode.on { background:var(--sel); color:#fff; }
-  .tnode .ticon { display:inline-block; width:16px; color:var(--acc2); font-size:11px; }
-  .tnode .ttype { color:var(--dim); font-size:11px; margin-left:5px; }
-  #leftTabs { display:flex; gap:4px; padding:0 10px; }
-  #leftTabs button { flex:1; background:#181b28; border-radius:6px 6px 0 0; margin:0; padding:5px 4px; font-size:12px; color:var(--dim); }
-  #leftTabs button.on { background:#232738; color:var(--fg); }
-  #playPane { display:none; padding:10px 12px; overflow-y:auto; flex:1; }
-  #guide { background:#181b28; border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin:8px 10px; font-size:12px; }
-  #guide ol { margin:5px 0 2px; padding-left:17px; }
-  #guide li { margin:2px 0; }
-  #fileinfo { font-size:11.5px; color:var(--dim); word-break:break-all; padding:0 12px 6px; }
-  #notesBadge { background:var(--acc); color:#fff; display:none; }
-  #timeline { background:var(--panel); border-top:1px solid var(--line); max-height:150px; overflow-y:auto; display:none; }
-  .trow { display:grid; grid-template-columns:150px 1fr; align-items:center; border-bottom:1px solid #20222f; }
-  .trow .tlabel { font-size:11px; color:var(--dim); padding:3px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .tlane { position:relative; height:20px; background:#161925; }
-  .tkey { position:absolute; top:50%; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; background:var(--acc2); transform:rotate(45deg); cursor:pointer; }
-  .tkey:hover { background:#fff; }
-  #tcursor { position:absolute; top:0; bottom:0; width:1px; background:var(--acc); pointer-events:none; }
+  .hint { font-size:11.5px; color:var(--text-dim); margin:4px 0; }
+  /* ---- 階層ツリー ---- */
+  #treeWrap { flex:1; overflow-y:auto; padding:4px 4px 12px; }
+  .tnode { height:26px; display:flex; align-items:center; gap:5px; padding:0 8px; cursor:pointer; white-space:nowrap;
+    overflow:hidden; font-size:12.5px; border-left:3px solid transparent; transition:background .12s ease; }
+  .tnode:hover { background:var(--panel-2); }
+  .tnode.on { border-left-color:var(--accent); background:rgba(91,167,255,.12); color:#fff; }
+  .tnode .chev { width:12px; height:12px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+    color:var(--text-dim); transition:transform .12s ease; transform:rotate(90deg); }
+  .tnode .chev.closed { transform:rotate(0deg); }
+  .tnode .chev svg { width:8px; height:8px; }
+  .tnode .ticon { width:14px; height:14px; flex-shrink:0; color:var(--accent); display:inline-flex; }
+  .tnode .ticon svg { width:14px; height:14px; }
+  .tnode .tname { overflow:hidden; text-overflow:ellipsis; }
+  .tnode .ttype { color:var(--text-dim); font-size:11px; margin-left:auto; padding-left:6px; }
+  #leftTabs { display:flex; gap:4px; padding:8px 8px 0; }
+  #leftTabs button { flex:1; height:26px; background:transparent; border:0; border-radius:var(--radius-s) var(--radius-s) 0 0;
+    margin:0; padding:0 4px; font-size:11.5px; color:var(--text-dim); }
+  #leftTabs button.on { background:var(--panel-2); color:var(--text); }
+  #playPane { display:none; padding:12px; overflow-y:auto; flex:1; }
+  /* ---- 初回ガイド（右下カード） ---- */
+  #guide { position:fixed; right:16px; bottom:16px; z-index:8; width:300px; background:var(--panel);
+    border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); animation:panelIn .15s ease; }
+  #guide .ghead { display:flex; align-items:center; margin-bottom:8px; }
+  #guide .ghead b { font-size:13px; }
+  #guideClose { margin-left:auto; width:22px; height:22px; padding:0; border:0; background:transparent; color:var(--text-dim); font-size:14px; }
+  #guideClose:hover { color:var(--text); background:transparent; }
+  .gstep { display:flex; gap:8px; margin:6px 0; color:var(--text-dim); align-items:baseline; }
+  .gstep .gcheck { width:14px; height:14px; flex-shrink:0; border:1px solid var(--border); border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center; font-size:9px; color:transparent; position:relative; top:2px;
+    transition:background .12s ease, color .12s ease; }
+  .gstep.done { color:var(--text); }
+  .gstep.done .gcheck { background:var(--ok); border-color:var(--ok); color:#0c2a1c; }
+  #notesBadge { background:var(--accent-2); border-color:var(--accent-2); color:#fff; display:none; }
+  /* ---- タイムライン ---- */
+  #timeline { background:var(--panel); border-top:1px solid var(--border); height:160px; overflow-y:auto; display:none; flex-shrink:0; }
+  .trow { display:grid; grid-template-columns:150px 1fr; align-items:center; border-bottom:1px solid var(--border); }
+  .trow .tlabel { font-size:11px; color:var(--text-dim); padding:3px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tlane { position:relative; height:22px; background:var(--bg); transition:background .12s ease; }
+  .trow:hover .tlane { background:#1a1a21; }
+  .tlane.ruler { height:20px; background:var(--panel-2); cursor:ew-resize; }
+  .rtick { position:absolute; top:0; bottom:0; width:1px; background:var(--border); pointer-events:none; }
+  .rtick span { position:absolute; top:2px; left:3px; font-size:9px; color:var(--text-dim); font-family:var(--mono); }
+  .tkey { position:absolute; top:50%; width:8px; height:8px; margin:-4px 0 0 -4px; background:var(--text-dim);
+    transform:rotate(45deg); cursor:ew-resize; transition:transform .12s ease, background .12s ease; }
+  .tkey:hover { transform:rotate(45deg) scale(1.3); background:var(--text); }
+  .tkey.sel { background:var(--accent-2); }
+  .tcur { position:absolute; top:0; bottom:0; width:1px; background:var(--accent-2); pointer-events:none; }
+  .phead { position:absolute; top:0; width:9px; height:9px; margin-left:-5px; background:var(--accent-2);
+    clip-path:polygon(0 0, 100% 0, 50% 100%); pointer-events:none; }
+  /* ---- トースト ---- */
+  #toasts { position:fixed; right:16px; bottom:16px; z-index:20; display:flex; flex-direction:column; gap:8px; align-items:flex-end; pointer-events:none; }
+  .toast { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--ok); border-radius:var(--radius-s);
+    padding:8px 14px; font-size:12px; box-shadow:0 8px 24px rgba(0,0,0,.4); animation:panelIn .15s ease; transition:opacity .4s ease; }
+  .toast.err { border-left-color:var(--accent-2); }
+  .toast.fade { opacity:0; }
+  @keyframes panelIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  /* ---- ヘルプ ---- */
   #helpWrap { position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; z-index:10; }
   #helpWrap.open { display:flex; }
-  #help { background:var(--panel); border:1px solid var(--line); border-radius:12px; max-width:660px; width:92%; max-height:86vh; overflow-y:auto; padding:22px 26px; }
-  #help h3 { color:var(--acc2); margin:0 0 8px; }
-  #help h4 { margin:14px 0 4px; }
-  #help p, #help li { font-size:13px; color:#c6cadb; }
-  #help code { background:#12141d; padding:1px 5px; border-radius:4px; font-size:12px; color:var(--acc2); }
+  #help { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); max-width:660px; width:92%;
+    max-height:86vh; overflow-y:auto; padding:24px; animation:panelIn .15s ease; }
+  #help h3 { color:var(--accent); margin:0 0 8px; font-size:15px; }
+  #help h4 { margin:16px 0 4px; font-size:13px; }
+  #help p, #help li { font-size:12.5px; color:var(--text); }
+  #help code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:11.5px; font-family:var(--mono); color:var(--accent); }
 </style></head><body>
-<div id="left">
-  <div id="topbar">
-    <h1>rive-mcp Studio</h1>
+<div id="appbar">
+  <div class="ab-left">
+    <span id="logo"><span class="dot"></span>rive-mcp studio</span>
+    <span id="fileinfo">-</span>
+    <span id="dirtyBadge" data-i18n-title="dirtyT">●</span>
+  </div>
+  <div class="ab-center">
+    <button id="undoBtn" class="icon" data-i18n-aria="undoA" data-i18n-title="undoA"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4 3 7l3 3"/><path d="M3 7h7a3 3 0 0 1 0 6H8"/></svg></button>
+    <button id="redoBtn" class="icon" data-i18n-aria="redoA" data-i18n-title="redoA"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 4l3 3-3 3"/><path d="M13 7H6a3 3 0 0 0 0 6h2"/></svg></button>
+    <span class="toolbarSep"></span>
+    <button id="addRect" class="mini" data-i18n="addRectBtn"></button>
+    <button id="addEllipse" class="mini" data-i18n="addEllipseBtn"></button>
+    <button id="addText" class="mini" data-i18n="addTextBtn"></button>
+  </div>
+  <div class="ab-right">
     <span class="badge" id="status">…</span>
-    <span class="spacer"></span>
-    <button class="sec mini" id="langBtn">EN</button>
-    <button class="sec mini" id="helpBtn">?</button>
+    <button class="mini" id="langBtn">EN</button>
+    <button class="mini icon" id="helpBtn" data-i18n-aria="helpA">?</button>
+    <span id="connDot" data-i18n-title="connT"></span>
   </div>
-  <div id="fileinfo">-</div>
-  <div id="guide">
-    <b data-i18n="guideTitle"></b>
-    <ol>
-      <li data-i18n="guide1"></li>
-      <li data-i18n="guide2"></li>
-      <li data-i18n="guide3"></li>
-    </ol>
-    <button class="sec mini" id="guideClose" data-i18n="close"></button>
-  </div>
+</div>
+<div id="main">
+<div id="left">
   <div id="leftTabs">
     <button id="tabTree" class="on" data-i18n="tabTree"></button>
     <button id="tabPlay" data-i18n="tabPlay"></button>
@@ -402,51 +511,72 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   <div id="playPane">
     <h2 data-i18n="hArtboard"></h2>
     <select id="artboardSel"></select>
-    <div style="height:5px"></div>
+    <div style="height:8px"></div>
     <select id="smSel"></select>
     <h2 data-i18n="hInputs"></h2>
     <div id="inputs"><span class="hint">-</span></div>
     <h2 data-i18n="hAnim"></h2>
     <select id="animSel"></select>
     <div class="row">
-      <button id="playAnim" data-i18n="play"></button>
-      <button id="backSM" class="sec" data-i18n="backSM"></button>
+      <button id="playAnim" class="primary" data-i18n="play"></button>
+      <button id="backSM" data-i18n="backSM"></button>
     </div>
   </div>
 </div>
+<div class="gutter" id="gutterL"></div>
 <div id="center">
-  <div id="stage"><canvas id="cv" width="800" height="600"></canvas><div id="selBox"></div></div>
+  <div id="stage"><canvas id="cv" width="800" height="600"></canvas><div id="selBox">
+    <div class="rzHandle nw" data-corner="nw"></div>
+    <div class="rzHandle ne" data-corner="ne"></div>
+    <div class="rzHandle sw" data-corner="sw"></div>
+    <div class="rzHandle se" data-corner="se"></div>
+  </div></div>
   <div id="timeline"></div>
   <div id="toolbar">
-    <button id="pauseBtn" class="sec mini">⏸</button>
+    <button id="pauseBtn" class="mini icon" data-i18n-aria="pauseA">⏸</button>
+    <select id="speedSel" data-i18n-aria="speedL">
+      <option value="0.25">0.25x</option>
+      <option value="0.5">0.5x</option>
+      <option value="1" selected>1x</option>
+      <option value="2">2x</option>
+    </select>
     <span class="hint" data-i18n="scrubL"></span>
     <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" disabled>
     <span id="time" class="badge">0.00s</span>
     <span class="hint" data-i18n="zoomL"></span>
     <input type="range" id="zoom" min="0.25" max="3" step="0.05" value="1" style="max-width:110px">
-    <button id="zoomReset" class="sec mini">1:1</button>
-    <button id="snap" class="sec mini" data-i18n="snapshot"></button>
+    <button id="zoomReset" class="mini">1:1</button>
+    <button id="snap" class="mini" data-i18n="snapshot"></button>
   </div>
 </div>
+<div class="gutter" id="gutterR"></div>
 <div id="right">
   <h2 data-i18n="hInspector"></h2>
   <div id="inspector"><div class="hint" data-i18n="noSel"></div></div>
   <h2><span data-i18n="hAI"></span> <span class="badge" id="notesBadge">0</span></h2>
   <textarea id="aiText" data-i18n-ph="aiPlaceholder"></textarea>
   <div class="row">
-    <button id="aiSend" data-i18n="aiSend"></button>
+    <button id="aiSend" class="primary" data-i18n="aiSend"></button>
     <span class="hint" id="aiState"></span>
   </div>
   <div class="hint" data-i18n="aiHint"></div>
-  <h2><span data-i18n="hLog"></span> <button class="sec mini" id="logClear" data-i18n="clear" style="float:right"></button></h2>
+  <h2><span data-i18n="hLog"></span> <button class="mini" id="logClear" data-i18n="clear" style="float:right"></button></h2>
   <div id="log"></div>
   <h2 data-i18n="hScene"></h2>
   <textarea id="scene" spellcheck="false" data-i18n-ph="scenePlaceholder"></textarea>
   <div class="row">
-    <button id="apply" data-i18n="rebuild"></button>
-    <button id="fmt" class="sec mini" data-i18n="format"></button>
+    <button id="apply" class="primary" data-i18n="rebuild"></button>
+    <button id="fmt" class="mini" data-i18n="format"></button>
   </div>
 </div>
+</div>
+<div id="guide">
+  <div class="ghead"><b data-i18n="guideTitle"></b><button id="guideClose" data-i18n-aria="close">×</button></div>
+  <div class="gstep" id="gstep1"><span class="gcheck">✓</span><span data-i18n="guide1"></span></div>
+  <div class="gstep" id="gstep2"><span class="gcheck">✓</span><span data-i18n="guide2"></span></div>
+  <div class="gstep" id="gstep3"><span class="gcheck">✓</span><span data-i18n="guide3"></span></div>
+</div>
+<div id="toasts"></div>
 <div id="helpWrap"><div id="help">
   <h3 data-i18n="helpTitle"></h3>
   <p data-i18n="helpIntro"></p>
@@ -511,6 +641,11 @@ const I18N = {
     editOk: '編集を適用', editNg: '編集失敗: ',
     rivOnlyHint: '（rivを直接編集中 — 生プロパティ）',
     artboardSel: 'アートボード',
+    addRectBtn: '+ 四角形', addEllipseBtn: '+ 楕円', addTextBtn: '+ テキスト',
+    speedL: '再生速度', kfDeleteMin: '最後のキーフレームは削除できません',
+    undoDone: '元に戻しました', redoDone: 'やり直しました', objDeleted: 'オブジェクトを削除しました',
+    undoA: '元に戻す (Ctrl+Z)', redoA: 'やり直す (Ctrl+Y)', helpA: 'ヘルプ', pauseA: '再生 / 一時停止',
+    connT: 'サーバー接続中', connOffT: 'サーバー切断 — 再接続待ち', dirtyT: '未保存の変更（自動再ビルド待ち）',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -551,6 +686,11 @@ const I18N = {
     editOk: 'Edit applied', editNg: 'Edit failed: ',
     rivOnlyHint: '(editing riv directly — raw properties)',
     artboardSel: 'Artboard',
+    addRectBtn: '+ Rect', addEllipseBtn: '+ Ellipse', addTextBtn: '+ Text',
+    speedL: 'Playback speed', kfDeleteMin: 'Cannot delete the last keyframe',
+    undoDone: 'Undo', redoDone: 'Redo', objDeleted: 'Object deleted',
+    undoA: 'Undo (Ctrl+Z)', redoA: 'Redo (Ctrl+Y)', helpA: 'Help', pauseA: 'Play / Pause',
+    connT: 'Connected', connOffT: 'Disconnected — waiting to reconnect', dirtyT: 'Unsaved changes (auto-rebuild pending)',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -559,6 +699,8 @@ function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
   document.getElementById('langBtn').textContent = lang === 'ja' ? 'EN' : '日本語';
 }
 document.getElementById('langBtn').onclick = () => {
@@ -569,7 +711,32 @@ document.getElementById('langBtn').onclick = () => {
 
 // ---- 基本状態 ----------------------------------------------------------------
 const logEl = document.getElementById('log');
-const log = (m) => { logEl.textContent = new Date().toLocaleTimeString() + '  ' + m + '\\n' + logEl.textContent.slice(0, 4000); };
+// イベントログ: type別の色ドット付き行（state=accent / event=warn / error=accent-2 / info=faint）
+const log = (m, type) => {
+  const row = document.createElement('div'); row.className = 'lrow';
+  const dot = document.createElement('span'); dot.className = 'ldot' + (type ? ' ' + type : '');
+  const tx = document.createElement('span'); tx.textContent = new Date().toLocaleTimeString() + '  ' + m;
+  row.appendChild(dot); row.appendChild(tx);
+  logEl.prepend(row);
+  while (logEl.childNodes.length > 80) logEl.removeChild(logEl.lastChild);
+};
+// トースト通知（右下・3秒でフェード。ガイドカード表示中はその上に積む）
+function toast(m, kind) {
+  const box = document.getElementById('toasts');
+  const g = document.getElementById('guide');
+  box.style.bottom = (g && g.style.display !== 'none' && g.offsetHeight) ? (g.offsetHeight + 28) + 'px' : '16px';
+  const d = document.createElement('div');
+  d.className = 'toast' + (kind === 'err' ? ' err' : '');
+  d.textContent = m;
+  box.appendChild(d);
+  setTimeout(() => d.classList.add('fade'), 2600);
+  setTimeout(() => d.remove(), 3000);
+}
+// 初回ガイドのステップ達成チェック
+function guideStep(n) {
+  const el = document.getElementById('gstep' + n);
+  if (el) el.classList.add('done');
+}
 rive.RuntimeLoader.setWasmUrl('/rive.wasm');
 
 let r = null, mode = 'sm', scrubAnim = null, scrubDur = 1, paused = false;
@@ -577,8 +744,46 @@ let sceneSpec = null;       // シーンJSONモード時の spec（編集の正�
 let imageSizes = {};        // 画像id → natural size
 let gTree = null;           // rivのみモードの構造（/tree）
 let sel = null;             // {src:'scene', kind, obj} | {src:'riv', node}
+let keySel = null;          // {tr, k} 選択中のキーフレーム（タイムライン）
 const cv = document.getElementById('cv');
 const $ = (id) => document.getElementById(id);
+
+// ---- Undo/Redo（シーンJSONモードのみ・最大50段） -------------------------------
+const HISTORY_MAX = 50;
+let history = [];
+let redoStack = [];
+function pushHistory() {
+  if (!sceneSpec) return;
+  try {
+    history.push(JSON.parse(JSON.stringify(sceneSpec)));
+    if (history.length > HISTORY_MAX) history.shift();
+    redoStack = [];
+  } catch {}
+}
+function afterHistoryChange() {
+  sel = null; keySel = null;
+  $('scene').value = JSON.stringify(sceneSpec, null, 2);
+  buildTree(); renderInspector(); drawSelBox(); renderTimeline();
+  doRebuild();
+}
+function performUndo() {
+  if (!sceneSpec || !history.length) return;
+  redoStack.push(JSON.parse(JSON.stringify(sceneSpec)));
+  if (redoStack.length > HISTORY_MAX) redoStack.shift();
+  sceneSpec = history.pop();
+  afterHistoryChange();
+  log(t('undoDone'));
+  toast(t('undoDone'));
+}
+function performRedo() {
+  if (!sceneSpec || !redoStack.length) return;
+  history.push(JSON.parse(JSON.stringify(sceneSpec)));
+  if (history.length > HISTORY_MAX) history.shift();
+  sceneSpec = redoStack.pop();
+  afterHistoryChange();
+  log(t('redoDone'));
+  toast(t('redoDone'));
+}
 
 async function loadState() {
   const st = await (await fetch('/state')).json();
@@ -598,9 +803,36 @@ function updateNotesBadge(n) {
   b.textContent = n;
 }
 
+// ---- 再生速度（アニメ単体再生モード限定・独自rAFループでscrubを駆動） -------------------
+let playSpeed = 1;
+let animRafId = null;
+let animLastTs = null;
+let animCurT = 0;
+function stopAnimLoop() {
+  if (animRafId) cancelAnimationFrame(animRafId);
+  animRafId = null; animLastTs = null;
+}
+function animLoopStep(ts) {
+  if (paused || mode !== 'anim' || !r) { animRafId = null; return; }
+  if (animLastTs == null) animLastTs = ts;
+  const dt = (ts - animLastTs) / 1000 * playSpeed;
+  animLastTs = ts;
+  animCurT += dt;
+  if (scrubDur > 0 && animCurT > scrubDur) animCurT = animCurT % scrubDur;
+  seekTo(animCurT);
+  animRafId = requestAnimationFrame(animLoopStep);
+}
+function startAnimLoopIfNeeded() {
+  if (mode === 'anim' && !paused && animRafId == null) {
+    animLastTs = null;
+    animRafId = requestAnimationFrame(animLoopStep);
+  }
+}
+
 // ---- Rive 起動 ---------------------------------------------------------------
 function boot(artboard, smName, animName) {
   if (r) { try { r.cleanup(); } catch {} r = null; }
+  stopAnimLoop();
   paused = false; $('pauseBtn').textContent = '⏸';
   const opts = {
     src: '/file.riv?' + Date.now(),
@@ -615,17 +847,23 @@ function boot(artboard, smName, animName) {
         boot(artboard ?? r.activeArtboard, defaultSM);
         return;
       }
+      if (mode === 'anim') {
+        try { r.pause(); } catch {}
+        animCurT = 0;
+        startAnimLoopIfNeeded();
+      }
       $('status').textContent = 'ready';
+      guideStep(1);
       drawSelBox();
     },
-    onLoadError: (e) => { $('status').textContent = 'load error'; log('load error: ' + e); },
+    onLoadError: (e) => { $('status').textContent = 'load error'; log('load error: ' + e, 'error'); },
   };
   if (artboard) opts.artboard = artboard;
   if (mode === 'sm') { if (smName) opts.stateMachines = smName; }
   else if (animName) { opts.animations = animName; }
   r = new rive.Rive(opts);
-  r.on(rive.EventType.RiveEvent, (e) => log('event: ' + JSON.stringify(e.data)));
-  r.on(rive.EventType.StateChange, (e) => log('state: ' + JSON.stringify(e.data)));
+  r.on(rive.EventType.RiveEvent, (e) => log('event: ' + JSON.stringify(e.data), 'event'));
+  r.on(rive.EventType.StateChange, (e) => log('state: ' + JSON.stringify(e.data), 'state'));
 }
 
 function setOptions(sel_, names, selected) {
@@ -759,19 +997,45 @@ function drawSelBox() {
   box.style.top = (m.oy + (bb.y - bb.h / 2) * m.s) + 'px';
   box.style.width = (bb.w * m.s) + 'px';
   box.style.height = (bb.h * m.s) + 'px';
+  box.classList.toggle('rz', ['shape', 'image', 'text'].includes(sel.kind));
 }
 
 // ---- 階層ツリー ---------------------------------------------------------------
-const KIND_ICON = { group: '⬡', bone: '⌐', shape: '■', image: '🖼', text: 'T', nested: '⊞', artboard: 'A' };
+// タイプ別インラインSVGアイコン（14px・stroke currentColor）
+const KIND_ICON = {
+  shape: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="9" height="9" rx="1"/></svg>',
+  image: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="2.5" width="10" height="9" rx="1"/><circle cx="5.2" cy="5.6" r="1"/><path d="M3 10.5 6 7.5l2 2 1.8-1.8 1.2 1.3"/></svg>',
+  text: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 4V3h7v1M7 3v8M5.7 11h2.6"/></svg>',
+  group: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M7 2.2 11.8 7 7 11.8 2.2 7z"/></svg>',
+  bone: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="3.6" cy="3.6" r="1.6"/><circle cx="10.4" cy="10.4" r="1.6"/><path d="M4.8 4.8 9.2 9.2"/></svg>',
+  nested: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="9" height="9" rx="1"/><path d="M7 2.5v9M2.5 7h9"/></svg>',
+  artboard: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4.5 1.5v11M9.5 1.5v11M1.5 4.5h11M1.5 9.5h11"/></svg>',
+};
+const CHEV_SVG = '<svg viewBox="0 0 8 8"><path d="M2 1l4 3-4 3z" fill="currentColor"/></svg>';
+const collapsedTree = new Set();
 function buildTree() {
   const wrap = $('treeWrap');
   wrap.textContent = '';
-  const addNode = (label, type, depth, onClick, isOn) => {
+  const addNode = (label, type, depth, onClick, isOn, kid) => {
     const d = document.createElement('div');
     d.className = 'tnode' + (isOn ? ' on' : '');
-    d.style.paddingLeft = (8 + depth * 14) + 'px';
-    const ic = document.createElement('span'); ic.className = 'ticon'; ic.textContent = KIND_ICON[type] ?? '·';
-    const nm = document.createElement('span'); nm.textContent = label;
+    d.style.paddingLeft = (5 + depth * 14) + 'px';
+    if (kid && kid.hasKids) {
+      const ch = document.createElement('span');
+      ch.className = 'chev' + (collapsedTree.has(kid.key) ? ' closed' : '');
+      ch.innerHTML = CHEV_SVG;
+      ch.onclick = (ev) => {
+        ev.stopPropagation();
+        if (collapsedTree.has(kid.key)) collapsedTree.delete(kid.key); else collapsedTree.add(kid.key);
+        buildTree();
+      };
+      d.appendChild(ch);
+    } else {
+      const sp = document.createElement('span'); sp.className = 'chev'; sp.style.visibility = 'hidden';
+      d.appendChild(sp);
+    }
+    const ic = document.createElement('span'); ic.className = 'ticon'; ic.innerHTML = KIND_ICON[type] ?? KIND_ICON.shape;
+    const nm = document.createElement('span'); nm.className = 'tname'; nm.textContent = label;
     const ty = document.createElement('span'); ty.className = 'ttype'; ty.textContent = type;
     d.appendChild(ic); d.appendChild(nm); d.appendChild(ty);
     d.onclick = onClick;
@@ -785,16 +1049,22 @@ function buildTree() {
     addNode(abName, 'artboard', 0, () => selectScene('artboard', ab), sel?.kind === 'artboard');
     // グループ階層（parent チェーン）
     const groups = ab.groups ?? [];
-    const depthOf = (g) => { let d = 1, cur = g.parent, guard = 0;
-      while (cur && guard++ < 20) { const p = groups.find(x => x.id === cur); if (!p) break; d++; cur = p.parent; } return d; };
+    const hasChildrenOf = (id) =>
+      groups.some(x => x.parent === id) ||
+      (ab.bones ?? []).some(b => b.parent === id) ||
+      [ab.shapes, ab.images, ab.texts, ab.nested].some(list => (list ?? []).some(o => (o.parent ?? null) === id));
     const emitGroup = (g, depth) => {
-      addNode(g.id, 'group', depth, () => selectScene('group', g), sel?.obj === g);
+      const kids = hasChildrenOf(g.id);
+      addNode(g.id, 'group', depth, () => selectScene('group', g), sel?.obj === g, { key: 'g:' + g.id, hasKids: kids });
+      if (collapsedTree.has('g:' + g.id)) return;
       for (const c of groups.filter(x => x.parent === g.id)) emitGroup(c, depth + 1);
       for (const b of (ab.bones ?? []).filter(b => b.parent === g.id)) emitBone(b, depth + 1);
       emitChildren(g.id, depth + 1);
     };
     const emitBone = (b, depth) => {
-      addNode(b.id, 'bone', depth, () => selectScene('bone', b), sel?.obj === b);
+      const kids = hasChildrenOf(b.id);
+      addNode(b.id, 'bone', depth, () => selectScene('bone', b), sel?.obj === b, { key: 'b:' + b.id, hasKids: kids });
+      if (collapsedTree.has('b:' + b.id)) return;
       for (const c of (ab.bones ?? []).filter(x => x.parent === b.id)) emitBone(c, depth + 1);
       emitChildren(b.id, depth + 1);
     };
@@ -826,12 +1096,14 @@ function buildTree() {
 }
 
 // ---- 選択 & インスペクタ --------------------------------------------------------
-function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; buildTree(); renderInspector(); drawSelBox(); }
+function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
 function selectRiv(node) { sel = { src: 'riv', node }; buildTree(); renderInspector(); drawSelBox(); }
 
 let rebuildTimer = null;
 function scheduleRebuild(delay = 300) {
   $('scene').value = JSON.stringify(sceneSpec, null, 2);
+  $('dirtyBadge').style.display = 'inline-block';
+  guideStep(2);
   if (rebuildTimer) clearTimeout(rebuildTimer);
   rebuildTimer = setTimeout(doRebuild, delay);
 }
@@ -839,37 +1111,99 @@ async function doRebuild() {
   if (!sceneSpec) return;
   $('status').textContent = 'building…';
   const res = await (await fetch('/rebuild', { method: 'POST', body: JSON.stringify(sceneSpec, null, 2) })).json();
-  if (res.ok) { $('status').textContent = 'ready'; }
-  else { log(t('rebuildNg') + res.error); $('status').textContent = 'error'; }
+  if (res.ok) { $('status').textContent = 'ready'; $('dirtyBadge').style.display = 'none'; }
+  else { log(t('rebuildNg') + res.error, 'error'); toast(t('rebuildNg') + res.error, 'err'); $('status').textContent = 'error'; }
 }
 async function rivEditSet(index, name, value) {
   const res = await (await fetch('/edit', { method: 'POST', body: JSON.stringify([{ op: 'set', index, set: { [name]: value } }]) })).json();
   if (res.ok) log(t('editOk') + ': ' + name + ' = ' + value);
-  else log(t('editNg') + res.error);
+  else { log(t('editNg') + res.error, 'error'); toast(t('editNg') + res.error, 'err'); }
 }
 
+const round2 = (v) => Math.round(v * 100) / 100;
+// 数値ラベルの横ドラッグで値変更（Figma/Rive流）
+function bindLabelDrag(labelEl, input) {
+  if (!input || input.type !== 'number' || !input._set) return;
+  labelEl.classList.add('dragv');
+  labelEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    labelEl.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startV = Number(input.value) || 0;
+    const step = Number(input.step) || 1;
+    let pushed = false, lastApply = 0;
+    const move = (ev) => {
+      const nv = round2(startV + (ev.clientX - startX) * step);
+      input.value = nv;
+      if (!pushed) { pushHistory(); pushed = true; }
+      const now = Date.now();
+      if (now - lastApply > 120) { input._set(nv); lastApply = now; }
+    };
+    const up = () => {
+      try { labelEl.releasePointerCapture(e.pointerId); } catch {}
+      labelEl.removeEventListener('pointermove', move);
+      labelEl.removeEventListener('pointerup', up);
+      if (pushed) input._set(Number(input.value));
+    };
+    labelEl.addEventListener('pointermove', move);
+    labelEl.addEventListener('pointerup', up);
+  });
+}
 function propRow(labelText, input) {
   const row = document.createElement('div'); row.className = 'prop';
   const l = document.createElement('label'); l.textContent = labelText;
+  bindLabelDrag(l, input);
   row.appendChild(l); row.appendChild(input);
   return row;
 }
+// 2カラム（x/y・w/h 横並び）行
+function pairRow(aLabel, aInput, bLabel, bInput) {
+  const row = document.createElement('div'); row.className = 'prop2';
+  const mk = (lb, inp) => {
+    const c = document.createElement('div'); c.className = 'pcell';
+    const l = document.createElement('label'); l.textContent = lb;
+    bindLabelDrag(l, inp);
+    c.appendChild(l); c.appendChild(inp);
+    return c;
+  };
+  row.appendChild(mk(aLabel, aInput));
+  if (bInput) row.appendChild(mk(bLabel, bInput));
+  return row;
+}
+function inspSection(box, name) {
+  const h = document.createElement('div'); h.className = 'isec'; h.textContent = name;
+  box.appendChild(h);
+}
 function numField(get, set, step = 1) {
   const i = document.createElement('input'); i.type = 'number'; i.step = step; i.value = round2(get() ?? 0);
-  i.onchange = () => { set(Number(i.value)); };
+  i._set = set;
+  i.onchange = () => { pushHistory(); set(Number(i.value)); };
   return i;
 }
+// 色スウォッチ + hex 入力の複合フィールド
 function colorField(get, set) {
-  const i = document.createElement('input'); i.type = 'color'; i.value = (get() ?? '#ffffff').slice(0, 7);
-  i.oninput = () => set(i.value);
-  return i;
+  const wrap = document.createElement('div'); wrap.className = 'colorCombo';
+  const c = document.createElement('input'); c.type = 'color';
+  const hx = document.createElement('input'); hx.type = 'text'; hx.spellcheck = false;
+  const cur = String(get() ?? '#ffffff');
+  c.value = cur.slice(0, 7); hx.value = cur;
+  let armed = true;
+  c.addEventListener('focus', () => { armed = true; });
+  c.oninput = () => { if (armed) { pushHistory(); armed = false; } hx.value = c.value; set(c.value); };
+  hx.onchange = () => {
+    let v = hx.value.trim();
+    if (v && v[0] !== '#') v = '#' + v;
+    if (/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(v)) { pushHistory(); c.value = v.slice(0, 7); hx.value = v; set(v); }
+    else { hx.value = String(get() ?? '#ffffff'); }
+  };
+  wrap.appendChild(c); wrap.appendChild(hx);
+  return wrap;
 }
 function textField(get, set) {
   const i = document.createElement('input'); i.type = 'text'; i.value = get() ?? '';
-  i.onchange = () => set(i.value);
+  i.onchange = () => { pushHistory(); set(i.value); };
   return i;
 }
-const round2 = (v) => Math.round(v * 100) / 100;
 
 function renderInspector() {
   const box = $('inspector');
@@ -879,24 +1213,32 @@ function renderInspector() {
   if (sel.src === 'scene') {
     const o = sel.obj, kind = sel.kind;
     const title = document.createElement('div');
-    title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--acc2)';
+    title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--accent)';
     title.textContent = (o.id ?? o.name ?? kind) + '  (' + kind + ')';
     box.appendChild(title);
-    const N = (label, key, step = 1, dflt = 0) => box.appendChild(propRow(label, numField(() => o[key] ?? dflt, (v) => { o[key] = v; scheduleRebuild(); }, step)));
+    const NF = (key, step = 1, dflt = 0) => numField(() => o[key] ?? dflt, (v) => { o[key] = v; scheduleRebuild(); }, step);
+    const N = (label, key, step = 1, dflt = 0) => box.appendChild(propRow(label, NF(key, step, dflt)));
     if (kind === 'artboard') {
       const tgt = sceneSpec.artboard && !sceneSpec.artboards ? sceneSpec.artboard : o;
-      box.appendChild(propRow('width', numField(() => tgt.width, (v) => { tgt.width = v; scheduleRebuild(); })));
-      box.appendChild(propRow('height', numField(() => tgt.height, (v) => { tgt.height = v; scheduleRebuild(); })));
+      inspSection(box, 'SIZE');
+      box.appendChild(pairRow(
+        'W', numField(() => tgt.width, (v) => { tgt.width = v; scheduleRebuild(); }),
+        'H', numField(() => tgt.height, (v) => { tgt.height = v; scheduleRebuild(); })));
       const bgHolder = sceneSpec.artboards ? o : sceneSpec;
+      inspSection(box, 'FILL');
       box.appendChild(propRow('background', colorField(() => bgHolder.backgroundColor, (v) => { bgHolder.backgroundColor = v; scheduleRebuild(); })));
       return;
     }
-    N('x', 'x'); N('y', 'y');
+    inspSection(box, 'TRANSFORM');
+    box.appendChild(pairRow('X', NF('x'), 'Y', NF('y')));
     if (kind === 'shape') {
-      if (o.width !== undefined || o.type !== 'polygon') { N('width', 'width'); N('height', 'height'); }
+      if (o.width !== undefined || o.type !== 'polygon') {
+        box.appendChild(pairRow('W', NF('width'), 'H', NF('height')));
+      }
       N('rotation', 'rotation');
       if (o.type === 'rect') N('cornerRadius', 'cornerRadius');
       N('opacity', 'opacity', 0.05, 1);
+      inspSection(box, 'FILL');
       if (o.fill?.color !== undefined || !o.fill?.gradient) {
         if (!o.fill) o.fill = { color: '#ffffff' };
         if (o.fill.color !== undefined) box.appendChild(propRow('fill', colorField(() => o.fill.color, (v) => { o.fill.color = v; scheduleRebuild(); })));
@@ -910,6 +1252,7 @@ function renderInspector() {
     } else if (kind === 'text') {
       const run = o.runs?.[0];
       if (run) {
+        inspSection(box, 'TEXT');
         box.appendChild(propRow('text', textField(() => run.text, (v) => { run.text = v; scheduleRebuild(); })));
         box.appendChild(propRow('fontSize', numField(() => run.fontSize ?? 32, (v) => { run.fontSize = v; scheduleRebuild(); })));
         box.appendChild(propRow('color', colorField(() => run.color ?? '#000000', (v) => { run.color = v; scheduleRebuild(); })));
@@ -923,7 +1266,7 @@ function renderInspector() {
     // rivのみモード: 生プロパティ編集
     const n = sel.node;
     const title = document.createElement('div');
-    title.style.cssText = 'font-weight:600;margin-bottom:2px;color:var(--acc2)';
+    title.style.cssText = 'font-weight:600;margin-bottom:2px;color:var(--accent)';
     title.textContent = (n.name ?? n.type) + '  (' + n.type + ')';
     box.appendChild(title);
     const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = t('rivOnlyHint');
@@ -946,6 +1289,7 @@ function renderInspector() {
 
 // ---- キャンバスのクリック選択 & ドラッグ移動（シーンモード） ---------------------
 let drag = null;
+let resizeDrag = null;
 $('stage').addEventListener('pointerdown', (e) => {
   if (!sceneSpec) return;
   const ab = abSpec();
@@ -966,27 +1310,252 @@ $('stage').addEventListener('pointerdown', (e) => {
   candidates.sort((a, b) => (b.z - a.z) || (a.area - b.area));
   const hit = candidates[0];
   selectScene(hit.kind, hit.o);
-  drag = { startX: ax, startY: ay, ox: hit.o.x, oy: hit.o.y, moved: false };
+  drag = { startX: ax, startY: ay, ox: hit.o.x, oy: hit.o.y, moved: false, historyPushed: false };
   e.preventDefault();
 });
+document.querySelectorAll('.rzHandle').forEach((h) => {
+  h.addEventListener('pointerdown', (e) => {
+    if (!sel || sel.src !== 'scene' || !['shape', 'image', 'text'].includes(sel.kind)) return;
+    e.stopPropagation(); e.preventDefault();
+    const ab = abSpec();
+    const bb = bboxOf(sel.kind, sel.obj, ab);
+    const m = stageMap();
+    const ax = (e.clientX - m.stageRect.left - m.ox) / m.s;
+    const ay = (e.clientY - m.stageRect.top - m.oy) / m.s;
+    resizeDrag = {
+      corner: h.dataset.corner, kind: sel.kind, o: sel.obj,
+      startW: bb.w, startH: bb.h, startCx: sel.obj.x, startCy: sel.obj.y,
+      startAx: ax, startAy: ay, historyPushed: false,
+    };
+  });
+});
+function applyResize(rd, newW, newH, cx, cy) {
+  const o = rd.o;
+  if (rd.kind === 'shape') {
+    if (o.type === 'polygon' && o.points?.length) {
+      const rx = newW / (rd.startW || 1), ry = newH / (rd.startH || 1);
+      o.points = o.points.map((p) => ({ ...p, x: round2(p.x * rx), y: round2(p.y * ry) }));
+    } else {
+      o.width = round2(newW); o.height = round2(newH);
+    }
+  } else if (rd.kind === 'image') {
+    const ratio = (newW / (rd.startW || 1) + newH / (rd.startH || 1)) / 2;
+    o.scale = Math.max(0.01, round2((o.scale ?? 1) * ratio * 100) / 100);
+  } else if (rd.kind === 'text') {
+    if (o.width !== undefined) {
+      o.width = round2(newW);
+      if (o.height !== undefined) o.height = round2(newH);
+    } else if (o.runs?.[0]) {
+      const ratio = (newW / (rd.startW || 1) + newH / (rd.startH || 1)) / 2;
+      o.runs[0].fontSize = Math.max(4, round2((o.runs[0].fontSize ?? 32) * ratio));
+    }
+  }
+  o.x = round2(cx); o.y = round2(cy);
+}
 window.addEventListener('pointermove', (e) => {
-  if (!drag || !sel || sel.src !== 'scene') return;
-  const m = stageMap();
-  const ax = (e.clientX - m.stageRect.left - m.ox) / m.s;
-  const ay = (e.clientY - m.stageRect.top - m.oy) / m.s;
-  sel.obj.x = round2(drag.ox + (ax - drag.startX));
-  sel.obj.y = round2(drag.oy + (ay - drag.startY));
-  drag.moved = true;
-  drawSelBox();
-  scheduleRebuild(160);
+  if (drag && sel && sel.src === 'scene') {
+    if (!drag.historyPushed) { pushHistory(); drag.historyPushed = true; }
+    document.body.classList.add('grabbing');
+    $('selBox').classList.add('dragging');
+    const m = stageMap();
+    const ax = (e.clientX - m.stageRect.left - m.ox) / m.s;
+    const ay = (e.clientY - m.stageRect.top - m.oy) / m.s;
+    sel.obj.x = round2(drag.ox + (ax - drag.startX));
+    sel.obj.y = round2(drag.oy + (ay - drag.startY));
+    drag.moved = true;
+    drawSelBox();
+    scheduleRebuild(160);
+    return;
+  }
+  if (resizeDrag) {
+    if (!resizeDrag.historyPushed) { pushHistory(); resizeDrag.historyPushed = true; }
+    const m = stageMap();
+    const ax = (e.clientX - m.stageRect.left - m.ox) / m.s;
+    const ay = (e.clientY - m.stageRect.top - m.oy) / m.s;
+    const dx = ax - resizeDrag.startAx, dy = ay - resizeDrag.startAy;
+    const signX = resizeDrag.corner.includes('e') ? 1 : -1;
+    const signY = resizeDrag.corner.includes('s') ? 1 : -1;
+    const newW = Math.max(4, resizeDrag.startW + signX * dx);
+    const newH = Math.max(4, resizeDrag.startH + signY * dy);
+    const cx = resizeDrag.startCx + signX * (newW - resizeDrag.startW) / 2;
+    const cy = resizeDrag.startCy + signY * (newH - resizeDrag.startH) / 2;
+    applyResize(resizeDrag, newW, newH, cx, cy);
+    renderInspector();
+    drawSelBox();
+    scheduleRebuild(160);
+  }
 });
 window.addEventListener('pointerup', () => {
   if (drag?.moved) { renderInspector(); scheduleRebuild(0); }
   drag = null;
+  if (resizeDrag) { scheduleRebuild(0); resizeDrag = null; }
+  document.body.classList.remove('grabbing');
+  $('selBox').classList.remove('dragging');
 });
 window.addEventListener('resize', drawSelBox);
 
+// ---- ペインのドラッグリサイズ（min 180/240・localStorage記憶） --------------------
+// 注意: #center は min-width:0 のまま維持（canvas の intrinsic width による押し出し防止）
+function setupGutter(id, paneId, min, max, storageKey, fromRight) {
+  const pane = $(paneId);
+  const saved = Number(localStorage.getItem(storageKey));
+  if (saved >= min && saved <= max) pane.style.width = saved + 'px';
+  $(id).addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const g = $(id);
+    g.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const w = Math.max(min, Math.min(max, fromRight ? (window.innerWidth - ev.clientX) : ev.clientX));
+      pane.style.width = w + 'px';
+      drawSelBox();
+    };
+    const up = () => {
+      g.removeEventListener('pointermove', move);
+      g.removeEventListener('pointerup', up);
+      localStorage.setItem(storageKey, parseInt(pane.style.width, 10));
+      drawSelBox();
+    };
+    g.addEventListener('pointermove', move);
+    g.addEventListener('pointerup', up);
+  });
+}
+setupGutter('gutterL', 'left', 180, 480, 'rive-mcp-pane-left', false);
+setupGutter('gutterR', 'right', 240, 520, 'rive-mcp-pane-right', true);
+
+// ---- キーボード操作（矢印移動・削除・Undo/Redo。入力欄フォーカス時は無効） ------------
+function isEditableFocus() {
+  const ae = document.activeElement;
+  if (!ae) return false;
+  return ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable;
+}
+function genId(prefix) {
+  const ab = abSpec();
+  const all = new Set();
+  for (const list of [ab?.shapes, ab?.images, ab?.texts, ab?.groups, ab?.bones, ab?.nested]) {
+    for (const o of (list ?? [])) all.add(o.id);
+  }
+  let n = 1;
+  while (all.has(prefix + n)) n++;
+  return prefix + n;
+}
+function addShape(type) {
+  if (!sceneSpec) return;
+  pushHistory();
+  const ab = abSpec();
+  const { w, h } = abDims();
+  const o = { id: genId(type), type, x: round2(w / 2), y: round2(h / 2), width: 80, height: 80, fill: { color: '#e94560' } };
+  if (!ab.shapes) ab.shapes = [];
+  ab.shapes.push(o);
+  selectScene('shape', o);
+  scheduleRebuild(0);
+}
+function addText() {
+  if (!sceneSpec) return;
+  pushHistory();
+  const ab = abSpec();
+  const { w, h } = abDims();
+  const o = { id: genId('text'), x: round2(w / 2), y: round2(h / 2), runs: [{ text: 'Text', fontSize: 32, color: '#ffffff' }] };
+  if (!ab.texts) ab.texts = [];
+  ab.texts.push(o);
+  selectScene('text', o);
+  scheduleRebuild(0);
+}
+function deleteSelectedObject() {
+  if (!sceneSpec || !sel || sel.src !== 'scene') return;
+  const listKey = { shape: 'shapes', text: 'texts', image: 'images', group: 'groups' }[sel.kind];
+  if (!listKey) return;
+  const ab = abSpec();
+  const list = ab[listKey];
+  const idx = (list ?? []).findIndex((o) => o.id === sel.obj.id);
+  if (idx < 0) return;
+  pushHistory();
+  list.splice(idx, 1);
+  sel = null;
+  buildTree(); renderInspector(); drawSelBox();
+  scheduleRebuild(0);
+  log(t('objDeleted'));
+  toast(t('objDeleted'));
+}
+function deleteSelectedKeyframe() {
+  if (!keySel) return false;
+  const { tr, k } = keySel;
+  if (!tr.keyframes || tr.keyframes.length <= 1) { log(t('kfDeleteMin')); toast(t('kfDeleteMin'), 'err'); return true; }
+  const idx = tr.keyframes.indexOf(k);
+  if (idx < 0) return false;
+  pushHistory();
+  tr.keyframes.splice(idx, 1);
+  keySel = null;
+  renderTimeline();
+  scheduleRebuild(0);
+  return true;
+}
+window.addEventListener('keydown', (e) => {
+  if (isEditableFocus()) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); performUndo(); return; }
+  if (mod && ((e.key === 'y' || e.key === 'Y') || (e.shiftKey && (e.key === 'z' || e.key === 'Z')))) { e.preventDefault(); performRedo(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (deleteSelectedKeyframe()) { e.preventDefault(); return; }
+    if (sel && sel.src === 'scene') { e.preventDefault(); deleteSelectedObject(); }
+    return;
+  }
+  if (!sceneSpec || !sel || sel.src !== 'scene' || sel.kind === 'artboard') return;
+  const step = e.shiftKey ? 10 : 1;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    pushHistory();
+    if (e.key === 'ArrowUp') sel.obj.y = round2(sel.obj.y - step);
+    else if (e.key === 'ArrowDown') sel.obj.y = round2(sel.obj.y + step);
+    else if (e.key === 'ArrowLeft') sel.obj.x = round2(sel.obj.x - step);
+    else sel.obj.x = round2(sel.obj.x + step);
+    renderInspector(); drawSelBox();
+    scheduleRebuild();
+  }
+});
+$('addRect').onclick = () => addShape('rect');
+$('addEllipse').onclick = () => addShape('ellipse');
+$('addText').onclick = () => addText();
+$('undoBtn').onclick = () => performUndo();
+$('redoBtn').onclick = () => performRedo();
+
 // ---- タイムライン --------------------------------------------------------------
+// 隣接キーフレーム間の線形補間（ダブルクリック追加時の既定値の近似算出用。イージング形状は無視）
+function interpAt(tr, frame) {
+  const kfs = (tr.keyframes ?? []).slice().sort((a, b) => a.frame - b.frame);
+  if (!kfs.length) return 0;
+  if (frame <= kfs[0].frame) return kfs[0].value ?? 0;
+  if (frame >= kfs[kfs.length - 1].frame) return kfs[kfs.length - 1].value ?? 0;
+  for (let i = 0; i < kfs.length - 1; i++) {
+    const a = kfs[i], b = kfs[i + 1];
+    if (frame >= a.frame && frame <= b.frame) {
+      const f = (frame - a.frame) / ((b.frame - a.frame) || 1);
+      const va = a.value ?? 0, vb = b.value ?? 0;
+      return va + (vb - va) * f;
+    }
+  }
+  return kfs[kfs.length - 1].value ?? 0;
+}
+function nearestColor(tr, frame) {
+  const kfs = (tr.keyframes ?? []).slice().sort((a, b) => a.frame - b.frame);
+  if (!kfs.length) return '#ffffff';
+  let best = kfs[0];
+  for (const k of kfs) if (Math.abs(k.frame - frame) < Math.abs(best.frame - frame)) best = k;
+  return best.color ?? '#ffffff';
+}
+function addKeyframeAt(tr, frame) {
+  if (!tr.keyframes) tr.keyframes = [];
+  let existing = tr.keyframes.find((k) => k.frame === frame);
+  if (tr.property === 'fillColor') {
+    const col = existing?.color ?? nearestColor(tr, frame);
+    if (existing) existing.color = col; else tr.keyframes.push({ frame, color: col });
+  } else {
+    const val = round2(interpAt(tr, frame));
+    if (existing) existing.value = val; else tr.keyframes.push({ frame, value: val });
+  }
+  tr.keyframes.sort((a, b) => a.frame - b.frame);
+  return tr.keyframes.find((k) => k.frame === frame);
+}
+let kfDrag = null;
 function renderTimeline() {
   const tl = $('timeline');
   tl.textContent = '';
@@ -997,33 +1566,113 @@ function renderTimeline() {
   tl.style.display = 'block';
   const durS = (anim.duration ?? 60) / (anim.fps ?? 60);
   scrubDur = durS;
+  // ルーラー行（フレーム目盛 10刻み + 再生ヘッドつまみ）
+  {
+    const row = document.createElement('div'); row.className = 'trow';
+    const lb = document.createElement('div'); lb.className = 'tlabel';
+    lb.textContent = anim.name + ' · ' + (anim.duration ?? 60) + 'f';
+    const lane = document.createElement('div'); lane.className = 'tlane ruler';
+    const durF = anim.duration || 1;
+    for (let f = 0; f <= durF; f += 10) {
+      const tick = document.createElement('div'); tick.className = 'rtick';
+      tick.style.left = (100 * f / durF) + '%';
+      const num = document.createElement('span'); num.textContent = f;
+      tick.appendChild(num);
+      lane.appendChild(tick);
+    }
+    const cur = document.createElement('div'); cur.className = 'tcur'; cur.style.left = '0%';
+    const head = document.createElement('div'); head.className = 'phead'; head.style.left = '0%';
+    lane.appendChild(cur); lane.appendChild(head);
+    // ルーラーはドラッグでスクラブ
+    lane.addEventListener('pointerdown', (ev) => {
+      lane.setPointerCapture(ev.pointerId);
+      const scrubAt = (x) => {
+        const rect = lane.getBoundingClientRect();
+        const tsec = ((x - rect.left) / rect.width) * durS;
+        animCurT = Math.max(0, Math.min(durS, tsec));
+        seekTo(animCurT);
+      };
+      scrubAt(ev.clientX);
+      const move = (e2) => scrubAt(e2.clientX);
+      const up = () => { lane.removeEventListener('pointermove', move); lane.removeEventListener('pointerup', up); };
+      lane.addEventListener('pointermove', move);
+      lane.addEventListener('pointerup', up);
+    });
+    row.appendChild(lb); row.appendChild(lane);
+    tl.appendChild(row);
+  }
   for (const tr of anim.tracks ?? []) {
     const row = document.createElement('div'); row.className = 'trow';
     const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = tr.target + ' · ' + tr.property;
     const lane = document.createElement('div'); lane.className = 'tlane';
     for (const k of tr.keyframes ?? []) {
-      const d = document.createElement('div'); d.className = 'tkey';
+      const d = document.createElement('div'); d.className = 'tkey' + (keySel && keySel.tr === tr && keySel.k === k ? ' sel' : '');
       d.style.left = (100 * k.frame / (anim.duration || 1)) + '%';
       d.title = 'f' + k.frame + (k.value !== undefined ? ' = ' + k.value : '') + (k.easing ? ' (' + k.easing + ')' : '');
-      d.onclick = (ev) => { ev.stopPropagation(); seekTo(k.frame / (anim.fps ?? 60)); };
+      d.addEventListener('pointerdown', (ev) => {
+        ev.stopPropagation(); ev.preventDefault();
+        const laneRect = lane.getBoundingClientRect();
+        kfDrag = { tr, k, anim, startClientX: ev.clientX, startFrame: k.frame, laneWidth: laneRect.width, moved: false, historyPushed: false };
+      });
       lane.appendChild(d);
     }
-    const cur = document.createElement('div'); cur.id = 'tcursor'; cur.style.left = '0%';
+    const cur = document.createElement('div'); cur.className = 'tcur'; cur.style.left = '0%';
     lane.appendChild(cur);
     lane.onclick = (ev) => {
+      if (ev.target.classList.contains('tkey')) return;
       const rect = lane.getBoundingClientRect();
       seekTo(((ev.clientX - rect.left) / rect.width) * durS);
+    };
+    lane.ondblclick = (ev) => {
+      if (ev.target.classList.contains('tkey')) return;
+      const rect = lane.getBoundingClientRect();
+      const frac = (ev.clientX - rect.left) / rect.width;
+      const frame = Math.max(0, Math.min(anim.duration || 0, Math.round(frac * (anim.duration || 1))));
+      pushHistory();
+      const k = addKeyframeAt(tr, frame);
+      keySel = { tr, k };
+      renderTimeline();
+      seekTo(frame / (anim.fps ?? 60));
+      scheduleRebuild(0);
     };
     row.appendChild(lb); row.appendChild(lane);
     tl.appendChild(row);
   }
 }
+window.addEventListener('pointermove', (e) => {
+  if (!kfDrag) return;
+  const dx = e.clientX - kfDrag.startClientX;
+  if (!kfDrag.moved && Math.abs(dx) < 3) return;
+  if (!kfDrag.historyPushed) { pushHistory(); kfDrag.historyPushed = true; }
+  kfDrag.moved = true;
+  const durFrames = kfDrag.anim.duration || 1;
+  const deltaFrames = (dx / (kfDrag.laneWidth || 1)) * durFrames;
+  let nf = Math.round(kfDrag.startFrame + deltaFrames);
+  nf = Math.max(0, Math.min(durFrames, nf));
+  kfDrag.k.frame = nf;
+  renderTimeline();
+  scheduleRebuild(160);
+});
+window.addEventListener('pointerup', () => {
+  if (!kfDrag) return;
+  const { tr, k, anim, moved } = kfDrag;
+  keySel = { tr, k };
+  if (!moved) {
+    seekTo(k.frame / (anim.fps ?? 60));
+    renderTimeline();
+  } else {
+    scheduleRebuild(0);
+    renderTimeline();
+  }
+  kfDrag = null;
+});
 function seekTo(tsec) {
   tsec = Math.max(0, Math.min(scrubDur, tsec));
   try { r.scrub(scrubAnim, tsec); } catch {}
   $('scrub').value = scrubDur ? tsec / scrubDur : 0;
   $('time').textContent = tsec.toFixed(2) + 's';
-  document.querySelectorAll('#tcursor').forEach(c => { c.style.left = (100 * tsec / scrubDur) + '%'; });
+  const pct = (100 * tsec / scrubDur) + '%';
+  document.querySelectorAll('.tcur, .phead').forEach(c => { c.style.left = pct; });
 }
 
 // ---- 操作 ----------------------------------------------------------------------
@@ -1041,15 +1690,21 @@ $('playAnim').onclick = () => {
 $('backSM').onclick = () => { mode = 'sm'; $('scrub').disabled = true; boot($('artboardSel').value, $('smSel').value); renderTimeline(); };
 $('scrub').oninput = () => {
   if (!r || mode !== 'anim') return;
-  seekTo(Number($('scrub').value) * scrubDur);
+  animCurT = Number($('scrub').value) * scrubDur;
+  seekTo(animCurT);
 };
 $('pauseBtn').onclick = () => {
   if (!r) return;
   paused = !paused;
-  try { paused ? r.pause() : r.play(); } catch {}
+  if (mode === 'anim') {
+    if (paused) stopAnimLoop(); else startAnimLoopIfNeeded();
+  } else {
+    try { paused ? r.pause() : r.play(); } catch {}
+  }
   $('pauseBtn').textContent = paused ? '▶' : '⏸';
   log(paused ? t('paused') : t('resumed'));
 };
+$('speedSel').onchange = () => { playSpeed = Number($('speedSel').value); };
 $('zoom').oninput = () => { cv.style.transform = 'scale(' + $('zoom').value + ')'; drawSelBox(); };
 $('zoomReset').onclick = () => { $('zoom').value = 1; cv.style.transform = ''; drawSelBox(); };
 $('snap').onclick = () => {
@@ -1061,15 +1716,19 @@ $('snap').onclick = () => {
 $('logClear').onclick = () => { logEl.textContent = ''; };
 $('fmt').onclick = () => {
   try { $('scene').value = JSON.stringify(JSON.parse($('scene').value), null, 2); }
-  catch (e) { log(t('jsonError') + e.message); }
+  catch (e) { log(t('jsonError') + e.message, 'error'); toast(t('jsonError') + e.message, 'err'); }
 };
 $('apply').onclick = async () => {
-  try { sceneSpec = JSON.parse($('scene').value); } catch (e) { log(t('jsonError') + e.message); return; }
+  try { sceneSpec = JSON.parse($('scene').value); } catch (e) { log(t('jsonError') + e.message, 'error'); toast(t('jsonError') + e.message, 'err'); return; }
   sel = null; renderInspector();
   $('status').textContent = 'building…';
   const res = await (await fetch('/rebuild', { method: 'POST', body: JSON.stringify(sceneSpec, null, 2) })).json();
-  if (res.ok) log(t('rebuildOk') + ' (' + res.bytes + ' bytes)' + (res.warnings?.length ? t('warn') + res.warnings.join('; ') : ''));
-  else { log(t('rebuildNg') + res.error); $('status').textContent = 'error'; }
+  if (res.ok) {
+    log(t('rebuildOk') + ' (' + res.bytes + ' bytes)' + (res.warnings?.length ? t('warn') + res.warnings.join('; ') : ''));
+    toast(t('rebuildOk'));
+    $('dirtyBadge').style.display = 'none';
+  }
+  else { log(t('rebuildNg') + res.error, 'error'); toast(t('rebuildNg') + res.error, 'err'); $('status').textContent = 'error'; }
 };
 
 // ---- AIへの指示 -----------------------------------------------------------------
@@ -1082,6 +1741,8 @@ $('aiSend').onclick = async () => {
     updateNotesBadge(res.pending);
     $('aiState').textContent = t('notesSent') + ' (' + res.pending + ')';
     log(t('notesSent') + ': ' + text);
+    toast(t('notesSent'));
+    guideStep(3);
   }
 };
 
@@ -1098,6 +1759,7 @@ sse.onmessage = (e) => {
   if (e.data === 'reload') {
     log(t('fileUpdated'));
     const wasSel = sel;
+    keySel = null;
     if (mode === 'sm') boot($('artboardSel').value, $('smSel').value || undefined);
     else boot($('artboardSel').value, null, scrubAnim);
     loadState().then(() => {
@@ -1114,8 +1776,11 @@ sse.onmessage = (e) => {
     updateNotesBadge(0);
     $('aiState').textContent = t('notesTaken');
     log(t('notesTaken'));
+    toast(t('notesTaken'));
   } else { $('status').textContent = 'ready'; }
 };
+sse.onopen = () => { $('connDot').classList.remove('off'); $('connDot').title = t('connT'); };
+sse.onerror = () => { $('connDot').classList.add('off'); $('connDot').title = t('connOffT'); };
 
 applyLang();
 loadState().then(() => boot());
