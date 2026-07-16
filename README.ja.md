@@ -50,15 +50,19 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_inspect` | アートボード / アニメーション（duration・fps・loop）/ State Machine と入力（型・初期値）の全メタデータ抽出 |
 | `riv_render_frame` | 任意時刻の1フレームを PNG レンダリング（インライン画像 + ファイル保存） |
 | `riv_render_gif` | アニメーションをプレビュー GIF に変換 |
+| `riv_render_video` | アニメーション/SM 実行を WebM 動画に録画 |
+| `riv_render_sprites` | スプライトシート PNG + メタデータ JSON（ゲームエンジン向け） |
 | `riv_play_state_machine` | 入力の set / fire → advance → 状態遷移レポート（+任意でフレームキャプチャ）|
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
 | `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き）、State Machine（入力・状態・条件付き遷移・exit time）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
-| `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）。roundtripはvehicles.rivでピクセル完全一致を検証済み |
+| `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
+| `riv_extract_assets` | .riv 埋め込み画像/フォントの抽出 |
+| `riv_visual_diff` | 2つの .riv のピクセル差分（一致率 + 相違箇所を赤表示した差分画像） |
 | `riv_rig_character` | **キャラPNG1枚→完成リグをワンコール生成**: パーツ切り出し+2ボーン頭メッシュ+目パチ+idle/happyアニメ+SM |
 | `riv_diff` | 2つの.rivの構造差分（型数変化・オブジェクト単位のプロパティ差分） |
-| `riv_studio` | **ローカルWebスタジオ**（公式エディタ風3ペイン・日英UI）: 階層ツリー / キャンバス上のクリック選択・ドラッグ移動 / インスペクタ（位置・サイズ・回転・色・テキストを直接編集→即反映）/ タイムライン（キーフレーム表示・クリックでシーク）/ ライブプレビュー+ホットリロード / SM入力コントロール自動生成 / シーンJSON編集→再ビルド / PNGスナップショット。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
+| `riv_studio` | **ローカルWebスタジオ**（公式エディタ風ダークUI・日英対応）: 階層ツリー（アイコン付き）/ キャンバス選択・ドラッグ・四隅リサイズ / インスペクタ（ラベル横ドラッグで数値変更）/ タイムライン編集（キーフレームのドラッグ移動・ダブルクリック追加・削除）/ Undo/Redo / 矢印キー移動・Deleteキー削除 / オブジェクト追加ボタン / 再生速度切替 / ライブプレビュー+ホットリロード / SM入力コントロール / PNGスナップショット。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
 | `riv_studio_notes` | **スタジオUI→AIへの指示の受信**: UIの「AIへの指示」ボックスに人間が書いた修正依頼をAIが取得（取得するとUI側に通知）。「スタジオの指示を確認して」で呼ばれる |
 
 ## キャラクターアニメーション

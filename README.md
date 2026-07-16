@@ -22,7 +22,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (14)
+## Tools (18)
 
 | Tool | What it does |
 |---|---|
@@ -30,15 +30,19 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_inspect` | Full metadata: artboards, animations (duration/fps/loop), state machines and inputs |
 | `riv_render_frame` | Render any moment to PNG (inline image + file) |
 | `riv_render_gif` | Turn an animation into a preview GIF |
+| `riv_render_video` | Record an animation or state machine to WebM video |
+| `riv_render_sprites` | Sprite-sheet PNG + JSON metadata (for game engines) |
 | `riv_play_state_machine` | Set/fire inputs → advance → state-transition report (+ optional frame captures) |
 | `riv_generate_code` | Integration code with real artboard/SM/input names (React / JS / Vue / Svelte / Flutter) |
 | `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview |
-| `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees |
+| `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
+| `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
+| `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |
 | `riv_dump` | Low-level binary structure dump (typeKeys / properties / hierarchy) |
 | `riv_slice_image` | Cut character parts out of a PNG by polygon (for cutout rigging) |
 | `riv_rig_character` | **Character PNG → fully rigged `.riv` in one call** |
 | `riv_diff` | Structural diff between two `.riv` files |
-| `riv_studio` | **Local web Studio**: 3-pane editor UI with live preview, hot reload, direct property editing, timeline, EN/JA UI |
+| `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Fetch instructions the human typed into the Studio UI |
 
 ## Quick start
@@ -101,7 +105,7 @@ Turn a single character PNG into a naturally moving `.riv`:
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 14 tools over JSON-RPC (36 checks)
+npm run test:e2e   # spawns the real server, exercises all 18 tools over JSON-RPC (48 checks)
 ```
 
 `docs/riv-format.md` documents the reverse-engineered knowledge of the `.riv` binary format used by the writer (typeKeys/propertyKeys resolved from the official `rive-runtime` type definitions vendored in `vendor/rive-defs/defs.json`).
