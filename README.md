@@ -22,7 +22,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (18)
+## Tools (19)
 
 | Tool | What it does |
 |---|---|
@@ -30,6 +30,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_inspect` | Full metadata: artboards, animations (duration/fps/loop), state machines and inputs |
 | `riv_render_frame` | Render any moment to PNG (inline image + file) |
 | `riv_render_gif` | Turn an animation into a preview GIF |
+| `riv_render_apng` | Animated PNG export — 24-bit color + alpha transparency (plays on GitHub) |
 | `riv_render_video` | Record an animation or state machine to WebM video |
 | `riv_render_sprites` | Sprite-sheet PNG + JSON metadata (for game engines) |
 | `riv_play_state_machine` | Set/fire inputs → advance → state-transition report (+ optional frame captures) |
@@ -42,7 +43,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_slice_image` | Cut character parts out of a PNG by polygon (for cutout rigging) |
 | `riv_rig_character` | **Character PNG → fully rigged `.riv` in one call** |
 | `riv_diff` | Structural diff between two `.riv` files |
-| `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, live preview + hot reload, EN/JA |
+| `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Fetch instructions the human typed into the Studio UI |
 
 ## Quick start

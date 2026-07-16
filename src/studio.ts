@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 import { createRiv, pngSize, type SceneSpec } from "./rivWriter.js";
 import { readRiv, propInfo } from "./rivBinary.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
+import { encodeApng } from "./apng.js";
+import { encodeGif } from "./gif.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 
@@ -292,6 +294,36 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         });
         return;
       }
+      // エクスポート: クライアントがキャプチャしたフレーム列を APNG / GIF に合成して返す
+      if (url.pathname === "/export/apng" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { frames, delayMs, loops } = JSON.parse(body) as { frames: string[]; delayMs?: number; loops?: number };
+            if (!Array.isArray(frames) || !frames.length) throw new Error("frames required");
+            const bytes = encodeApng(frames.map((f) => new Uint8Array(Buffer.from(f, "base64"))), { delayMs, loops: loops ?? 0 });
+            res.writeHead(200, { "Content-Type": "image/apng", "Cache-Control": "no-store" });
+            res.end(Buffer.from(bytes));
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
+      if (url.pathname === "/export/gif" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { frames, width, height, delayMs } = JSON.parse(body) as { frames: string[]; width: number; height: number; delayMs?: number };
+            if (!Array.isArray(frames) || !frames.length || !width || !height) throw new Error("frames/width/height required");
+            const fps = Math.max(1, Math.round(1000 / (delayMs || 33)));
+            const bytes = encodeGif(frames.map((f) => Buffer.from(f, "base64")), width, height, fps);
+            res.writeHead(200, { "Content-Type": "image/gif", "Cache-Control": "no-store" });
+            res.end(bytes);
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
       send(404, "text/plain", "not found");
     } catch (e) {
       send(500, "text/plain", e instanceof Error ? e.message : String(e));
@@ -546,7 +578,12 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <span class="hint" data-i18n="zoomL"></span>
     <input type="range" id="zoom" min="0.25" max="3" step="0.05" value="1" style="max-width:110px">
     <button id="zoomReset" class="mini">1:1</button>
-    <button id="snap" class="mini" data-i18n="snapshot"></button>
+    <span class="toolbarSep"></span>
+    <span class="hint" data-i18n="expL"></span>
+    <button id="snap" class="mini" data-i18n="expPng" data-i18n-title="expPngT"></button>
+    <button id="expApng" class="mini">APNG</button>
+    <button id="expGif" class="mini">GIF</button>
+    <button id="expWebm" class="mini">WebM</button>
   </div>
 </div>
 <div class="gutter" id="gutterR"></div>
@@ -633,7 +670,7 @@ const I18N = {
     helpP3: '再生/SM: ステートマシン入力（trigger/bool/number）の操作とアニメ単体再生',
     helpP4: 'タイムライン: アニメ再生中に表示。◆=キーフレーム、クリックでその時刻へジャンプ',
     helpP5: 'シーンJSON: riv_create 仕様を直接編集して再ビルド（scenePath 指定時）',
-    helpP6: 'ツールバー: 一時停止 / シーク / ズーム / 表示中フレームのPNG保存',
+    helpP6: 'ツールバー: 一時停止 / 速度 / シーク / ズーム / エクスポート（PNG・APNG・GIF・WebM）',
     paused: '一時停止', resumed: '再開',
     notesSent: '指示を送信しました', notesTaken: 'AIが指示を受け取りました',
     fileUpdated: 'ファイル更新 → リロード', jsonError: 'JSONエラー: ',
@@ -646,6 +683,9 @@ const I18N = {
     undoDone: '元に戻しました', redoDone: 'やり直しました', objDeleted: 'オブジェクトを削除しました',
     undoA: '元に戻す (Ctrl+Z)', redoA: 'やり直す (Ctrl+Y)', helpA: 'ヘルプ', pauseA: '再生 / 一時停止',
     connT: 'サーバー接続中', connOffT: 'サーバー切断 — 再接続待ち', dirtyT: '未保存の変更（自動再ビルド待ち）',
+    expL: 'エクスポート', expPng: 'PNG', expPngT: '表示中フレームをPNG保存',
+    expProg: 'エクスポート中… ', expDone: 'エクスポート完了', expFail: 'エクスポート失敗: ',
+    expNoAnim: 'エクスポートできるアニメーションがありません',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -678,7 +718,7 @@ const I18N = {
     helpP3: 'Play / SM: drive state machine inputs (trigger/bool/number) and solo-play animations',
     helpP4: 'Timeline: shown while solo-playing. ◆ = keyframe, click to jump to that time',
     helpP5: 'Scene JSON: edit the riv_create spec directly and rebuild (needs scenePath)',
-    helpP6: 'Toolbar: pause / seek / zoom / save the current frame as PNG',
+    helpP6: 'Toolbar: pause / speed / seek / zoom / export (PNG, APNG, GIF, WebM)',
     paused: 'Paused', resumed: 'Resumed',
     notesSent: 'Instruction queued', notesTaken: 'AI picked up the instructions',
     fileUpdated: 'File changed → reloading', jsonError: 'JSON error: ',
@@ -691,6 +731,9 @@ const I18N = {
     undoDone: 'Undo', redoDone: 'Redo', objDeleted: 'Object deleted',
     undoA: 'Undo (Ctrl+Z)', redoA: 'Redo (Ctrl+Y)', helpA: 'Help', pauseA: 'Play / Pause',
     connT: 'Connected', connOffT: 'Disconnected — waiting to reconnect', dirtyT: 'Unsaved changes (auto-rebuild pending)',
+    expL: 'Export', expPng: 'PNG', expPngT: 'Save the current frame as PNG',
+    expProg: 'Exporting… ', expDone: 'Export complete', expFail: 'Export failed: ',
+    expNoAnim: 'No animation to export',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -785,10 +828,12 @@ function performRedo() {
   toast(t('redoDone'));
 }
 
+let rivName = 'scene';
 async function loadState() {
   const st = await (await fetch('/state')).json();
   sceneSpec = st.scene ?? null;
   imageSizes = st.imageSizes ?? {};
+  if (st.rivName) rivName = st.rivName.toLowerCase().endsWith('.riv') ? st.rivName.slice(0, -4) : st.rivName;
   if (sceneSpec) $('scene').value = JSON.stringify(sceneSpec, null, 2);
   $('fileinfo').textContent = (st.rivName || '-') + (st.bytes ? ' · ' + (st.bytes / 1024).toFixed(1) + ' KB · ' + st.objects + ' obj · v' + st.version : '');
   updateNotesBadge(st.pendingNotes || 0);
@@ -830,8 +875,10 @@ function startAnimLoopIfNeeded() {
 }
 
 // ---- Rive 起動 ---------------------------------------------------------------
+let bootSeq = 0; // 連続リロード時に破棄済みインスタンスの stale コールバックを無視する
 function boot(artboard, smName, animName) {
   if (r) { try { r.cleanup(); } catch {} r = null; }
+  const myBoot = ++bootSeq;
   stopAnimLoop();
   paused = false; $('pauseBtn').textContent = '⏸';
   const opts = {
@@ -840,6 +887,7 @@ function boot(artboard, smName, animName) {
     autoplay: true,
     autoBind: true,
     onLoad: () => {
+      if (myBoot !== bootSeq) return;
       r.resizeDrawingSurfaceToCanvas();
       populate();
       const defaultSM = $('smSel').value;
@@ -856,7 +904,10 @@ function boot(artboard, smName, animName) {
       guideStep(1);
       drawSelBox();
     },
-    onLoadError: (e) => { $('status').textContent = 'load error'; log('load error: ' + e, 'error'); },
+    onLoadError: (e) => {
+      if (myBoot !== bootSeq) return;
+      $('status').textContent = 'load error'; log('load error: ' + e, 'error');
+    },
   };
   if (artboard) opts.artboard = artboard;
   if (mode === 'sm') { if (smName) opts.stateMachines = smName; }
@@ -1679,7 +1730,7 @@ function seekTo(tsec) {
 $('tabTree').onclick = () => { $('tabTree').classList.add('on'); $('tabPlay').classList.remove('on'); $('treeWrap').style.display = 'block'; $('playPane').style.display = 'none'; };
 $('tabPlay').onclick = () => { $('tabPlay').classList.add('on'); $('tabTree').classList.remove('on'); $('treeWrap').style.display = 'none'; $('playPane').style.display = 'block'; };
 $('artboardSel').onchange = () => { mode = 'sm'; sel = null; boot($('artboardSel').value); renderTimeline(); };
-$('smSel').onchange = () => { mode = 'sm'; boot($('artboardSel').value, $('smSel').value); };
+$('smSel').onchange = () => { mode = 'sm'; const v = $('smSel').value; boot($('artboardSel').value, v && v !== '-' ? v : undefined); };
 $('playAnim').onclick = () => {
   mode = 'anim';
   scrubAnim = $('animSel').value;
@@ -1687,7 +1738,7 @@ $('playAnim').onclick = () => {
   $('scrub').disabled = false;
   renderTimeline();
 };
-$('backSM').onclick = () => { mode = 'sm'; $('scrub').disabled = true; boot($('artboardSel').value, $('smSel').value); renderTimeline(); };
+$('backSM').onclick = () => { mode = 'sm'; $('scrub').disabled = true; const v = $('smSel').value; boot($('artboardSel').value, v && v !== '-' ? v : undefined); renderTimeline(); };
 $('scrub').oninput = () => {
   if (!r || mode !== 'anim') return;
   animCurT = Number($('scrub').value) * scrubDur;
@@ -1709,9 +1760,152 @@ $('zoom').oninput = () => { cv.style.transform = 'scale(' + $('zoom').value + ')
 $('zoomReset').onclick = () => { $('zoom').value = 1; cv.style.transform = ''; drawSelBox(); };
 $('snap').onclick = () => {
   const a = document.createElement('a');
-  a.download = 'studio-frame.png';
+  a.download = rivName + '.png';
   a.href = cv.toDataURL('image/png');
   a.click();
+};
+
+// ---- エクスポート（APNG / GIF / WebM。対象=選択中アニメ、未選択なら先頭。30fps・1ループ） ----
+let progToast = null;
+function showProgress(msg) {
+  if (!progToast) {
+    progToast = document.createElement('div');
+    progToast.className = 'toast';
+    document.getElementById('toasts').appendChild(progToast);
+  }
+  progToast.textContent = msg;
+}
+function hideProgress() { if (progToast) { progToast.remove(); progToast = null; } }
+function saveBlob(blob, name) {
+  const a = document.createElement('a');
+  a.download = name;
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function b64FromBytes(u8) {
+  let s = '';
+  const CH = 0x8000;
+  for (let i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+  return btoa(s);
+}
+const raf2 = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+function waitReady(timeout = 6000) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if ($('status').textContent === 'ready' || Date.now() - t0 > timeout) { clearInterval(iv); resolve(); }
+    }, 60);
+  });
+}
+// アニメ単体再生モードに切替（未選択時は先頭アニメ）。復帰情報を返す
+async function ensureAnimMode() {
+  if (mode === 'anim' && scrubAnim) return { restore: null };
+  const anims = (abSpec()?.animations ?? []);
+  if (!anims.length) return { error: true };
+  const restore = { mode, smName: $('smSel').value };
+  mode = 'anim';
+  scrubAnim = anims[0].name;
+  boot($('artboardSel').value, null, scrubAnim);
+  $('scrub').disabled = false;
+  renderTimeline();
+  await waitReady();
+  return { restore };
+}
+function restoreAfterExport(st) {
+  if (st && st.restore) {
+    mode = st.restore.mode;
+    $('scrub').disabled = true;
+    boot($('artboardSel').value, st.restore.smName && st.restore.smName !== '-' ? st.restore.smName : undefined);
+    renderTimeline();
+  }
+}
+// 0..duration を等間隔にシークしてフレームを収集（wantRgba: GIF用 raw RGBA / それ以外は PNG bytes）
+async function captureFrames(wantRgba) {
+  const st = await ensureAnimMode();
+  if (st.error) { toast(t('expNoAnim'), 'err'); return null; }
+  const wasPaused = paused;
+  paused = true; stopAnimLoop();
+  const prevT = animCurT;
+  const N = Math.max(2, Math.min(300, Math.round(scrubDur * 30)));
+  const scale = wantRgba ? Math.min(1, 480 / (cv.width || 480)) : 1;
+  const ow = Math.max(2, Math.round(cv.width * scale));
+  const oh = Math.max(2, Math.round(cv.height * scale));
+  const oc = document.createElement('canvas'); oc.width = ow; oc.height = oh;
+  const octx = oc.getContext('2d', { willReadFrequently: true });
+  // GIFは透過を持てないため背景色を合成（シーンの backgroundColor を優先）
+  const bg = (sceneSpec && ((abSpec() || {}).backgroundColor || sceneSpec.backgroundColor)) || '#141419';
+  const frames = [];
+  for (let i = 0; i < N; i++) {
+    seekTo((i / N) * scrubDur);
+    await raf2();
+    octx.fillStyle = bg; octx.fillRect(0, 0, ow, oh);
+    octx.drawImage(cv, 0, 0, ow, oh);
+    if (wantRgba) {
+      frames.push(new Uint8Array(octx.getImageData(0, 0, ow, oh).data.buffer));
+    } else {
+      const blob = await new Promise((res) => oc.toBlob(res, 'image/png'));
+      frames.push(new Uint8Array(await blob.arrayBuffer()));
+    }
+    showProgress(t('expProg') + (i + 1) + '/' + N);
+  }
+  paused = wasPaused;
+  animCurT = prevT;
+  if (!st.restore && !paused) startAnimLoopIfNeeded();
+  return { frames, width: ow, height: oh, delayMs: Math.max(10, Math.round(scrubDur * 1000 / N)), state: st };
+}
+async function exportEncoded(path, payloadOf, ext) {
+  let cap = null;
+  try {
+    cap = await captureFrames(path === '/export/gif');
+    if (!cap) return;
+    const res = await fetch(path, { method: 'POST', body: JSON.stringify(payloadOf(cap)) });
+    if (!res.ok) throw new Error((await res.text()).slice(0, 200));
+    saveBlob(await res.blob(), rivName + ext);
+    toast(t('expDone'));
+  } catch (e) {
+    toast(t('expFail') + (e && e.message ? e.message : e), 'err');
+  } finally {
+    hideProgress();
+    if (cap) restoreAfterExport(cap.state);
+  }
+}
+$('expApng').onclick = () => exportEncoded('/export/apng',
+  (cap) => ({ frames: cap.frames.map(b64FromBytes), delayMs: cap.delayMs, loops: 0 }), '.apng');
+$('expGif').onclick = () => exportEncoded('/export/gif',
+  (cap) => ({ frames: cap.frames.map(b64FromBytes), width: cap.width, height: cap.height, delayMs: cap.delayMs }), '.gif');
+$('expWebm').onclick = async () => {
+  const st = await ensureAnimMode();
+  if (st.error) { toast(t('expNoAnim'), 'err'); return; }
+  const prevPaused = paused, prevSpeed = playSpeed, prevT = animCurT;
+  try {
+    // リアルタイム録画: 1x でアニメ1ループ分
+    playSpeed = 1; paused = false;
+    animCurT = 0; seekTo(0);
+    stopAnimLoop(); startAnimLoopIfNeeded();
+    const stream = cv.captureStream(30);
+    let mt = 'video/webm;codecs=vp9';
+    if (!MediaRecorder.isTypeSupported(mt)) mt = 'video/webm;codecs=vp8';
+    if (!MediaRecorder.isTypeSupported(mt)) mt = 'video/webm';
+    const rec = new MediaRecorder(stream, { mimeType: mt, videoBitsPerSecond: 6000000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise((res) => { rec.onstop = res; });
+    rec.start(200);
+    showProgress(t('expProg') + 'WebM');
+    await new Promise((res) => setTimeout(res, Math.max(400, scrubDur * 1000)));
+    rec.stop();
+    await stopped;
+    saveBlob(new Blob(chunks, { type: 'video/webm' }), rivName + '.webm');
+    toast(t('expDone'));
+  } catch (e) {
+    toast(t('expFail') + (e && e.message ? e.message : e), 'err');
+  } finally {
+    hideProgress();
+    playSpeed = prevSpeed; paused = prevPaused; animCurT = prevT;
+    if (paused) stopAnimLoop();
+    restoreAfterExport(st);
+  }
 };
 $('logClear').onclick = () => { logEl.textContent = ''; };
 $('fmt').onclick = () => {
@@ -1760,7 +1954,8 @@ sse.onmessage = (e) => {
     log(t('fileUpdated'));
     const wasSel = sel;
     keySel = null;
-    if (mode === 'sm') boot($('artboardSel').value, $('smSel').value || undefined);
+    const smv = $('smSel').value;
+    if (mode === 'sm') boot($('artboardSel').value, smv && smv !== '-' ? smv : undefined);
     else boot($('artboardSel').value, null, scrubAnim);
     loadState().then(() => {
       // 選択を id で復元（specは再取得で別オブジェクトになる）
