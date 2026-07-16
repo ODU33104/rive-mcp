@@ -1,0 +1,58 @@
+rive-mcp Freeware License / rive-mcp フリーウェア利用許諾
+============================================================
+
+Copyright (c) 2026 the rive-mcp author. All rights reserved.
+
+--- 日本語 ---
+
+1. 許可されること
+   - 本ソフトウェアを、個人・商用を問わず無料で使用すること。
+   - 本ソフトウェアが生成した .riv ファイルおよび生成コード（riv_generate_code の出力）を、
+     制限なく自由に利用・改変・配布・販売すること。
+
+2. 禁止されること（著作権者の書面による事前許可がない限り）
+   - 本ソフトウェアの改変、および改変物の使用・配布。
+   - 本ソフトウェアの再配布（全部・一部を問わず。ミラー、再パッケージ、フォークの公開を含む）。
+   - 派生物・競合製品の作成を目的とした、本ソフトウェアのコード・構造・アルゴリズムの
+     解析、リバースエンジニアリング、逆コンパイル、逆アセンブル。
+   - AI システム・自動化ツールを用いた本ソフトウェアの解析、コードの抽出・複製・要約、
+     および本ソフトウェアのコードを機械学習の学習データとして使用すること。
+   - 本ソフトウェアのライセンス表示・著作権表示の削除または改変。
+
+3. 免責
+   本ソフトウェアは現状有姿で提供され、明示・黙示を問わずいかなる保証もありません。
+   本ソフトウェアの使用により生じたいかなる損害についても、著作権者は責任を負いません。
+
+4. 第三者コンポーネント
+   - Inter フォント: SIL Open Font License 1.1
+   - Rive ランタイム / 型定義 (rive-runtime): MIT License, (c) Rive, Inc.
+   これらは各ライセンスに従います。本プロジェクトは Rive, Inc. とは無関係です。
+
+--- English ---
+
+1. Permitted
+   - Free use of this software for any purpose, personal or commercial.
+   - Unlimited use, modification, distribution, and sale of the .riv files and
+     integration code that this software generates for you.
+
+2. Prohibited (without prior written permission of the copyright holder)
+   - Modifying this software, or using/distributing modified versions.
+   - Redistributing this software in whole or in part (including mirrors,
+     repackaging, or publishing forks).
+   - Analyzing, reverse engineering, decompiling, or disassembling this software
+     for the purpose of creating derivative or competing works.
+   - Using AI systems or automated tools to analyze this software, to extract,
+     reproduce, or summarize its code, or to use its code as machine-learning
+     training data.
+   - Removing or altering license or copyright notices.
+
+3. Disclaimer
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+4. Third-party components
+   - Inter font: SIL Open Font License 1.1
+   - Rive runtime / type definitions (rive-runtime): MIT License, (c) Rive, Inc.
+   Those components remain under their own licenses. This project is not
+   affiliated with Rive, Inc.

@@ -1,0 +1,38 @@
+{
+  "name": "rive-mcp-server",
+  "version": "0.1.0",
+  "mcpName": "io.github.odu33104/rive-mcp",
+  "description": "Free, editor-less MCP server for Rive: create, edit, inspect, render and live-preview .riv animations from Claude or any MCP client",
+  "keywords": ["rive", "riv", "mcp", "model-context-protocol", "animation", "claude", "state-machine", "rigging"],
+  "repository": { "type": "git", "url": "git+https://github.com/ODU33104/rive-mcp.git" },
+  "homepage": "https://github.com/ODU33104/rive-mcp#readme",
+  "bugs": { "url": "https://github.com/ODU33104/rive-mcp/issues" },
+  "engines": { "node": ">=20" },
+  "type": "module",
+  "bin": {
+    "rive-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "vendor/rive-defs/defs.json"
+  ],
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "build": "npm run vendor && tsc -p tsconfig.json",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@rive-app/canvas": "^2.38.5",
+    "@rive-app/canvas-advanced": "^2.30.3",
+    "gifenc": "^1.0.3",
+    "playwright-core": "^1.53.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0"
+  }
+}
