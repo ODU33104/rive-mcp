@@ -4,7 +4,7 @@
 
 エディタ不要・完全無料・ローカル完結の Rive (`.riv`) MCP サーバー。
 
-![Studio screenshot](docs/media/studio.png)
+![Studio スクリーンショット](docs/media/studio-ja.png)
 
 <p align="center"><img src="docs/media/showcase.gif" width="420" alt="riv_createだけで生成したアニメーション"></p>
 <p align="center"><i>このアニメーションは <code>riv_create</code> だけで生成（Riveエディタ不使用）</i></p>
