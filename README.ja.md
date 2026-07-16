@@ -6,7 +6,7 @@
 
 ![Studio スクリーンショット](docs/media/studio-ja.png)
 
-<p align="center"><img src="docs/media/showcase.gif" width="420" alt="riv_createだけで生成したアニメーション"></p>
+<p align="center"><img src="docs/media/showcase.apng" width="420" alt="riv_createだけで生成したアニメーション"></p>
 <p align="center"><i>このアニメーションは <code>riv_create</code> だけで生成（Riveエディタ不使用）</i></p>
 
 Claude（や任意の MCP クライアント）から `.riv` アニメーションファイルの
