@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.odu33104/rive-mcp",
+  "name": "io.github.ODU33104/rive-mcp",
   "description": "Free, editor-less MCP server for Rive: create, edit, inspect, render and preview .riv animations",
   "repository": {
     "url": "https://github.com/ODU33104/rive-mcp",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "rive-mcp-server",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       }
