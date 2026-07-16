@@ -13,6 +13,7 @@ import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
+import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
 
@@ -506,18 +507,30 @@ server.registerTool(
   {
     title: "Edit an existing .riv file",
     description:
-      "Modify an existing .riv (lossless roundtrip): set any property, change named text runs, or delete objects (with automatic subtree + reference remapping). Use riv_dump to find object indices/names. Renders a preview of the result.",
+      "Modify an existing .riv (lossless roundtrip): set any property, change named text runs, delete objects (with automatic subtree + reference remapping), or edit keyframes on an existing animation (op=setKeyframes). Use riv_dump to find object indices/names. Renders a preview of the result.\n" +
+      "setKeyframes: target an animated object via index/name(+type), give 'animation' (LinearAnimation name) and 'property' (x/y/rotation/scaleX/scaleY/opacity/width/height — rotation in degrees), then 'keyframes' (array of {frame,value,easing}). 'mode': replace (default, swaps the whole track) | add (appends keyframes, creating the track if absent) | remove (deletes keyframes matching the given frame numbers; keyframes[].value/easing are ignored).",
     inputSchema: {
       path: z.string().describe("Source .riv path"),
       outPath: z.string().optional().describe("Output path (default: overwrite source)"),
       edits: z.array(
         z.object({
-          op: z.enum(["set", "setText", "delete"]),
+          op: z.enum(["set", "setText", "delete", "setKeyframes"]),
           index: z.number().int().optional().describe("Target by riv_dump global index"),
-          name: z.string().optional().describe("Target by object name (setText: run name)"),
+          name: z.string().optional().describe("Target by object name (setText: run name; setKeyframes: animated object name)"),
           type: z.string().optional().describe("Filter by typeName when targeting by name"),
           set: z.record(z.unknown()).optional().describe("op=set: property name -> value (colors as #RRGGBB)"),
           text: z.string().optional().describe("op=setText: new text"),
+          animation: z.string().optional().describe("op=setKeyframes: LinearAnimation name"),
+          property: z.enum(["x", "y", "rotation", "scaleX", "scaleY", "opacity", "width", "height"]).optional()
+            .describe("op=setKeyframes: animated property (rotation in degrees)"),
+          keyframes: z.array(
+            z.object({
+              frame: z.number().int().min(0),
+              value: z.number().optional(),
+              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap"]).optional(),
+            })
+          ).optional().describe("op=setKeyframes: keyframe list (value required unless mode=remove)"),
+          mode: z.enum(["replace", "add", "remove"]).optional().describe("op=setKeyframes: default replace"),
         })
       ).min(1),
     },
@@ -727,6 +740,262 @@ server.registerTool(
       }],
     };
   })
+);
+
+// ---- riv_render_video ---------------------------------------------------
+server.registerTool(
+  "riv_render_video",
+  {
+    title: "Render an animation to a WebM video",
+    description:
+      "Render a .riv animation (or state machine) to a real-time WebM video using canvas.captureStream() + MediaRecorder (VP9, falls back to VP8/generic webm). Default duration is one loop of the animation (2s for a bare state machine or when the animation's length can't be determined).",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      artboard: z.string().optional(),
+      animation: z.string().optional(),
+      stateMachine: z.string().optional(),
+      duration: z.number().positive().max(30).optional().describe("Seconds to record (default: one animation loop, or 2s)"),
+      fps: z.number().int().positive().max(60).optional().describe("captureStream() frame rate (default 30)"),
+      width: z.number().int().positive().max(2048).optional(),
+      height: z.number().int().positive().max(2048).optional(),
+      background: z.string().optional().describe("CSS background color (default: transparent)"),
+      out: z.string().optional().describe("Output .webm path (default: alongside the .riv)"),
+    },
+  },
+  wrap(
+    async (a: {
+      path: string;
+      artboard?: string;
+      animation?: string;
+      stateMachine?: string;
+      duration?: number;
+      fps?: number;
+      width?: number;
+      height?: number;
+      background?: string;
+      out?: string;
+    }) => {
+      const { bytes, abs } = loadRiv(a.path);
+      let duration = a.duration;
+      if (duration === undefined) {
+        if (a.stateMachine) {
+          duration = 2;
+        } else {
+          const info = await host.inspect(bytes);
+          const ab = info.artboards.find((x) => x.name === a.artboard) ?? info.artboards[0];
+          const anim = ab?.animations.find((x) => x.name === a.animation) ?? ab?.animations[0];
+          duration = anim?.durationSeconds ?? 2;
+        }
+      }
+      const fps = a.fps ?? 30;
+      const result = await host.renderVideo(bytes, {
+        artboard: a.artboard,
+        animation: a.animation,
+        stateMachine: a.stateMachine,
+        duration,
+        fps,
+        width: a.width,
+        height: a.height,
+        background: a.background,
+      });
+      const out = resolve(a.out ?? join(dirname(abs), `${basename(abs, extname(abs))}.webm`));
+      writeFileSync(out, Buffer.from(result.base64, "base64"));
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Recorded ${result.durationSeconds.toFixed(2)}s, ${result.estimatedFrames} frames (${result.width}x${result.height}, ${result.mimeType}) -> ${out}` +
+              ` (${Math.round(result.byteLength / 1024)} KB)`,
+          },
+        ],
+      };
+    }
+  )
+);
+
+// ---- riv_render_sprites --------------------------------------------------
+server.registerTool(
+  "riv_render_sprites",
+  {
+    title: "Render an animation to a sprite sheet PNG",
+    description:
+      "Render N evenly-spaced frames of a .riv animation/state machine into a single grid sprite sheet PNG (columns = ceil(sqrt(N))). Writes the PNG plus a JSON metadata file (cellW/cellH/cols/rows/count/fps) alongside.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      artboard: z.string().optional(),
+      animation: z.string().optional(),
+      stateMachine: z.string().optional(),
+      count: z.number().int().positive().max(256).optional().describe("Number of frames (default 16)"),
+      duration: z.number().positive().max(30).optional().describe("Seconds spanned by the frames (default: one animation loop, or 2s)"),
+      fps: z.number().int().positive().max(60).optional().describe("Metadata playback fps (default: count/duration)"),
+      width: z.number().int().positive().max(2048).optional(),
+      height: z.number().int().positive().max(2048).optional(),
+      background: z.string().optional(),
+      out: z.string().optional().describe("Output PNG path (default: alongside the .riv); metadata is written next to it with a .json extension"),
+    },
+  },
+  wrap(
+    async (a: {
+      path: string;
+      artboard?: string;
+      animation?: string;
+      stateMachine?: string;
+      count?: number;
+      duration?: number;
+      fps?: number;
+      width?: number;
+      height?: number;
+      background?: string;
+      out?: string;
+    }) => {
+      const { bytes, abs } = loadRiv(a.path);
+      let duration = a.duration;
+      if (duration === undefined) {
+        if (a.stateMachine) {
+          duration = 2;
+        } else {
+          const info = await host.inspect(bytes);
+          const ab = info.artboards.find((x) => x.name === a.artboard) ?? info.artboards[0];
+          const anim = ab?.animations.find((x) => x.name === a.animation) ?? ab?.animations[0];
+          duration = anim?.durationSeconds ?? 2;
+        }
+      }
+      const result = await host.renderSprites(bytes, {
+        artboard: a.artboard,
+        animation: a.animation,
+        stateMachine: a.stateMachine,
+        count: a.count ?? 16,
+        duration,
+        fps: a.fps,
+        width: a.width,
+        height: a.height,
+        background: a.background,
+      });
+      const out = resolve(a.out ?? join(dirname(abs), `${basename(abs, extname(abs))}.sprites.png`));
+      writeFileSync(out, Buffer.from(result.image, "base64"));
+      const metaPath = (out.toLowerCase().endsWith(".png") ? out.slice(0, -4) : out) + ".json";
+      const meta = { cellW: result.cellW, cellH: result.cellH, cols: result.cols, rows: result.rows, count: result.count, fps: result.fps };
+      writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Sprite sheet ${result.width}x${result.height} (${result.cols}x${result.rows} grid, ${result.count} frames, cell ${result.cellW}x${result.cellH}, ${result.fps}fps) -> ${out}\n` +
+              `Metadata -> ${metaPath}`,
+          },
+          { type: "image", data: result.image, mimeType: "image/png" },
+        ],
+      };
+    }
+  )
+);
+
+// ---- riv_extract_assets --------------------------------------------------
+server.registerTool(
+  "riv_extract_assets",
+  {
+    title: "Extract embedded assets from a .riv file",
+    description:
+      "Extract embedded image/font/audio asset binary contents (ImageAsset/FontAsset/AudioAsset + FileAssetContents pairs) from a .riv file to disk, with the file extension inferred from magic bytes (PNG/JPEG/WEBP/TTF/OTF/WOFF/WOFF2/GIF). Externally-referenced (non-embedded) assets are skipped.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      outDir: z.string().optional().describe("Output directory (default: <file>.assets alongside the .riv)"),
+    },
+  },
+  wrap(async ({ path, outDir }: { path: string; outDir?: string }) => {
+    const { bytes, abs } = loadRiv(path);
+    const assets = extractAssets(bytes);
+    const dir = resolve(outDir ?? join(dirname(abs), `${basename(abs, extname(abs))}.assets`));
+    if (assets.length) mkdirSync(dir, { recursive: true });
+    const written: Array<{ name: string; type: string; sizeKB: number; path: string }> = [];
+    const usedNames = new Set<string>();
+    for (const a of assets) {
+      const safeName = a.name.replace(/[^\w.-]+/g, "_") || "asset";
+      let fname = `${safeName}.${a.ext}`;
+      let n = 1;
+      while (usedNames.has(fname)) fname = `${safeName}_${n++}.${a.ext}`;
+      usedNames.add(fname);
+      const p = join(dir, fname);
+      writeFileSync(p, Buffer.from(a.bytes));
+      written.push({ name: a.name, type: a.typeName, sizeKB: Math.round(a.bytes.length / 102.4) / 10, path: p });
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: written.length
+            ? JSON.stringify(written, null, 2)
+            : `No embedded assets found in ${abs} (assets may be externally referenced rather than embedded)`,
+        },
+      ],
+    };
+  })
+);
+
+// ---- riv_visual_diff ------------------------------------------------------
+server.registerTool(
+  "riv_visual_diff",
+  {
+    title: "Pixel-diff two .riv files",
+    description:
+      "Render the same artboard/animation/time from two .riv files under identical conditions (forced to the same output size) and compute a thresholded per-pixel visual diff. Returns match rate, differing pixel count, and a diff visualization PNG (differing pixels in red, matching pixels dimmed).",
+    inputSchema: {
+      pathA: z.string().describe("Path to the first .riv file"),
+      pathB: z.string().describe("Path to the second .riv file"),
+      artboard: z.string().optional(),
+      animation: z.string().optional(),
+      stateMachine: z.string().optional(),
+      time: z.number().optional().describe("Seconds to advance before capturing (default 0)"),
+      threshold: z.number().min(0).max(255).optional().describe("Max per-channel diff (0-255) still counted as a match (default 16)"),
+      width: z.number().int().positive().max(2048).optional(),
+      height: z.number().int().positive().max(2048).optional(),
+      background: z.string().optional(),
+      out: z.string().optional().describe("Output diff PNG path (default: alongside pathA)"),
+    },
+  },
+  wrap(
+    async (a: {
+      pathA: string;
+      pathB: string;
+      artboard?: string;
+      animation?: string;
+      stateMachine?: string;
+      time?: number;
+      threshold?: number;
+      width?: number;
+      height?: number;
+      background?: string;
+      out?: string;
+    }) => {
+      const { bytes: bytesA, abs: absA } = loadRiv(a.pathA);
+      const { bytes: bytesB, abs: absB } = loadRiv(a.pathB);
+      const result = await host.visualDiff(bytesA, bytesB, {
+        artboard: a.artboard,
+        animation: a.animation,
+        stateMachine: a.stateMachine,
+        time: a.time ?? 0,
+        threshold: a.threshold,
+        width: a.width,
+        height: a.height,
+        background: a.background,
+      });
+      const out = resolve(a.out ?? join(dirname(absA), `${basename(absA, extname(absA))}.vs.${basename(absB)}.diff.png`));
+      writeFileSync(out, Buffer.from(result.diffImage, "base64"));
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Match rate: ${result.matchRate.toFixed(2)}% (${result.diffPixels}/${result.totalPixels} differing pixels, ` +
+              `threshold=${result.threshold}, ${result.width}x${result.height}) -> ${out}`,
+          },
+          { type: "image", data: result.diffImage, mimeType: "image/png" },
+        ],
+      };
+    }
+  )
 );
 
 // ---- riv_studio --------------------------------------------------------

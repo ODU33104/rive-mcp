@@ -106,8 +106,16 @@ function makeScene(file, opts) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
+  // captureStream()/MediaRecorder はcanvasがドキュメントに接続されていないと合成フレームを出さない
+  canvas.style.position = "fixed";
+  canvas.style.left = "-99999px";
+  document.body.appendChild(canvas);
   const renderer = rive.makeRenderer(canvas);
-  const ctx = canvas.getContext("2d");
+  // ctx は遅延取得: canvas.getContext("2d") を呼ぶだけで captureStream(0)+requestFrame() の
+  // フレーム捕捉が空になる環境がある(実測)。background合成/rgba capture を使わない経路(=動画録画)
+  // では一切呼ばれないようにする。
+  let _ctx = null;
+  const getCtx = () => (_ctx || (_ctx = canvas.getContext("2d")));
 
   let anim = null;
   let sm = null;
@@ -163,6 +171,7 @@ function makeScene(file, opts) {
     rive.resolveAnimationFrame();
     if (opts.background) {
       // 背景は描画結果の下に合成する
+      const ctx = getCtx();
       ctx.globalCompositeOperation = "destination-over";
       ctx.fillStyle = opts.background;
       ctx.fillRect(0, 0, width, height);
@@ -172,7 +181,7 @@ function makeScene(file, opts) {
 
   const capture = (format) => {
     if (format === "rgba") {
-      const data = ctx.getImageData(0, 0, width, height).data;
+      const data = getCtx().getImageData(0, 0, width, height).data;
       let bin = "";
       const CHUNK = 0x8000;
       for (let i = 0; i < data.length; i += CHUNK) {
@@ -187,9 +196,19 @@ function makeScene(file, opts) {
     if (sm) sm.delete();
     if (anim) anim.delete();
     ab.delete();
+    if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
   };
 
-  return { ab, sm, anim, width, height, step, draw, capture, cleanup };
+  return { ab, sm, anim, width, height, canvas, step, draw, capture, cleanup };
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
 }
 
 window.riveApi = {
@@ -305,6 +324,181 @@ window.riveApi = {
         scene.cleanup();
       }
     });
+  },
+
+  // アニメーション/SMをリアルタイムでWebM動画に録画する
+  async renderVideo(b64, opts) {
+    return withFile(b64, async (file) => {
+      const scene = makeScene(file, opts);
+      try {
+        const fps = opts.fps || 30;
+        const duration = Math.max(0.05, opts.duration || 2);
+        const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+          ? "video/webm;codecs=vp9"
+          : (MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8" : "video/webm");
+
+        const recordOnce = async () => {
+          // captureStream(fps) の自動タイマーサンプリングは canvas-advanced の描画(dirty-rect検出を経ない
+          // ブリット)を拾わないことがある。captureStream(0)=手動モード + track.requestFrame() で毎描画を
+          // 確実にキャプチャする（実測: 自動=110B(空), 手動=数十KB/1s で検証済み）。
+          const stream = scene.canvas.captureStream(0);
+          const track = stream.getVideoTracks()[0];
+          const chunks = [];
+          const recorder = new MediaRecorder(stream, { mimeType });
+          recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+          };
+          const stopped = new Promise((resolve, reject) => {
+            recorder.onstop = resolve;
+            recorder.onerror = (ev) => reject(ev.error || new Error("MediaRecorder error"));
+          });
+          scene.step(0);
+          scene.draw();
+          track.requestFrame();
+          recorder.start();
+          const start = performance.now();
+          let steps = 0;
+          const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+          while ((performance.now() - start) / 1000 < duration) {
+            await nextFrame();
+            scene.step(1 / 60);
+            scene.draw();
+            track.requestFrame();
+            steps++;
+          }
+          recorder.stop();
+          await stopped;
+          const elapsedSeconds = (performance.now() - start) / 1000;
+          const blob = new Blob(chunks, { type: mimeType });
+          return { blob, elapsedSeconds, steps };
+        };
+
+        // 実測: フレッシュなページでの最初の captureStream(0)+MediaRecorder 呼び出しは、パイプラインの
+        // ウォームアップが間に合わず空(~110B)のWebMを返すことがある(非決定的)。中身が明らかに空なら
+        // 同じシーンで1回だけ録り直す。
+        let result = await recordOnce();
+        if (result.blob.size < 1000 && result.steps > 3) {
+          result = await recordOnce();
+        }
+        const base64 = await blobToBase64(result.blob);
+        return {
+          base64,
+          mimeType,
+          width: scene.width,
+          height: scene.height,
+          durationSeconds: result.elapsedSeconds,
+          steps: result.steps,
+          estimatedFrames: result.steps + 1,
+          byteLength: result.blob.size,
+        };
+      } finally {
+        scene.cleanup();
+      }
+    });
+  },
+
+  // 等間隔Nフレームを1枚のスプライトシートPNGに合成する
+  async renderSprites(b64, opts) {
+    return withFile(b64, (file) => {
+      const scene = makeScene(file, opts);
+      try {
+        const count = Math.max(1, Math.min(opts.count || 16, 256));
+        const duration = opts.duration && opts.duration > 0 ? opts.duration : count / (opts.fps || 20);
+        const fps = opts.fps || Math.round(count / duration) || 1;
+        const cols = Math.ceil(Math.sqrt(count));
+        const rows = Math.ceil(count / cols);
+        const cellW = scene.width;
+        const cellH = scene.height;
+        const sheet = document.createElement("canvas");
+        sheet.width = cellW * cols;
+        sheet.height = cellH * rows;
+        const sctx = sheet.getContext("2d");
+        const dt = count > 1 ? duration / count : 0;
+        scene.step(0);
+        for (let i = 0; i < count; i++) {
+          if (i > 0) scene.step(dt);
+          scene.draw();
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          sctx.drawImage(scene.canvas, col * cellW, row * cellH);
+        }
+        return {
+          image: sheet.toDataURL("image/png").split(",")[1],
+          width: sheet.width,
+          height: sheet.height,
+          cellW,
+          cellH,
+          cols,
+          rows,
+          count,
+          fps,
+        };
+      } finally {
+        scene.cleanup();
+      }
+    });
+  },
+
+  // 2つの.rivを同条件レンダリングしてピクセル差分を計算する
+  async visualDiff(b64, opts) {
+    return withFile(b64, (fileA) =>
+      withFile(opts.b64B, (fileB) => {
+        const sceneA = makeScene(fileA, opts);
+        const forcedOpts = Object.assign({}, opts, { width: sceneA.width, height: sceneA.height });
+        const sceneB = makeScene(fileB, forcedOpts);
+        try {
+          const t = opts.time || 0;
+          sceneA.step(t);
+          sceneA.draw();
+          sceneB.step(t);
+          sceneB.draw();
+          const w = sceneA.width, h = sceneA.height;
+          const dataA = sceneA.canvas.getContext("2d").getImageData(0, 0, w, h).data;
+          const dataB = sceneB.canvas.getContext("2d").getImageData(0, 0, w, h).data;
+          const threshold = opts.threshold === undefined ? 16 : opts.threshold;
+          const diffCanvas = document.createElement("canvas");
+          diffCanvas.width = w;
+          diffCanvas.height = h;
+          const dctx = diffCanvas.getContext("2d");
+          const outImg = dctx.createImageData(w, h);
+          const out = outImg.data;
+          let diffPixels = 0;
+          const total = w * h;
+          for (let p = 0; p < total; p++) {
+            const o = p * 4;
+            const dr = Math.abs(dataA[o] - dataB[o]);
+            const dg = Math.abs(dataA[o + 1] - dataB[o + 1]);
+            const db = Math.abs(dataA[o + 2] - dataB[o + 2]);
+            const da = Math.abs(dataA[o + 3] - dataB[o + 3]);
+            const maxDiff = Math.max(dr, dg, db, da);
+            if (maxDiff > threshold) {
+              diffPixels++;
+              out[o] = 255;
+              out[o + 1] = 0;
+              out[o + 2] = 0;
+              out[o + 3] = 255;
+            } else {
+              const lum = (dataA[o] + dataA[o + 1] + dataA[o + 2]) / 3;
+              out[o] = out[o + 1] = out[o + 2] = lum;
+              out[o + 3] = dataA[o + 3] > 0 ? 60 : 0;
+            }
+          }
+          dctx.putImageData(outImg, 0, 0);
+          return {
+            width: w,
+            height: h,
+            totalPixels: total,
+            diffPixels,
+            matchRate: total > 0 ? (1 - diffPixels / total) * 100 : 100,
+            threshold,
+            diffImage: diffCanvas.toDataURL("image/png").split(",")[1],
+          };
+        } finally {
+          sceneA.cleanup();
+          sceneB.cleanup();
+        }
+      })
+    );
   },
 
   // State Machine を対話的に実行する。

@@ -78,7 +78,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 14 tools", names.length === 14, names.join(","));
+  check("tools/list has 18 tools", names.length === 18, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -135,6 +135,50 @@ try {
       !!bytes && bytes.subarray(0, 6).toString() === "GIF89a" && frameCount === 18,
       bytes ? `${bytes.length} bytes, ${frameCount} frames` : "missing"
     );
+  }
+
+  // riv_render_video
+  const video = await callTool("riv_render_video", {
+    path: RIV,
+    duration: 1,
+    fps: 15,
+    width: 240,
+    out: join(root, "samples", "test-video.webm"),
+  });
+  check("riv_render_video not error", !video.isError, textOf(video));
+  {
+    const videoPath = join(root, "samples", "test-video.webm");
+    const bytes = existsSync(videoPath) ? await import("node:fs").then((m) => m.readFileSync(videoPath)) : null;
+    // WebM/Matroska EBML magic: 1A 45 DF A3
+    check(
+      "riv_render_video writes a webm file",
+      !!bytes && bytes.length > 500 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3,
+      bytes ? `${bytes.length} bytes` : "missing"
+    );
+  }
+
+  // riv_render_sprites
+  const sprites = await callTool("riv_render_sprites", {
+    path: RIV,
+    count: 9,
+    duration: 1,
+    width: 100,
+    out: join(root, "samples", "test-sprites.png"),
+  });
+  const spritesText = textOf(sprites);
+  check("riv_render_sprites not error", !sprites.isError, spritesText);
+  check("riv_render_sprites returns image", (sprites.content || []).some((c) => c.type === "image"));
+  {
+    const pngPath = join(root, "samples", "test-sprites.png");
+    const jsonPath = join(root, "samples", "test-sprites.json");
+    const fs = await import("node:fs");
+    const pngOk = existsSync(pngPath) && fs.statSync(pngPath).size > 1000;
+    let metaOk = false;
+    if (existsSync(jsonPath)) {
+      const meta = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+      metaOk = meta.count === 9 && meta.cols === 3 && meta.rows === 3 && meta.cellW > 0 && meta.cellH > 0;
+    }
+    check("riv_render_sprites writes PNG + metadata JSON (3x3 grid)", pngOk && metaOk, `png=${pngOk} meta=${metaOk}`);
   }
 
   // riv_play_state_machine
@@ -247,6 +291,25 @@ try {
     textOf(imgCreated).slice(0, 250)
   );
 
+  // riv_extract_assets: e2e-image.riv には埋め込みPNG("img")が1つあるはず
+  const extracted = await callTool("riv_extract_assets", {
+    path: join(root, "samples", "e2e-image.riv"),
+    outDir: join(root, "samples", "e2e-assets"),
+  });
+  const extractedText = textOf(extracted);
+  check("riv_extract_assets not error", !extracted.isError, extractedText);
+  check(
+    "riv_extract_assets extracts the embedded PNG",
+    extractedText.includes('"type": "ImageAsset"') && extractedText.includes(".png"),
+    extractedText.slice(0, 300)
+  );
+  {
+    const list = JSON.parse(extractedText || "[]");
+    const first = Array.isArray(list) ? list[0] : null;
+    const fileOk = first && existsSync(first.path) && (await import("node:fs")).statSync(first.path).size > 0;
+    check("riv_extract_assets writes a non-empty PNG file", !!fileOk, JSON.stringify(first));
+  }
+
   // riv_create: ボーン+スキニング（バインド姿勢が壊れていないか = 公式ランタイムで受理+レンダリング）
   const boneCreated = await callTool("riv_create", {
     outPath: join(root, "samples", "e2e-bones.riv"),
@@ -310,6 +373,87 @@ try {
   // riv_diff
   const diff = await callTool("riv_diff", { pathA: genPath, pathB: join(root, "samples", "e2e-edited.riv") });
   check("riv_diff detects change", !diff.isError && textOf(diff).includes("x: 80 -> 150"), textOf(diff).slice(0, 300));
+
+  // riv_edit: setKeyframes (mode=replace, 新規トラック作成)
+  const kfPath1 = join(root, "samples", "e2e-keyframes.riv");
+  const kfAdded = await callTool("riv_edit", {
+    path: genPath,
+    outPath: kfPath1,
+    edits: [
+      {
+        op: "setKeyframes", name: "dot", type: "Shape", animation: "wobble", property: "y", mode: "replace",
+        keyframes: [
+          { frame: 0, value: 100 },
+          { frame: 30, value: 20, easing: "ease-out" },
+          { frame: 60, value: 100, easing: "ease-in" },
+        ],
+      },
+    ],
+  });
+  check(
+    "riv_edit setKeyframes creates a new track",
+    !kfAdded.isError && textOf(kfAdded).includes("setKeyframes replace") && textOf(kfAdded).includes("new track"),
+    textOf(kfAdded).slice(0, 300)
+  );
+  // official runtime がロード可能 + 追加したトラックが実際に動きに反映されているか(t=0とt=0.5でピクセルが変わる)
+  const kfFrame0 = await callTool("riv_render_frame", { path: kfPath1, animation: "wobble", time: 0 });
+  const kfFrame1 = await callTool("riv_render_frame", { path: kfPath1, animation: "wobble", time: 0.5 });
+  const kfImg0 = (kfFrame0.content || []).find((c) => c.type === "image")?.data;
+  const kfImg1 = (kfFrame1.content || []).find((c) => c.type === "image")?.data;
+  check(
+    "riv_edit setKeyframes: official runtime renders the new track and motion changes the frame",
+    !kfFrame0.isError && !kfFrame1.isError && !!kfImg0 && !!kfImg1 && kfImg0 !== kfImg1,
+    `frame0 err=${kfFrame0.isError} frame1 err=${kfFrame1.isError}`
+  );
+
+  // riv_edit: setKeyframes (mode=add, 既存トラックに1フレーム追加)
+  const kfPath2 = join(root, "samples", "e2e-keyframes-add.riv");
+  const kfAddMode = await callTool("riv_edit", {
+    path: kfPath1,
+    outPath: kfPath2,
+    edits: [
+      { op: "setKeyframes", name: "sq", type: "Shape", animation: "wobble", property: "rotation", mode: "add", keyframes: [{ frame: 45, value: 180 }] },
+    ],
+  });
+  check(
+    "riv_edit setKeyframes mode=add appends to an existing track",
+    !kfAddMode.isError && textOf(kfAddMode).includes("setKeyframes add"),
+    textOf(kfAddMode).slice(0, 300)
+  );
+
+  // riv_edit: setKeyframes (mode=remove, 追加したフレームを削除)
+  const kfPath3 = join(root, "samples", "e2e-keyframes-remove.riv");
+  const kfRemoveMode = await callTool("riv_edit", {
+    path: kfPath2,
+    outPath: kfPath3,
+    edits: [
+      { op: "setKeyframes", name: "sq", type: "Shape", animation: "wobble", property: "rotation", mode: "remove", keyframes: [{ frame: 45 }] },
+    ],
+  });
+  check(
+    "riv_edit setKeyframes mode=remove removes a keyframe (official runtime still loads it)",
+    !kfRemoveMode.isError && textOf(kfRemoveMode).includes("setKeyframes remove"),
+    textOf(kfRemoveMode).slice(0, 300)
+  );
+
+  // riv_visual_diff: 同一ファイル同士 -> 一致率100% / 編集後ファイルとの比較 -> 100%未満
+  const diffSame = await callTool("riv_visual_diff", {
+    pathA: genPath, pathB: genPath, out: join(root, "samples", "e2e-diff-same.png"),
+  });
+  const diffSameText = textOf(diffSame);
+  check("riv_visual_diff same file matches 100%", !diffSame.isError && diffSameText.includes("100.00%"), diffSameText.slice(0, 200));
+
+  const diffChanged = await callTool("riv_visual_diff", {
+    pathA: genPath, pathB: join(root, "samples", "e2e-edited.riv"), out: join(root, "samples", "e2e-diff-changed.png"),
+  });
+  const diffChangedText = textOf(diffChanged);
+  const matchPct = parseFloat((diffChangedText.match(/Match rate: ([\d.]+)%/) || [])[1] ?? "100");
+  check(
+    "riv_visual_diff detects the edit (<100% match)",
+    !diffChanged.isError && matchPct < 100,
+    diffChangedText.slice(0, 200)
+  );
+  check("riv_visual_diff returns a diff image", (diffChanged.content || []).some((c) => c.type === "image"));
 
   // HLAPI: bake + particles
   const hlapi = await callTool("riv_create", {

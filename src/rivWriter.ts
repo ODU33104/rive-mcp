@@ -366,7 +366,7 @@ export function parseColor(c: string): number {
   return Number.parseInt(s, 16) >>> 0;
 }
 
-const EASING_BEZIER: Record<string, [number, number, number, number] | null> = {
+export const EASING_BEZIER: Record<string, [number, number, number, number] | null> = {
   hold: null,
   linear: null,
   ease: [0.25, 0.1, 0.25, 1],

@@ -1,17 +1,41 @@
 // 既存 .riv の編集（無損失 roundtrip ベース）
-// set: プロパティ変更/追加、setText: 名前付きテキストラン変更、delete: サブツリー削除+参照再マップ
+// set: プロパティ変更/追加、setText: 名前付きテキストラン変更、delete: サブツリー削除+参照再マップ、
+// setKeyframes: 既存アニメーションのキーフレーム置換/追加/削除
 import { readRiv, writeRawRiv, propInfo, fieldTypeOf, type RivObject, type RawProp } from "./rivBinary.js";
-import { parseColor } from "./rivWriter.js";
+import { parseColor, EASING_BEZIER, type EasingName } from "./rivWriter.js";
+
+export interface KeyframeEditSpec {
+  frame: number;
+  value?: number;
+  easing?: EasingName;
+}
 
 export interface EditOp {
-  op: "set" | "setText" | "delete";
+  op: "set" | "setText" | "delete" | "setKeyframes";
   // 対象指定: index（riv_dump のグローバルindex）または name（+type で絞り込み）
   index?: number;
   name?: string;
   type?: string;
   set?: Record<string, unknown>; // op=set: プロパティ名→値（色は "#RRGGBB" 可）
   text?: string; // op=setText
+  // op=setKeyframes: index/name はアニメート対象オブジェクトを指す
+  animation?: string; // LinearAnimation名
+  property?: "x" | "y" | "rotation" | "scaleX" | "scaleY" | "opacity" | "width" | "height";
+  keyframes?: KeyframeEditSpec[];
+  mode?: "replace" | "add" | "remove"; // 既定 replace。remove は keyframes[].frame のみ参照
 }
+
+// setKeyframes 用: rivWriter.ts の PROP_KEYS (数値プロパティのみ・同期を保つこと)
+const KEYFRAME_PROP_MAP: Record<string, { type: string; prop: string }> = {
+  x: { type: "Node", prop: "x" },
+  y: { type: "Node", prop: "y" },
+  rotation: { type: "TransformComponent", prop: "rotation" },
+  scaleX: { type: "TransformComponent", prop: "scaleX" },
+  scaleY: { type: "TransformComponent", prop: "scaleY" },
+  opacity: { type: "WorldTransformComponent", prop: "opacity" },
+  width: { type: "LayoutComponent", prop: "width" },
+  height: { type: "LayoutComponent", prop: "height" },
+};
 
 // アートボード内ローカルindexを参照するプロパティキー（削除時の再マップ対象）
 const REF_PROPS: Array<[string, string]> = [
@@ -66,6 +90,99 @@ function requireProp(typeName: string, propName: string): { key: number; type: s
   }
   throw new Error(`Property ${propName} not found on ${typeName}`);
 }
+
+// ---- setKeyframes 用ヘルパ ------------------------------------------------
+function typeKeyOf(typeName: string): number {
+  const d = loadDefs();
+  const t = d?.types[typeName];
+  if (!t || t.typeKey == null) throw new Error(`Unknown type: ${typeName}`);
+  return t.typeKey;
+}
+
+function buildRivObj(type: string, props: Record<string, unknown>): RivObject {
+  const raw: RawProp[] = [];
+  for (const [propName, value] of Object.entries(props)) {
+    if (value === undefined) continue;
+    const p = requireProp(type, propName);
+    const ft = fieldTypeOf(p.type);
+    const bits = ft === "double" ? 2 : ft === "string" ? 1 : ft === "color" ? 3 : 0;
+    raw.push({ key: p.key, fieldType: bits, value: value as number | string | Uint8Array });
+  }
+  return { index: -1, typeKey: typeKeyOf(type), typeName: type, properties: {}, unknownProps: [], raw };
+}
+
+// pos を含むアートボードの [開始position, 終了position) を配列位置で返す（.index の欠番に依存しない）
+function artboardBoundsForPosition(objects: RivObject[], pos: number): { abStartPos: number; abEndPos: number } {
+  const artboardPositions: number[] = [];
+  objects.forEach((o, i) => {
+    if (o.typeName === "Artboard") artboardPositions.push(i);
+  });
+  let abStartPos = -1;
+  for (const p of artboardPositions) {
+    if (p <= pos) abStartPos = p;
+    else break;
+  }
+  if (abStartPos === -1) throw new Error(`Object at position ${pos} is not inside any artboard`);
+  const idx = artboardPositions.indexOf(abStartPos);
+  const abEndPos = artboardPositions[idx + 1] ?? objects.length;
+  return { abStartPos, abEndPos };
+}
+
+// removePositions（アートボード内の配列position集合）を除去し、残存オブジェクトのローカル参照値を再マップする。
+// KeyedObject/KeyedProperty/KeyFrame* は他オブジェクトから参照されないため、除去自体に参照の巻き添えは無い。
+function removeAtPositions(
+  objects: RivObject[],
+  abStartPos: number,
+  abEndPos: number,
+  removePositions: Set<number>
+): RivObject[] {
+  if (removePositions.size === 0) return objects;
+  const removedSorted = [...removePositions].sort((a, b) => a - b);
+  const shiftFor = (absPos: number): number => {
+    let lo = 0, hi = removedSorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (removedSorted[mid] < absPos) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const refs = refKeys();
+  for (let i = abStartPos; i < abEndPos; i++) {
+    if (removePositions.has(i)) continue;
+    for (const r of objects[i].raw) {
+      if (refs.has(r.key) && typeof r.value === "number") {
+        const absPos = abStartPos + r.value;
+        const shift = shiftFor(absPos);
+        if (shift > 0) r.value = r.value - shift;
+      }
+    }
+  }
+  return objects.filter((_, i) => !removePositions.has(i));
+}
+
+// atPos（配列position）に newObjs を挿入し、以降のローカル参照値を +newObjs.length する
+function insertAt(
+  objects: RivObject[],
+  abStartPos: number,
+  abEndPos: number,
+  atPos: number,
+  newObjs: RivObject[]
+): RivObject[] {
+  if (newObjs.length === 0) return objects;
+  const localThreshold = atPos - abStartPos;
+  const refs = refKeys();
+  for (let i = abStartPos; i < abEndPos; i++) {
+    for (const r of objects[i].raw) {
+      if (refs.has(r.key) && typeof r.value === "number" && r.value >= localThreshold) {
+        r.value = r.value + newObjs.length;
+      }
+    }
+  }
+  return [...objects.slice(0, atPos), ...newObjs, ...objects.slice(atPos)];
+}
+
+const KEYFRAME_TYPES = new Set(["KeyFrameDouble", "KeyFrameColor", "KeyFrameId"]);
 
 export function editRiv(bytes: Uint8Array, edits: EditOp[]): { bytes: Uint8Array; log: string[] } {
   const dump = readRiv(bytes);
@@ -185,6 +302,169 @@ export function editRiv(bytes: Uint8Array, edits: EditOp[]): { bytes: Uint8Array
         }
         objects = objects.filter((o) => !doomed.has(o.index));
         log.push(`deleted #${target.index} ${target.typeName} (+${doomed.size - 1} descendants/refs)`);
+      }
+    } else if (e.op === "setKeyframes") {
+      if (!e.animation) throw new Error("setKeyframes needs 'animation'");
+      const property = e.property;
+      if (!property || !(property in KEYFRAME_PROP_MAP)) {
+        throw new Error(`setKeyframes 'property' must be one of: ${Object.keys(KEYFRAME_PROP_MAP).join(", ")}`);
+      }
+      const mode = e.mode ?? "replace";
+      const kfs = e.keyframes ?? [];
+      if (mode !== "remove" && kfs.length === 0) throw new Error("setKeyframes needs a non-empty 'keyframes' array");
+
+      const animPos = objects.findIndex((o) => o.typeName === "LinearAnimation" && o.properties.name === e.animation);
+      if (animPos === -1) throw new Error(`Animation '${e.animation}' not found`);
+      const { abStartPos, abEndPos: abEndPosOrig } = artboardBoundsForPosition(objects, animPos);
+      let abEndPos = abEndPosOrig;
+
+      let targetPos = -1;
+      if (e.index !== undefined) {
+        targetPos = objects.findIndex((o) => o.index === e.index);
+        if (targetPos === -1 || targetPos < abStartPos || targetPos >= abEndPos) {
+          throw new Error(`Object index ${e.index} not found in the artboard of animation '${e.animation}'`);
+        }
+      } else if (e.name !== undefined) {
+        for (let i = abStartPos; i < abEndPos; i++) {
+          const o = objects[i];
+          if (o.properties.name === e.name && (e.type === undefined || o.typeName === e.type)) {
+            targetPos = i;
+            break;
+          }
+        }
+        if (targetPos === -1) throw new Error(`Object named '${e.name}' not found in artboard of animation '${e.animation}'`);
+      } else {
+        throw new Error("setKeyframes needs 'index' or 'name' to locate the target object");
+      }
+      const targetLocal = targetPos - abStartPos;
+
+      // このアニメーションのブロック境界（次の LinearAnimation/StateMachine の手前まで）
+      let blockEndPos = abEndPos;
+      for (let i = animPos + 1; i < abEndPos; i++) {
+        if (objects[i].typeName === "LinearAnimation" || objects[i].typeName === "StateMachine") {
+          blockEndPos = i;
+          break;
+        }
+      }
+
+      const propRef = KEYFRAME_PROP_MAP[property];
+      const propKeyInfo = requireProp(propRef.type, propRef.prop);
+      const objectIdKey = requireProp("KeyedObject", "objectId").key;
+      const propertyKeyKey = requireProp("KeyedProperty", "propertyKey").key;
+
+      // 既存トラック（KeyedObject(objectId=target) 直後に KeyedProperty(propertyKey=対象)) を探す
+      let groupPos = -1, kfStartPos = -1, kfEndPos = -1;
+      for (let i = animPos + 1; i < blockEndPos; i++) {
+        const o = objects[i];
+        if (o.typeName !== "KeyedObject") continue;
+        const oid = o.raw.find((r) => r.key === objectIdKey)?.value;
+        const kp = objects[i + 1];
+        if (oid !== targetLocal || !kp || kp.typeName !== "KeyedProperty") continue;
+        const pk = kp.raw.find((r) => r.key === propertyKeyKey)?.value;
+        if (pk !== propKeyInfo.key) continue;
+        groupPos = i;
+        kfStartPos = i + 2;
+        let j = kfStartPos;
+        while (j < blockEndPos && KEYFRAME_TYPES.has(objects[j].typeName)) j++;
+        kfEndPos = j;
+        break;
+      }
+
+      if (mode === "remove") {
+        if (groupPos === -1) {
+          log.push(`setKeyframes: no track found for ${e.animation}/${property} (nothing to remove)`);
+        } else {
+          const frameKeyInfo = requireProp("KeyFrame", "frame");
+          const frames = new Set(kfs.map((k) => k.frame ?? 0));
+          const removeSet = new Set<number>();
+          for (let i = kfStartPos; i < kfEndPos; i++) {
+            const fRaw = objects[i].raw.find((r) => r.key === frameKeyInfo.key)?.value;
+            const f = typeof fRaw === "number" ? fRaw : 0;
+            if (frames.has(f)) removeSet.add(i);
+          }
+          const remaining = kfEndPos - kfStartPos - removeSet.size;
+          if (remaining <= 0) {
+            removeSet.add(groupPos);
+            removeSet.add(groupPos + 1);
+          }
+          objects = removeAtPositions(objects, abStartPos, abEndPos, removeSet);
+          log.push(
+            `setKeyframes remove: ${removeSet.size} object(s) removed for ${e.animation}/${property}` +
+              (remaining <= 0 ? " (track emptied and removed)" : "")
+          );
+        }
+      } else {
+        // replace / add: 必要なイージング補間器（新規のみ）+ 新規キーフレームを1バッチで挿入
+        let removeCount: number, insertPos: number;
+        if (mode === "add") {
+          removeCount = 0;
+          insertPos = groupPos === -1 ? animPos + 1 : kfEndPos;
+        } else if (groupPos === -1) {
+          removeCount = 0;
+          insertPos = animPos + 1;
+        } else {
+          removeCount = kfEndPos - kfStartPos;
+          insertPos = kfStartPos;
+        }
+
+        const interpKeys = ["x1", "y1", "x2", "y2"].map((p) => requireProp("CubicEaseInterpolator", p).key);
+        const findInterpolator = (bez: [number, number, number, number]): number | null => {
+          for (let i = abStartPos; i < abEndPos; i++) {
+            const o = objects[i];
+            if (o.typeName !== "CubicEaseInterpolator") continue;
+            const vals = interpKeys.map((k) => o.raw.find((r) => r.key === k)?.value as number | undefined);
+            if (vals.every((v, idx) => v !== undefined && Math.abs(v - bez[idx]) < 1e-4)) return i - abStartPos;
+          }
+          return null;
+        };
+
+        const neededEasings = new Set<string>();
+        for (const k of kfs) {
+          if (k.easing && EASING_BEZIER[k.easing]) neededEasings.add(k.easing);
+        }
+        const interpolatorLocal = new Map<string, number>();
+        const newInterpObjs: RivObject[] = [];
+        let cursor = insertPos - abStartPos;
+        for (const name of neededEasings) {
+          const existing = findInterpolator(EASING_BEZIER[name]!);
+          if (existing !== null) {
+            interpolatorLocal.set(name, existing);
+            continue;
+          }
+          const [x1, y1, x2, y2] = EASING_BEZIER[name]!;
+          newInterpObjs.push(buildRivObj("CubicEaseInterpolator", { x1, y1, x2, y2 }));
+          interpolatorLocal.set(name, cursor);
+          cursor++;
+        }
+
+        const kfObjs = kfs.map((k) => {
+          const easing = k.easing ?? "linear";
+          const interpolationType = easing === "hold" ? 0 : easing === "linear" ? 1 : 2;
+          const props: Record<string, unknown> = { interpolationType };
+          if (k.frame) props.frame = k.frame;
+          if (interpolationType === 2) props.interpolatorId = interpolatorLocal.get(easing);
+          let v = k.value ?? 0;
+          if (property === "rotation") v = (v * Math.PI) / 180;
+          props.value = v;
+          return buildRivObj("KeyFrameDouble", props);
+        });
+
+        const insertBatch =
+          groupPos === -1
+            ? [...newInterpObjs, buildRivObj("KeyedObject", { objectId: targetLocal }), buildRivObj("KeyedProperty", { propertyKey: propKeyInfo.key }), ...kfObjs]
+            : [...newInterpObjs, ...kfObjs];
+
+        if (removeCount > 0) {
+          const removeSet = new Set<number>();
+          for (let i = insertPos; i < insertPos + removeCount; i++) removeSet.add(i);
+          objects = removeAtPositions(objects, abStartPos, abEndPos, removeSet);
+          abEndPos -= removeCount;
+        }
+        objects = insertAt(objects, abStartPos, abEndPos, insertPos, insertBatch);
+        log.push(
+          `setKeyframes ${mode}: ${kfObjs.length} keyframe(s) (+${newInterpObjs.length} interpolator(s)) for ${e.animation}/${property}` +
+            (groupPos === -1 ? " (new track)" : "")
+        );
       }
     } else {
       throw new Error(`Unknown op '${(e as EditOp).op}'`);

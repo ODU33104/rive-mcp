@@ -43,6 +43,39 @@ export interface PlayResult {
   frames: string[]; // base64 png
 }
 
+export interface VideoResult {
+  base64: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  durationSeconds: number;
+  steps: number;
+  estimatedFrames: number;
+  byteLength: number;
+}
+
+export interface SpriteSheetResult {
+  image: string; // base64 png
+  width: number;
+  height: number;
+  cellW: number;
+  cellH: number;
+  cols: number;
+  rows: number;
+  count: number;
+  fps: number;
+}
+
+export interface VisualDiffResult {
+  width: number;
+  height: number;
+  totalPixels: number;
+  diffPixels: number;
+  matchRate: number;
+  threshold: number;
+  diffImage: string; // base64 png
+}
+
 function findPlaywrightChromium(): string | null {
   const roots = [
     process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "ms-playwright"),
@@ -177,6 +210,21 @@ export class RiveHost {
     base: string;
   }> {
     return this.call("sliceImage", pngBytes.toString("base64"), { regions });
+  }
+
+  renderVideo(rivBytes: Buffer, opts: Record<string, unknown>): Promise<VideoResult> {
+    return this.call<VideoResult>("renderVideo", rivBytes.toString("base64"), opts);
+  }
+
+  renderSprites(rivBytes: Buffer, opts: Record<string, unknown>): Promise<SpriteSheetResult> {
+    return this.call<SpriteSheetResult>("renderSprites", rivBytes.toString("base64"), opts);
+  }
+
+  visualDiff(rivBytesA: Buffer, rivBytesB: Buffer, opts: Record<string, unknown>): Promise<VisualDiffResult> {
+    return this.call<VisualDiffResult>("visualDiff", rivBytesA.toString("base64"), {
+      ...opts,
+      b64B: rivBytesB.toString("base64"),
+    });
   }
 
   async close(): Promise<void> {
