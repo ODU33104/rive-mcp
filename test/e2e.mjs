@@ -78,7 +78,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 18 tools", names.length === 18, names.join(","));
+  check("tools/list has 19 tools", names.length === 19, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -135,6 +135,43 @@ try {
       !!bytes && bytes.subarray(0, 6).toString() === "GIF89a" && frameCount === 18,
       bytes ? `${bytes.length} bytes, ${frameCount} frames` : "missing"
     );
+  }
+
+  // riv_render_apng (transparent=true 既定)
+  const apng = await callTool("riv_render_apng", {
+    path: RIV,
+    duration: 1,
+    fps: 10,
+    width: 240,
+    out: join(root, "samples", "test-anim.apng"),
+  });
+  check("riv_render_apng not error", !apng.isError, textOf(apng));
+  {
+    const apngPath = join(root, "samples", "test-anim.apng");
+    const bytes = existsSync(apngPath) ? await import("node:fs").then((m) => m.readFileSync(apngPath)) : null;
+    const sigOk = !!bytes && bytes[0] === 0x89 && bytes.subarray(1, 4).toString() === "PNG";
+    // チャンク走査: acTL の有無 / fcTL・fdAT 数 / IHDR colorType
+    let hasActl = false, actlFrames = 0, fctlCount = 0, fdatCount = 0, colorType = -1;
+    if (sigOk) {
+      let pos = 8;
+      while (pos + 8 <= bytes.length) {
+        const len = bytes.readUInt32BE(pos);
+        const type = bytes.subarray(pos + 4, pos + 8).toString();
+        if (type === "IHDR") colorType = bytes[pos + 8 + 9];
+        if (type === "acTL") { hasActl = true; actlFrames = bytes.readUInt32BE(pos + 8); }
+        if (type === "fcTL") fctlCount++;
+        if (type === "fdAT") fdatCount++;
+        pos += 8 + len + 4;
+        if (type === "IEND") break;
+      }
+    }
+    check(
+      "riv_render_apng writes APNG (PNG sig + acTL, 10 frames)",
+      sigOk && hasActl && actlFrames === 10 && fctlCount === 10 && fdatCount >= 9,
+      bytes ? `${bytes.length} bytes, acTL=${hasActl}(${actlFrames}), fcTL=${fctlCount}, fdAT=${fdatCount}` : "missing"
+    );
+    // transparent=true: canvas由来PNGは colorType 6 (truecolor + alpha)
+    check("riv_render_apng transparent output has alpha (IHDR colorType 6)", colorType === 6, `colorType=${colorType}`);
   }
 
   // riv_render_video

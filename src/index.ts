@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { RiveHost } from "./riveHost.js";
 import { PAGE_SCRIPT } from "./pageScript.js";
 import { encodeGif } from "./gif.js";
+import { encodeApng } from "./apng.js";
 import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
@@ -286,6 +287,84 @@ server.registerTool(
               (result.states.length
                 ? `\nState changes: ${JSON.stringify(result.states)}`
                 : ""),
+          },
+        ],
+      };
+    }
+  )
+);
+
+// ---- riv_render_apng ---------------------------------------------------
+server.registerTool(
+  "riv_render_apng",
+  {
+    title: "Render an animation to APNG",
+    description:
+      "Render a .riv animation (or state machine playback) to an animated PNG (APNG). Unlike GIF this supports 24-bit color plus full alpha transparency, and GitHub READMEs animate it like a regular image. Frames are rendered with a transparent background by default.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      artboard: z.string().optional(),
+      animation: z.string().optional().describe("Animation name (default: first state machine or animation)"),
+      stateMachine: z.string().optional(),
+      duration: z.number().positive().max(30).optional().describe("Seconds to render (default 2)"),
+      fps: z.number().int().positive().max(60).optional().describe("Frames per second (default 20)"),
+      width: z.number().int().positive().max(2048).optional().describe("Output width (default 480)"),
+      height: z.number().int().positive().max(2048).optional(),
+      transparent: z.boolean().optional().describe("Render on a transparent background to keep APNG alpha (default true). Set false to composite onto 'background'"),
+      background: z.string().optional().describe("CSS background color when transparent=false (default #ffffff)"),
+      loops: z.number().int().min(0).optional().describe("Loop count (0 = infinite, default 0)"),
+      out: z.string().optional().describe("Output path, .apng or .png (default: <name>.apng alongside the .riv)"),
+    },
+  },
+  wrap(
+    async (a: {
+      path: string;
+      artboard?: string;
+      animation?: string;
+      stateMachine?: string;
+      duration?: number;
+      fps?: number;
+      width?: number;
+      height?: number;
+      transparent?: boolean;
+      background?: string;
+      loops?: number;
+      out?: string;
+    }) => {
+      const { bytes, abs } = loadRiv(a.path);
+      const fps = a.fps ?? 20;
+      const duration = a.duration ?? 2;
+      const frameCount = Math.min(Math.round(fps * duration), 600);
+      const transparent = a.transparent ?? true;
+      const result = await host.renderFrames(bytes, {
+        artboard: a.artboard,
+        animation: a.animation,
+        stateMachine: a.stateMachine,
+        startTime: 0,
+        frameCount,
+        fps,
+        width: a.width ?? 480,
+        height: a.height,
+        background: transparent ? undefined : a.background ?? "#ffffff",
+        format: "png",
+      });
+      const apng = encodeApng(
+        result.frames.map((f) => new Uint8Array(Buffer.from(f, "base64"))),
+        { delayMs: Math.round(1000 / fps), loops: a.loops ?? 0 }
+      );
+      const out = resolve(
+        a.out ?? join(dirname(abs), `${basename(abs, extname(abs))}.apng`)
+      );
+      writeFileSync(out, apng);
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Rendered ${frameCount} frames (${result.width}x${result.height}, ${fps}fps, ${duration}s, ` +
+              `${transparent ? "transparent" : `background ${a.background ?? "#ffffff"}`}) -> ${out}` +
+              ` (${Math.round(apng.length / 1024)} KB)` +
+              (result.states.length ? `\nState changes: ${JSON.stringify(result.states)}` : ""),
           },
         ],
       };

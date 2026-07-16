@@ -29,6 +29,7 @@ samples/e2e-assets/
 samples/e2e-diff-*.png
 samples/test-sprites.*
 samples/test-video.webm
+samples/test-anim.apng
 samples/koneko-onecall*
 samples/ref/centaur_game.riv
 samples/ref/nested_menu.riv
