@@ -110,6 +110,12 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 3. **AIに頼む** — 大きな変更は「AIへの指示」ボックスに書いて送信 → チャットで「スタジオの指示を確認して」
 4. AIが `riv_edit` / `riv_create` で修正すると、ブラウザは自動で最新状態に更新される
 
+## ワンクリック書き出し
+
+Studio のツールバーで PNG / APNG / GIF / WebM を押すだけで、その場でレンダリングして書き出せる。ちょっとしたプレビュー用途なら MCP 経由の往復は不要。
+
+![エクスポートパネル](docs/media/studio-export.png)
+
 ## 使用例（Claude での指示）
 
 - 「`samples/` にある riv ファイルを一覧して」

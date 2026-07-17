@@ -86,6 +86,12 @@ Requires Node.js 20+.
 
 Works without a scene JSON too: any `.riv` can be edited property-by-property through the hierarchy + inspector.
 
+## One-click export
+
+Click PNG / APNG / GIF / WebM in the Studio toolbar to render the current animation on the spot — no MCP round-trip needed for a quick preview export.
+
+![Export panel](docs/media/studio-export.png)
+
 ## Character animation
 
 Turn a single character PNG into a naturally moving `.riv`:
