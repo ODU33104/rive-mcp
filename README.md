@@ -10,7 +10,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 
 ![Studio screenshot](docs/media/studio.png)
 
-<p align="center"><img src="docs/media/showcase.apng" width="420" alt="Animation generated entirely by riv_create"></p>
+<p align="center"><img src="docs/media/showcase-orbit.apng" width="420" alt="Animation generated entirely by riv_create"></p>
 <p align="center"><i>This animation was generated entirely by <code>riv_create</code> — no Rive editor involved.</i></p>
 
 ## Highlights
