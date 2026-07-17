@@ -15,7 +15,8 @@
   "files": [
     "dist",
     "assets",
-    "vendor/rive-defs/defs.json"
+    "vendor/rive-defs/defs.json",
+    "skills"
   ],
   "scripts": {
     "vendor": "node scripts/vendor.mjs",

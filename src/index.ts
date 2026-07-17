@@ -488,6 +488,7 @@ server.registerTool(
   {
     title: "Create a .riv file from a scene spec",
     description: `Create a working .riv animation file from scratch (no Rive editor needed) and validate it with the official runtime. Returns a rendered preview frame.
+For non-flat, non-"AI placeholder" quality (gradients, organic bezier curves, proper easing, springy motion), read the "rive-design-guidelines" prompt this server exposes before designing a non-trivial scene.
 Scene spec example:
 {
   "artboard": {"name":"Demo","width":400,"height":300},
@@ -1141,6 +1142,34 @@ server.registerTool(
         text: `Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically.`,
       }],
     };
+  })
+);
+
+// ---- prompts -------------------------------------------------------------
+server.registerPrompt(
+  "rive-design-guidelines",
+  {
+    title: "Rive design quality guidelines",
+    description:
+      "Guidelines for producing polished, non-\"AI-generated-looking\" .riv output with riv_create — color, gradients, easing semantics, organic curves, rigging.",
+  },
+  () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `When building a scene with riv_create, aim for the quality of a modern SaaS product or game UI, not flat placeholder shapes:
+
+- **Color**: avoid saturated primaries (#FF0000-style). Prefer restrained, modern tones (muted pastels, deep darks, earthy accents). Use \`fill.gradient\` (linear/radial) on primary shapes far more often than a flat \`fill.color\` — a subtle angled gradient reads as "designed" instead of "placeholder".
+- **Organic curves**: \`shapes[].type: "polygon"\` points support an optional \`cubic: { rotation, distance }\` (degrees + handle length) to turn a straight-line vertex into a bezier-handled one (CubicMirroredVertex/CubicAsymmetricVertex). Classic 4-point circle approximation: place points at 0/90/180/270°, each with \`cubic.rotation\` matching that tangent direction and \`distance ≈ radius * 0.5523\`. Use this for blobs, rounded organic shapes, and speech-bubble-like forms instead of chains of straight segments.
+- **Easing semantics (important, easy to misuse)**: a keyframe's \`easing\` describes the motion *arriving at that keyframe* (i.e. the transition from the previous keyframe to this one) — not what happens after it. Never leave every track on implicit \`linear\`; that reads as robotic. Match the easing to the physical intent: \`ease-out\`/\`ease-out-back\` for something settling or overshooting into place, \`ease-in\` for something building up speed (e.g. a drop), \`ease-in-out\` for a smooth back-and-forth, \`elastic-out\`/\`elastic-in\`/\`elastic-in-out\` (with optional \`amplitude\`/\`period\` on that keyframe) for a springy, bouncy pop-in — genuinely more lively than \`ease-out-back\` for UI elements appearing.
+- **Physics bake**: prefer \`bake: { type: "pendulum"|"wind"|"spring"|"gravity", ... }\` over hand-authored keyframes for anything that should sway, drop, or bounce — it now carries proper per-segment easing automatically.
+- **Rigging**: chain \`bones\`/\`RootBone\` with \`mesh.bones\` skinning for anything that bends (limbs, tails, hair); add \`constraints: [{type:"ik"}]\` for reaching/pointing motions instead of animating raw bone rotations by hand.
+- **Known limitation**: \`fill.feather\`/\`stroke.feather\` (blur) writes correctly to the .riv but is NOT rendered by this server's preview pipeline (Canvas2D-based runtime) — only Rive's GPU renderer supports it. Don't rely on it for anything you need to see in riv_render_frame/gif/apng/studio previews.`,
+        },
+      },
+    ],
   })
 );
 

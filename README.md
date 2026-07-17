@@ -35,7 +35,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_render_sprites` | Sprite-sheet PNG + JSON metadata (for game engines) |
 | `riv_play_state_machine` | Set/fire inputs → advance → state-transition report (+ optional frame captures) |
 | `riv_generate_code` | Integration code with real artboard/SM/input names (React / JS / Vue / Svelte / Flutter) |
-| `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview |
+| `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview. Supports bezier-handled vertices, elastic easing, gradients, physics baking, particles |
 | `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
 | `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |
@@ -45,6 +45,10 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_diff` | Structural diff between two `.riv` files |
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Fetch instructions the human typed into the Studio UI |
+
+### Design quality guidance
+
+`riv_create` output can look like flat "AI placeholder" shapes if a client just wings the scene spec. The server exposes a `rive-design-guidelines` MCP prompt (color/gradients, organic bezier curves, easing semantics, physics baking, rigging, a known feather/blur limitation) that any MCP client can fetch before designing a non-trivial scene. For clients without MCP prompts support, the same guidance ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
 
 ## Quick start
 
@@ -122,6 +126,7 @@ npm run test:e2e   # spawns the real server, exercises all 18 tools over JSON-RP
 - Text-run enumeration is not exposed by the runtime API (access by name works)
 - GIF output has no transparency (composited on a background color)
 - The Canvas2D preview renderer can show mesh seams that don't exist in the file (WebGL/Skia render clean)
+- `fill.feather`/`stroke.feather` (vector blur) writes correctly to the `.riv` but isn't rendered by this server's Canvas2D preview pipeline — only a GPU Rive Renderer supports it
 - Luau scripting and the Layout engine are not generated (runtime spec still moving)
 
 ## License

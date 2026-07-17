@@ -1,6 +1,6 @@
 // HLAPI: 物理ベイク・パーティクル・プレハブ
 // コンパイル時に物理シミュレーションを実行し、Douglas-Peucker で疎なキーフレームに圧縮する
-import type { SceneSpec, ArtboardSpec, TrackSpec, KeyframeSpec, ShapeSpec, AnimationSpec } from "./rivWriter.js";
+import type { SceneSpec, ArtboardSpec, TrackSpec, KeyframeSpec, ShapeSpec, AnimationSpec, EasingName } from "./rivWriter.js";
 
 // ---- 物理ベイク -----------------------------------------------------------
 export interface BakeSpec {
@@ -97,7 +97,18 @@ export function bakeToKeyframes(bake: BakeSpec, durationFrames: number, fps: num
   }
   const range = Math.max(...samples.map((s) => Math.abs(s[1] - bake.from)), 1);
   const eps = range * 0.008; // 値域の0.8%を許容誤差に
-  return simplify(samples, eps).map(([frame, val]) => ({ frame, value: val }));
+  const simplified = simplify(samples, eps);
+  // 区間ごとにイージングを付与（既定 linear だと物理曲線がカクつく）
+  return simplified.map(([frame, val], i) => {
+    if (i === 0) return { frame, value: val };
+    const prev = simplified[i - 1][1];
+    let easing: EasingName = "ease-in-out";
+    if (bake.type === "gravity") {
+      // 落下(加速)は ease-in、跳ね返り後の減速は ease-out
+      easing = val > prev ? "ease-in" : "ease-out";
+    }
+    return { frame, value: val, easing };
+  });
 }
 
 // ---- パーティクル / プレハブ ----------------------------------------------

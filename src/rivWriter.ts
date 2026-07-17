@@ -204,9 +204,26 @@ export interface ShapeSpec {
   rotation?: number;
   opacity?: number;
   cornerRadius?: number;
-  points?: Array<{ x: number; y: number; radius?: number }>;
-  fill?: { color?: string; gradient?: GradientSpec };
-  stroke?: { color: string; thickness: number };
+  points?: Array<{
+    x: number;
+    y: number;
+    radius?: number; // 直線頂点(StraightVertex)の角丸半径。cubicと併用不可
+    // 指定するとベジェハンドル付き頂点(Cubic*Vertex)になる。有機的な曲線シェイプ用
+    cubic?: {
+      rotation: number; // 度。この頂点の接線方向
+      distance?: number; // 対称ハンドル長（省略時はinDistance/outDistanceを個別指定）
+      inDistance?: number; // 非対称: 入り側ハンドル長
+      outDistance?: number; // 非対称: 出側ハンドル長
+    };
+  }>;
+  fill?: { color?: string; gradient?: GradientSpec; feather?: FeatherSpec };
+  stroke?: { color: string; thickness: number; feather?: FeatherSpec };
+}
+export interface FeatherSpec {
+  strength?: number; // ぼかし半径。既定 12
+  offsetX?: number;
+  offsetY?: number;
+  inner?: boolean; // true で内側シャドウ的な効果
 }
 export interface TextRunSpec {
   text: string;
@@ -245,10 +262,13 @@ export interface KeyframeSpec {
   value?: number;
   color?: string;
   easing?: EasingName;
+  amplitude?: number; // elastic-* 専用。既定 1
+  period?: number; // elastic-* 専用。既定 0.5（秒）
 }
 export type EasingName =
   | "hold" | "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out"
-  | "ease-out-back" | "ease-in-back" | "smooth" | "snap";
+  | "ease-out-back" | "ease-in-back" | "smooth" | "snap"
+  | "elastic-in" | "elastic-out" | "elastic-in-out";
 export interface TrackSpec {
   target: string;
   property:
@@ -378,6 +398,16 @@ export const EASING_BEZIER: Record<string, [number, number, number, number] | nu
   smooth: [0.4, 0, 0.2, 1], // Material standard
   snap: [0.7, 0, 0.1, 1],
 };
+
+// ElasticInterpolator.easingValue: Easing::easeIn=0 / easeOut=1 / easeInOut=2 (rive-runtime)
+export const ELASTIC_EASING_VALUE: Record<string, number> = {
+  "elastic-in": 0,
+  "elastic-out": 1,
+  "elastic-in-out": 2,
+};
+function elasticKey(easing: string, amplitude: number, period: number): string {
+  return `${easing}:${amplitude}:${period}`;
+}
 
 const LOOP_VALUES = { oneShot: 0, loop: 1, pingPong: 2 } as const;
 
@@ -663,10 +693,27 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         if (!s.points || s.points.length < 3) throw new Error(`polygon '${s.id}' needs >=3 points`);
         const path = push({ type: "PointsPath", props: { parentId: shape, isClosed: true } });
         for (const p of s.points) {
-          push({
-            type: "StraightVertex",
-            props: { parentId: path, x: p.x, y: p.y, ...(p.radius ? { radius: p.radius } : {}) },
-          });
+          if (p.cubic) {
+            const rotation = (p.cubic.rotation * Math.PI) / 180;
+            const inDistance = p.cubic.inDistance ?? p.cubic.distance ?? 0;
+            const outDistance = p.cubic.outDistance ?? p.cubic.distance ?? 0;
+            if (inDistance === outDistance) {
+              push({
+                type: "CubicMirroredVertex",
+                props: { parentId: path, x: p.x, y: p.y, rotation, distance: inDistance },
+              });
+            } else {
+              push({
+                type: "CubicAsymmetricVertex",
+                props: { parentId: path, x: p.x, y: p.y, rotation, inDistance, outDistance },
+              });
+            }
+          } else {
+            push({
+              type: "StraightVertex",
+              props: { parentId: path, x: p.x, y: p.y, ...(p.radius ? { radius: p.radius } : {}) },
+            });
+          }
         }
       } else {
         const typeName = s.type === "rect" ? "Rectangle" : s.type === "ellipse" ? "Ellipse" : "Triangle";
@@ -682,8 +729,22 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         push({ type: typeName, props });
       }
 
+      const emitFeather = (paintId: number, f: FeatherSpec): void => {
+        push({
+          type: "Feather",
+          props: {
+            parentId: paintId,
+            strength: f.strength ?? 12,
+            ...(f.offsetX ? { offsetX: f.offsetX } : {}),
+            ...(f.offsetY ? { offsetY: f.offsetY } : {}),
+            ...(f.inner ? { inner: f.inner } : {}),
+          },
+        });
+      };
+
       if (s.fill) {
         const fill = push({ type: "Fill", props: { parentId: shape } });
+        if (s.fill.feather) emitFeather(fill, s.fill.feather);
         if (s.fill.gradient) {
           const g = s.fill.gradient;
           const w2 = (s.width ?? 100) / 2;
@@ -719,6 +780,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
 
       if (s.stroke) {
         const stroke = push({ type: "Stroke", props: { parentId: shape, thickness: s.stroke.thickness } });
+        if (s.stroke.feather) emitFeather(stroke, s.stroke.feather);
         push({ type: "SolidColor", props: { parentId: stroke, colorValue: parseColor(s.stroke.color) } });
       }
     };
@@ -822,16 +884,33 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     // イージング用インターポレータ
     const interpolatorIds = new Map<string, number>();
     const neededEasings = new Set<string>();
+    const neededElastics = new Map<string, { easing: string; amplitude: number; period: number }>();
     for (const a of ab.animations ?? []) {
       for (const t of a.tracks) {
         for (const k of t.keyframes) {
-          if (k.easing && EASING_BEZIER[k.easing]) neededEasings.add(k.easing);
+          if (!k.easing) continue;
+          if (EASING_BEZIER[k.easing]) {
+            neededEasings.add(k.easing);
+          } else if (k.easing in ELASTIC_EASING_VALUE) {
+            const amplitude = k.amplitude ?? 1;
+            const period = k.period ?? 0.5;
+            neededElastics.set(elasticKey(k.easing, amplitude, period), { easing: k.easing, amplitude, period });
+          }
         }
       }
     }
     for (const name of neededEasings) {
       const [x1, y1, x2, y2] = EASING_BEZIER[name]!;
       interpolatorIds.set(name, push({ type: "CubicEaseInterpolator", props: { x1, y1, x2, y2 } }));
+    }
+    for (const [key, p] of neededElastics) {
+      interpolatorIds.set(
+        key,
+        push({
+          type: "ElasticInterpolator",
+          props: { easingValue: ELASTIC_EASING_VALUE[p.easing], amplitude: p.amplitude, period: p.period },
+        })
+      );
     }
 
     // アニメーション
@@ -892,12 +971,23 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         }
         push({ type: "KeyedObject", props: { objectId: targetId } });
         push({ type: "KeyedProperty", props: { propertyKey: resolveProp(propRef.type, propRef.prop).key } });
-        for (const k of t.keyframes) {
-          const easing = k.easing ?? "linear";
+        t.keyframes.forEach((k, i) => {
+          // rive-runtime の仕様: KeyFrame の interpolationType/interpolatorId は
+          // 「このフレームから次のフレームへ向かう区間」の補間に使われる（このフレーム自身への
+          // 到達には使われない）。シーン仕様では「このキーフレームへ向かう動き」に easing を
+          // 書く方が直感的なので、次要素の easing をこのフレームへシフトして書き込む。
+          const next = t.keyframes[i + 1];
+          const easing = next?.easing ?? "linear";
           const interpolationType = easing === "hold" ? 0 : easing === "linear" ? 1 : 2;
           const kfProps: Record<string, unknown> = { interpolationType };
           if (k.frame) kfProps.frame = k.frame;
-          if (interpolationType === 2) kfProps.interpolatorId = interpolatorIds.get(easing);
+          if (interpolationType === 2) {
+            const idKey =
+              easing in ELASTIC_EASING_VALUE
+                ? elasticKey(easing, next!.amplitude ?? 1, next!.period ?? 0.5)
+                : easing;
+            kfProps.interpolatorId = interpolatorIds.get(idKey);
+          }
           if (isColor) {
             if (k.color === undefined) throw new Error(`fillColor keyframe needs 'color'`);
             push({ type: "KeyFrameColor", props: { ...kfProps, value: parseColor(k.color) } });
@@ -906,7 +996,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             if (t.property === "rotation") v = (v * Math.PI) / 180;
             push({ type: "KeyFrameDouble", props: { ...kfProps, value: v } });
           }
-        }
+        });
       }
     }
 

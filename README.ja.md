@@ -55,7 +55,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_render_sprites` | スプライトシート PNG + メタデータ JSON（ゲームエンジン向け） |
 | `riv_play_state_machine` | 入力の set / fire → advance → 状態遷移レポート（+任意でフレームキャプチャ）|
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
-| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き）、State Machine（入力・状態・条件付き遷移・exit time）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
+| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
 | `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
@@ -65,6 +65,10 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_diff` | 2つの.rivの構造差分（型数変化・オブジェクト単位のプロパティ差分） |
 | `riv_studio` | **ローカルWebスタジオ**（公式エディタ風ダークUI・日英対応）: 階層ツリー（アイコン付き）/ キャンバス選択・ドラッグ・四隅リサイズ / インスペクタ（ラベル横ドラッグで数値変更）/ タイムライン編集（キーフレームのドラッグ移動・ダブルクリック追加・削除）/ Undo/Redo / 矢印キー移動・Deleteキー削除 / オブジェクト追加ボタン / 再生速度切替 / **ワンクリック書き出し（PNG/APNG/GIF/WebM）** / ライブプレビュー+ホットリロード / SM入力コントロール。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
 | `riv_studio_notes` | **スタジオUI→AIへの指示の受信**: UIの「AIへの指示」ボックスに人間が書いた修正依頼をAIが取得（取得するとUI側に通知）。「スタジオの指示を確認して」で呼ばれる |
+
+### デザイン品質のガイダンス
+
+`riv_create` はシーン仕様を雑に書くと、いかにも「AIが仮置きした」ような平坦な図形になりがちです。サーバーは `rive-design-guidelines` という MCP prompt を公開しており、複雑なシーンを設計する前にどの MCP クライアントからでも取得できます（色・グラデーション、ベジェ曲線による有機的な形状、イージングの意味論、物理ベイク、リギング、featherの既知の制約について）。MCP prompts に対応していないクライアント向けに、同内容を [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としてスキル形式でも同梱している。
 
 ## キャラクターアニメーション
 
@@ -83,10 +87,10 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 
 ## 対応機能（riv_create シーン仕様）
 
-- **描画**: rect(角丸)/ellipse/polygon、単色・線形/放射グラデ、ストローク、統一z順序、PNG画像
+- **描画**: rect(角丸)/ellipse/polygon（**ベジェハンドル付き頂点**でCubicMirrored/CubicAsymmetric対応）、単色・線形/放射グラデ、ストローク、feather（ぼかし。データは正しく書き込まれるがCanvas2Dプレビューでは非表示、下記「対象外」参照）、統一z順序、PNG画像
 - **テキスト**: フォント埋め込み（既定: 同梱Inter/OFL）、スタイル付きラン（サイズ・色）、名前付きランはランタイム差し替え可
 - **構造**: 複数アートボード、ネストアートボード（SM入力自動公開）、グループ階層、ボーン+スキニング、IKコンストレイント
-- **アニメ**: キーフレーム（10種イージング + hold）、色アニメ、メッシュ頂点アニメ、物理ベイク（gravity/spring/pendulum/wind → Douglas-Peucker圧縮）、パーティクル（rain/snow/sparks/dust/confetti/bubbles）
+- **アニメ**: キーフレーム（linear/hold/ease系 + **elastic-in/out/in-out**）、色アニメ、メッシュ頂点アニメ、物理ベイク（gravity/spring/pendulum/wind → Douglas-Peucker圧縮 + 自動イージング付与）、パーティクル（rain/snow/sparks/dust/confetti/bubbles）
 - **State Machine**: 複数SM・複数レイヤー、ブレンドステート(1D)、条件付き遷移（==,!=,<,>,<=,>=）、duration/exit time、**リスナー**（click/down/up/enter/exit/move → trigger発火・bool設定/トグル・number設定）、**イベント**（カスタム/OpenURL、state進入時発火）
 
 ### 対象外（理由）
@@ -136,6 +140,7 @@ npm run test:e2e   # 実サーバーを spawn して全ツールを JSON-RPC 実
 - `.riv` の**読み取り専用**（編集・再エクスポートは Rive エディタの領分）
 - テキストラン列挙は Rive ランタイム API 制約により非対応（名前指定アクセスは可）
 - GIF は透過非対応のため既定で白背景合成（`background` で変更可）
+- `fill.feather`/`stroke.feather`（ぼかし）は .riv には正しく書き込まれるが、このサーバーのCanvas2Dプレビューでは描画されない（GPU版Rive Rendererのみ対応）
 
 ## ライセンス / 利用条件
 
