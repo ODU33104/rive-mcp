@@ -48,6 +48,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 |---|---|
 | `riv_list` | ディレクトリ配下の `.riv` を再帰検索（サイズ・フォーマット版） |
 | `riv_inspect` | アートボード / アニメーション（duration・fps・loop）/ State Machine と入力（型・初期値）の全メタデータ抽出 |
+| `riv_lint` | 静的診断: 壊れた参照、巨大な埋め込みアセット、到達不能な state、条件無しの自己遷移（無限ループの恐れ）、未使用input、トラック最終キーフレームで無効化されるeasingを検出 |
 | `riv_render_frame` | 任意時刻の1フレームを PNG レンダリング（インライン画像 + ファイル保存） |
 | `riv_render_gif` | アニメーションをプレビュー GIF に変換 |
 | `riv_render_apng` | アニメーションPNG（APNG）書き出し — 24bit色+アルファ透過（GitHub上でも再生される） |

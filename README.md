@@ -22,12 +22,13 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (19)
+## Tools (20)
 
 | Tool | What it does |
 |---|---|
 | `riv_list` | Recursively find `.riv` files (size, format version) |
 | `riv_inspect` | Full metadata: artboards, animations (duration/fps/loop), state machines and inputs |
+| `riv_lint` | Static diagnostic: broken references, oversized embedded assets, unreachable state-machine states, unconditional self-transitions (infinite-loop risk), unused inputs, easing silently discarded on a track's last keyframe |
 | `riv_render_frame` | Render any moment to PNG (inline image + file) |
 | `riv_render_gif` | Turn an animation into a preview GIF |
 | `riv_render_apng` | Animated PNG export — 24-bit color + alpha transparency (plays on GitHub) |

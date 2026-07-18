@@ -12,6 +12,7 @@ import { encodeGif } from "./gif.js";
 import { encodeApng } from "./apng.js";
 import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
+import { lintRiv } from "./rivLint.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
 import { extractAssets } from "./rivAssets.js";
@@ -479,6 +480,30 @@ server.registerTool(
       objects: full ? dump.objects : dump.objects.slice(0, 50),
     };
     return { content: [{ type: "text", text: JSON.stringify(body, null, 1) }] };
+  })
+);
+
+// ---- riv_lint ------------------------------------------------------------
+server.registerTool(
+  "riv_lint",
+  {
+    title: "Diagnose a .riv file for structural problems",
+    description:
+      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, and keyframe easing silently discarded on a track's last keyframe. Complements riv_dump (which shows raw structure but doesn't judge it).",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+    },
+  },
+  wrap(async ({ path }: { path: string }) => {
+    const { bytes } = loadRiv(path);
+    const findings = lintRiv(bytes);
+    const summary = {
+      errorCount: findings.filter((f) => f.severity === "error").length,
+      warningCount: findings.filter((f) => f.severity === "warning").length,
+      infoCount: findings.filter((f) => f.severity === "info").length,
+      findings,
+    };
+    return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
   })
 );
 

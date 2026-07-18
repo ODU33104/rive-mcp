@@ -78,7 +78,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 19 tools", names.length === 19, names.join(","));
+  check("tools/list has 20 tools", names.length === 20, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -397,6 +397,53 @@ try {
     "generated SM transitions on input",
     !genPlay.isError && genPlayText.includes("wobble"),
     genPlayText.slice(0, 400)
+  );
+
+  // riv_lint: 正常なファイルでは誤検知が無いこと
+  const lintClean = await callTool("riv_lint", { path: genPath });
+  const lintCleanText = textOf(lintClean);
+  check(
+    "riv_lint reports no findings on a well-formed file",
+    !lintClean.isError && JSON.parse(lintCleanText).findings.length === 0,
+    lintCleanText.slice(0, 300)
+  );
+
+  // riv_lint: 壊れたファイルで既知の問題を検出できること
+  const lintBrokenPath = join(root, "samples", "e2e-lint-broken.riv");
+  await callTool("riv_create", {
+    outPath: lintBrokenPath,
+    scene: {
+      artboard: { width: 100, height: 100 },
+      shapes: [{ id: "sq", type: "rect", x: 50, y: 50, width: 20, height: 20, fill: { color: "#e94560" } }],
+      animations: [{ name: "still", duration: 10, loop: "oneShot", tracks: [] }],
+      stateMachine: {
+        name: "Broken",
+        inputs: [{ name: "unused", type: "bool" }],
+        states: [{ name: "idle", animation: "still" }, { name: "orphan", animation: "still" }],
+        transitions: [
+          { from: "entry", to: "idle" },
+          { from: "idle", to: "idle" },
+        ],
+      },
+    },
+  });
+  const lintBroken = await callTool("riv_lint", { path: lintBrokenPath });
+  const lintBrokenText = textOf(lintBroken);
+  const lintBrokenFindings = JSON.parse(lintBrokenText).findings;
+  check(
+    "riv_lint detects unreachable state",
+    lintBrokenFindings.some((f) => f.rule === "unreachable-state" && f.message.includes("state#4")),
+    lintBrokenText
+  );
+  check(
+    "riv_lint detects unconditional self-transition",
+    lintBrokenFindings.some((f) => f.rule === "infinite-loop-risk"),
+    lintBrokenText
+  );
+  check(
+    "riv_lint detects unused state-machine input",
+    lintBrokenFindings.some((f) => f.rule === "unused-input" && f.message.includes("unused")),
+    lintBrokenText
   );
 
   // riv_edit: プロパティ変更
