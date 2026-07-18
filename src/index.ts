@@ -23,7 +23,7 @@ const host = new RiveHost(PAGE_SCRIPT);
 
 const server = new McpServer({
   name: "rive-mcp",
-  version: "0.1.0",
+  version: "0.3.0",
 });
 
 type ToolResult = {

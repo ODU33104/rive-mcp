@@ -1,6 +1,6 @@
 {
   "name": "rive-mcp-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "mcpName": "io.github.ODU33104/rive-mcp",
   "description": "Free, editor-less MCP server for Rive: create, edit, inspect, render and live-preview .riv animations from Claude or any MCP client",
   "keywords": ["rive", "riv", "mcp", "model-context-protocol", "animation", "claude", "state-machine", "rigging"],
