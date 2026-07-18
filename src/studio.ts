@@ -686,6 +686,8 @@ const I18N = {
     expL: 'エクスポート', expPng: 'PNG', expPngT: '表示中フレームをPNG保存',
     expProg: 'エクスポート中… ', expDone: 'エクスポート完了', expFail: 'エクスポート失敗: ',
     expNoAnim: 'エクスポートできるアニメーションがありません',
+    kfEasingHint: 'easingは「このキーフレームへ向かう動き」を表します（前のキーフレームからの区間に適用）。elastic系はバネのように弾む動きになります。',
+    kfFirstKeyHint: 'これはこのトラックの最初のキーフレームです。手前に区間が無いため、ここで設定したeasingは見た目に反映されません。',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -734,6 +736,8 @@ const I18N = {
     expL: 'Export', expPng: 'PNG', expPngT: 'Save the current frame as PNG',
     expProg: 'Exporting… ', expDone: 'Export complete', expFail: 'Export failed: ',
     expNoAnim: 'No animation to export',
+    kfEasingHint: 'Easing describes the motion arriving at this keyframe (applied to the segment from the previous one). The elastic- options give a springy overshoot.',
+    kfFirstKeyHint: 'This is the first keyframe on this track. There is no incoming segment, so any easing set here has no visible effect.',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -1147,8 +1151,8 @@ function buildTree() {
 }
 
 // ---- 選択 & インスペクタ --------------------------------------------------------
-function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
-function selectRiv(node) { sel = { src: 'riv', node }; buildTree(); renderInspector(); drawSelBox(); }
+function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; keySel = null; guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
+function selectRiv(node) { sel = { src: 'riv', node }; keySel = null; buildTree(); renderInspector(); drawSelBox(); }
 
 let rebuildTimer = null;
 function scheduleRebuild(delay = 300) {
@@ -1255,10 +1259,47 @@ function textField(get, set) {
   i.onchange = () => { pushHistory(); set(i.value); };
   return i;
 }
+// ドロップダウン（キーフレームのeasing選択などに使用）
+const EASING_OPTIONS = ['hold', 'linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'ease-out-back', 'ease-in-back', 'smooth', 'snap', 'elastic-in', 'elastic-out', 'elastic-in-out'];
+function selectField(options, get, set) {
+  const s = document.createElement('select');
+  for (const opt of options) {
+    const o = document.createElement('option'); o.value = opt; o.textContent = opt;
+    s.appendChild(o);
+  }
+  s.value = get() ?? options[0];
+  s.onchange = () => { pushHistory(); set(s.value); renderInspector(); };
+  return s;
+}
 
 function renderInspector() {
   const box = $('inspector');
   box.textContent = '';
+  if (keySel) {
+    const { tr, k } = keySel;
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--accent)';
+    title.textContent = tr.target + ' · ' + tr.property + '  (f' + k.frame + ')';
+    box.appendChild(title);
+    inspSection(box, 'EASING');
+    box.appendChild(propRow('easing', selectField(EASING_OPTIONS, () => k.easing ?? 'linear', (v) => {
+      if (v === 'linear') { delete k.easing; delete k.amplitude; delete k.period; }
+      else {
+        k.easing = v;
+        if (!v.startsWith('elastic')) { delete k.amplitude; delete k.period; }
+      }
+      scheduleRebuild(0);
+    })));
+    if (k.easing && k.easing.indexOf('elastic') === 0) {
+      box.appendChild(propRow('amplitude', numField(() => k.amplitude ?? 1, (v) => { k.amplitude = v; scheduleRebuild(0); }, 0.1)));
+      box.appendChild(propRow('period', numField(() => k.period ?? 0.5, (v) => { k.period = v; scheduleRebuild(0); }, 0.05)));
+    }
+    const sortedKfs = (tr.keyframes ?? []).slice().sort((a, b) => a.frame - b.frame);
+    const hint = document.createElement('div'); hint.className = 'hint';
+    hint.textContent = sortedKfs[0] === k ? t('kfFirstKeyHint') : t('kfEasingHint');
+    box.appendChild(hint);
+    return;
+  }
   if (!sel) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = t('noSel'); box.appendChild(d); return; }
 
   if (sel.src === 'scene') {
@@ -1537,6 +1578,7 @@ function deleteSelectedKeyframe() {
   tr.keyframes.splice(idx, 1);
   keySel = null;
   renderTimeline();
+  renderInspector();
   scheduleRebuild(0);
   return true;
 }
@@ -1683,6 +1725,7 @@ function renderTimeline() {
       const k = addKeyframeAt(tr, frame);
       keySel = { tr, k };
       renderTimeline();
+      renderInspector();
       seekTo(frame / (anim.fps ?? 60));
       scheduleRebuild(0);
     };
@@ -1708,6 +1751,7 @@ window.addEventListener('pointerup', () => {
   if (!kfDrag) return;
   const { tr, k, anim, moved } = kfDrag;
   keySel = { tr, k };
+  renderInspector();
   if (!moved) {
     seekTo(k.frame / (anim.fps ?? 60));
     renderTimeline();

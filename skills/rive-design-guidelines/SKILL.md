@@ -26,6 +26,8 @@ A keyframe's `easing` describes the motion *arriving at that keyframe* — the t
 - `ease-in-out` — a smooth back-and-forth
 - `elastic-out` / `elastic-in` / `elastic-in-out` (with optional `amplitude` / `period` on that keyframe) — a springy, bouncy pop-in, genuinely more lively than `ease-out-back` for UI elements appearing
 
+Setting `easing` on a track's *first* keyframe has no visible effect (there is no incoming segment to apply it to) — put the easing on the keyframe(s) that follow instead.
+
 ## Physics bake
 
 Prefer `bake: { type: "pendulum" | "wind" | "spring" | "gravity", ... }` over hand-authored keyframes for anything that should sway, drop, or bounce — it carries proper per-segment easing automatically.
