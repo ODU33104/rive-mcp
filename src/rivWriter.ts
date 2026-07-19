@@ -7,6 +7,7 @@
 //   - アセット(Image/Font)は Backboard 直後、assetId/fontAssetId = ファイル内アセット出現順
 import { loadDefs, fieldTypeOf, type Defs } from "./rivBinary.js";
 import { expandHlapi } from "./hlapi.js";
+import { subsetTtf } from "./fontSubset.js";
 
 // ---- defs 解決ヘルパ -----------------------------------------------------
 let fileToName: Map<string, string> | null = null;
@@ -370,6 +371,10 @@ export interface FontSpec {
   id: string;
   path?: string; // ツール層で bytes に解決される（ttf/otf）
   bytes?: Uint8Array;
+  // 既定 true: シーン内で実際に使う文字だけにサブセットして埋め込む（Inter全量806KB→数KB）。
+  // ランタイムからテキストを未知の文字列に差し替える予定があるなら false か文字列
+  // （追加で残す文字集合）を指定する
+  subset?: boolean | string;
 }
 export interface SceneSpec extends Partial<Omit<ArtboardSpec, "name" | "width" | "height">> {
   artboard?: { name?: string; width: number; height: number }; // 単一アートボード形式
@@ -483,9 +488,30 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
   const assetIndexOf = new Map<string, number>(); // "font:<id>" / "image:<id>" → index
   for (const font of spec.fonts ?? []) {
     if (!font.bytes) throw new Error(`Font '${font.id}' has no bytes (path unresolved?)`);
+    let bytes = font.bytes;
+    if (font.subset !== false) {
+      // このフォントを参照する全テキストランの文字を収集してサブセット
+      let used = typeof font.subset === "string" ? font.subset : "";
+      const defaultFontId = spec.fonts?.[0]?.id;
+      for (const ab of artboards) {
+        for (const t of ab.texts ?? []) {
+          for (const run of t.runs) {
+            if ((run.font ?? defaultFontId) === font.id) used += run.text;
+          }
+        }
+      }
+      if (used.length) {
+        try {
+          const sub = subsetTtf(font.bytes, used);
+          if (sub.length < font.bytes.length) bytes = sub;
+        } catch (e) {
+          warnings.push(`font '${font.id}': subsetting failed (${e instanceof Error ? e.message : e}) — embedding full font`);
+        }
+      }
+    }
     assetIndexOf.set(`font:${font.id}`, assetIndexOf.size);
     objects.push({ type: "FontAsset", props: { name: font.id } });
-    objects.push({ type: "FileAssetContents", props: { bytes: font.bytes } });
+    objects.push({ type: "FileAssetContents", props: { bytes } });
   }
   for (const ab of artboards) {
     for (const img of ab.images ?? []) {

@@ -156,6 +156,25 @@ function makeScene(file, opts) {
     return [];
   };
 
+  // 大きな時間ジャンプ用: SMは1回のadvanceで遷移評価が1回しか走らないため、
+  // 1/60秒刻みで進めて exitTime 遷移やアニメ進行を正しく通過させる
+  const seek = (sec) => {
+    const all = [];
+    const dt = 1 / 60;
+    let remaining = sec;
+    while (remaining > 1e-9) {
+      const d = Math.min(dt, remaining);
+      remaining -= d;
+      const c = step(d);
+      for (const s of c) if (!all.includes(s)) all.push(s);
+    }
+    if (sec <= 1e-9) {
+      const c = step(0);
+      for (const s of c) if (!all.includes(s)) all.push(s);
+    }
+    return all;
+  };
+
   const draw = () => {
     renderer.clear();
     renderer.save();
@@ -199,7 +218,7 @@ function makeScene(file, opts) {
     if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
   };
 
-  return { ab, sm, anim, width, height, canvas, step, draw, capture, cleanup };
+  return { ab, sm, anim, width, height, canvas, step, seek, draw, capture, cleanup };
 }
 
 function blobToBase64(blob) {
@@ -308,7 +327,7 @@ window.riveApi = {
         const frames = [];
         const states = [];
         const dt = 1 / (opts.fps || 60);
-        const changed = scene.step(opts.startTime || 0);
+        const changed = scene.seek(opts.startTime || 0);
         if (changed.length) states.push({ frame: 0, states: changed });
         const frameCount = Math.min(opts.frameCount || 1, 600);
         for (let i = 0; i < frameCount; i++) {
@@ -528,7 +547,7 @@ window.riveApi = {
           if (s.input !== undefined && s.input !== null) {
             entry.applied = applyInput(scene.sm, s.input, s.value);
           }
-          const changed = scene.step(s.advance || 0);
+          const changed = scene.seek(s.advance || 0);
           entry.advancedSeconds = s.advance || 0;
           entry.statesChanged = changed;
           entry.inputs = currentInputs(scene.sm);
