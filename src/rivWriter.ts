@@ -216,11 +216,15 @@ export interface ShapeSpec {
   width?: number;
   height?: number;
   rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
   opacity?: number;
   cornerRadius?: number;
   closed?: boolean; // polygon専用。false で開いたパス（線・軌跡など）。既定 true
   clipBy?: string; // このシェイプを指定シェイプの形でクリップ（マスク元は fill/stroke 無しの不可視シェイプ推奨）
   blendMode?: BlendModeName; // 合成モード。影=multiply、光=screen/colorDodge が定番
+  pathX?: number; // rect/ellipse/triangle のパス自体のShape内オフセット (主にdecompile復元用)
+  pathY?: number;
   // polygon専用: 複数輪郭（穴あき形状・複合パス）。points の代わりに指定
   subpaths?: Array<{ closed?: boolean; points: NonNullable<ShapeSpec["points"]> }>;
   points?: Array<{
@@ -770,6 +774,8 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     const emitShape = (s: ShapeSpec): void => {
       const shapeProps: Record<string, unknown> = { name: s.id, parentId: parentOf(s.parent), x: s.x, y: s.y };
       if (s.rotation) shapeProps.rotation = (s.rotation * Math.PI) / 180;
+      if (s.scaleX !== undefined && s.scaleX !== 1) shapeProps.scaleX = s.scaleX;
+      if (s.scaleY !== undefined && s.scaleY !== 1) shapeProps.scaleY = s.scaleY;
       if (s.opacity !== undefined) shapeProps.opacity = s.opacity;
       if (s.blendMode && s.blendMode !== "srcOver") shapeProps.blendModeValue = BLEND_MODE_VALUE[s.blendMode];
       const shape = push({ type: "Shape", props: shapeProps });
@@ -823,6 +829,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           width: s.width ?? 100,
           height: s.height ?? 100,
         };
+        // パス自身のShape内オフセット (Riveエディタ製ファイルの復元用)
+        if (s.pathX) props.x = s.pathX;
+        if (s.pathY) props.y = s.pathY;
         if (s.type === "rect" && s.cornerRadius) {
           props.linkCornerRadius = true;
           props.cornerRadiusTL = s.cornerRadius;

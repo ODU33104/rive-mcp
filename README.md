@@ -43,7 +43,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_import_svg` | **SVG → Rive bezier shapes** (Figma/Illustrator exports, icons, illustrations): full cubic vertices, multi-contour paths, gradients, strokes, nested transforms — so the AI composes pro artwork instead of drawing with primitives. Fragments plug into riv_create via `imports` |
 | `riv_asset_search` | Search **Iconify's ~200k professionally designed icons** and import one directly as Rive shapes (needs network) |
 | `riv_decompile` | **.riv → editable scene spec**: study or remix professional files (bezier paths, gradients, solos, trim paths, animations with named easings); unsupported types are counted, not silently dropped |
-| `riv_critique` | **One-call review bundle**: sampled frames across the animation + objective metrics (bezier-vs-primitive ratio, palette saturation flags, easing distribution, rig/SM stats) + lint findings + a fixed 6-axis scoring checklist for the render→critique→revise loop |
+| `riv_critique` | **One-call review bundle that makes motion visible to a VLM**: a filmstrip (frames left→right), an onion-skin overlay (motion trails), a motion report (net displacement vector per animated object), objective metrics (bezier ratio, palette flags, easing distribution) + lint findings + a fixed 7-axis scoring checklist incl. spatial/directional coherence (does each mover travel toward its artwork's front? is the perspective consistent?) |
 | `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
 | `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |

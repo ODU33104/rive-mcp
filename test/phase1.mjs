@@ -115,7 +115,29 @@ const metrics = computeMetrics(bytes);
 check("easing distribution counts cubic", () => assert.ok(metrics.motion.easingDistribution.cubic > 0));
 check("palette extracted", () => assert.ok(metrics.color.distinctFills >= 3));
 check("no oversaturated colors from tokens", () => assert.equal(metrics.color.oversaturated.length, 0, JSON.stringify(metrics.color.oversaturated)));
-check("checklist mentions all 6 axes", () => assert.equal((CRITIQUE_CHECKLIST.match(/^\d\./gm) ?? []).length, 6));
+check("checklist mentions all 7 axes", () => assert.equal((CRITIQUE_CHECKLIST.match(/^\d\./gm) ?? []).length, 7));
+
+// ---- 4b. 動きの見える化 (filmstrip / onion / motion report / png) ----------
+console.log("motion visibility helpers");
+{
+  const { composeFilmstrip, composeOnionSkin, encodePng, motionReport } = await import("../dist/critique.js");
+  const w = 4, h = 2;
+  const red = new Uint8Array(w * h * 4);
+  const blue = new Uint8Array(w * h * 4);
+  for (let p = 0; p < w * h; p++) {
+    red.set([255, 0, 0, 255], p * 4);
+    blue.set([0, 0, 255, 255], p * 4);
+  }
+  const strip = composeFilmstrip([red, blue], w, h);
+  check("filmstrip width = cells + gap", () => assert.equal(strip.width, w * 2 + 2));
+  check("filmstrip keeps left frame pixels", () => assert.equal(strip.rgba[0], 255));
+  const onion = composeOnionSkin([red, blue], w, h);
+  check("onion skin blends toward the last frame", () => assert.ok(onion.rgba[2] > onion.rgba[0]));
+  const png = encodePng(strip.rgba, strip.width, strip.height);
+  check("encodePng emits PNG signature", () => assert.equal(png[0], 137) || assert.equal(png[1], 80));
+  const report = motionReport(bytes);
+  check("motion report lists movers with direction", () => assert.ok(/moves (left|right|up|down)/.test(report), report.slice(0, 200)));
+}
 
 // ---- 5. 公式ランタイムで受理・レンダリング ----------------------------------
 console.log("official runtime validation");

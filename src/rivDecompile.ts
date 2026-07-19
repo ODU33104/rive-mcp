@@ -70,7 +70,21 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
     // paint を参照する。→ いったん収集して parentId ベースで後解決する。
     interface ShapeCtx { spec: ShapeSpec; li: number }
     let curShape: ShapeCtx | null = null;
-    let curPath: { closed?: boolean; points: NonNullable<ShapeSpec["points"]> } | null = null;
+    let curPath: {
+      closed?: boolean;
+      points: NonNullable<ShapeSpec["points"]>;
+      __tf?: { x: number; y: number; rot: number; sx: number; sy: number };
+    } | null = null;
+    // パスのShape内transformを頂点へ焼き込むヘルパ
+    const tfPoint = (x: number, y: number): { x: number; y: number } => {
+      const tf = curPath?.__tf;
+      if (!tf) return { x, y };
+      const c = Math.cos(tf.rot), s = Math.sin(tf.rot);
+      const px = x * tf.sx, py = y * tf.sy;
+      return { x: tf.x + px * c - py * s, y: tf.y + px * s + py * c };
+    };
+    const tfRotDeg = (d: number): number => (curPath?.__tf ? d + (curPath.__tf.rot * 180) / Math.PI : d);
+    const tfDist = (d: number): number => (curPath?.__tf ? d * (curPath.__tf.sx + curPath.__tf.sy) / 2 : d);
     const shapeByLi = new Map<number, ShapeSpec>();
     const paintRaw: { li: number; o: RivObject }[] = [];
     const deferredRaw: { li: number; o: RivObject }[] = []; // ClippingShape / FollowPathConstraint (前方参照あり得る)
@@ -118,6 +132,8 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
           const par = parentIdStr(o);
           if (par) s.parent = par;
           if (o.properties.rotation !== undefined) s.rotation = deg(o.properties.rotation);
+          if (o.properties.scaleX !== undefined) s.scaleX = num(o.properties.scaleX, 1);
+          if (o.properties.scaleY !== undefined) s.scaleY = num(o.properties.scaleY, 1);
           if (o.properties.opacity !== undefined) s.opacity = num(o.properties.opacity, 1);
           if (typeof o.properties.blendModeValue === "number") {
             const bm = (Object.entries(BLEND_MODE_VALUE) as [BlendModeName, number][])
@@ -130,27 +146,33 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
           decompiled++;
           break;
         }
-        case "Rectangle":
+        case "Rectangle": case "Ellipse":
           if (curShape) {
-            curShape.spec.type = "rect";
+            curShape.spec.type = o.typeName === "Rectangle" ? "rect" : "ellipse";
             curShape.spec.width = num(o.properties.width, 100);
             curShape.spec.height = num(o.properties.height, 100);
-            if (o.properties.cornerRadiusTL) curShape.spec.cornerRadius = num(o.properties.cornerRadiusTL);
-            decompiled++;
-          }
-          break;
-        case "Ellipse":
-          if (curShape) {
-            curShape.spec.type = "ellipse";
-            curShape.spec.width = num(o.properties.width, 100);
-            curShape.spec.height = num(o.properties.height, 100);
+            if (o.typeName === "Rectangle" && o.properties.cornerRadiusTL) curShape.spec.cornerRadius = num(o.properties.cornerRadiusTL);
+            // パス自身のShape内transform (エディタ製ファイルはほぼ必ず持つ)
+            if (o.properties.x) curShape.spec.pathX = num(o.properties.x);
+            if (o.properties.y) curShape.spec.pathY = num(o.properties.y);
+            if (o.properties.rotation) warnings.push(`parametric path rotation on "${curShape.spec.id}" not restored`);
             decompiled++;
           }
           break;
         case "PointsPath":
           if (curShape) {
             curShape.spec.type = "polygon";
-            curPath = { closed: o.properties.isClosed !== false && o.properties.isClosed !== 0, points: [] };
+            // パス自身のShape内transformは頂点座標へ焼き込む
+            const psx = num(o.properties.scaleX, 1), psy = num(o.properties.scaleY, 1);
+            const prot = num(o.properties.rotation);
+            curPath = {
+              closed: o.properties.isClosed !== false && o.properties.isClosed !== 0,
+              points: [],
+            };
+            if (o.properties.x || o.properties.y || prot || psx !== 1 || psy !== 1) {
+              curPath.__tf = { x: num(o.properties.x), y: num(o.properties.y), rot: prot, sx: psx, sy: psy };
+            }
+            if (Math.abs(psx - psy) > 0.001) warnings.push(`non-uniform path scale on "${curShape.spec.id}" approximated`);
             curShape.spec.subpaths = curShape.spec.subpaths ?? [];
             curShape.spec.subpaths.push(curPath);
             decompiled++;
@@ -158,8 +180,8 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
           break;
         case "StraightVertex":
           if (curPath) {
-            const p: NonNullable<ShapeSpec["points"]>[number] = { x: num(o.properties.x), y: num(o.properties.y) };
-            if (o.properties.radius) p.radius = num(o.properties.radius);
+            const p: NonNullable<ShapeSpec["points"]>[number] = tfPoint(num(o.properties.x), num(o.properties.y));
+            if (o.properties.radius) p.radius = tfDist(num(o.properties.radius));
             curPath.points.push(p);
             decompiled++;
           }
@@ -167,8 +189,8 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
         case "CubicMirroredVertex":
           if (curPath) {
             curPath.points.push({
-              x: num(o.properties.x), y: num(o.properties.y),
-              cubic: { rotation: deg(o.properties.rotation), distance: num(o.properties.distance) },
+              ...tfPoint(num(o.properties.x), num(o.properties.y)),
+              cubic: { rotation: tfRotDeg(deg(o.properties.rotation)), distance: tfDist(num(o.properties.distance)) },
             });
             decompiled++;
           }
@@ -176,10 +198,10 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
         case "CubicAsymmetricVertex":
           if (curPath) {
             curPath.points.push({
-              x: num(o.properties.x), y: num(o.properties.y),
+              ...tfPoint(num(o.properties.x), num(o.properties.y)),
               cubic: {
-                rotation: deg(o.properties.rotation),
-                inDistance: num(o.properties.inDistance), outDistance: num(o.properties.outDistance),
+                rotation: tfRotDeg(deg(o.properties.rotation)),
+                inDistance: tfDist(num(o.properties.inDistance)), outDistance: tfDist(num(o.properties.outDistance)),
               },
             });
             decompiled++;
@@ -188,10 +210,10 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
         case "CubicDetachedVertex":
           if (curPath) {
             curPath.points.push({
-              x: num(o.properties.x), y: num(o.properties.y),
+              ...tfPoint(num(o.properties.x), num(o.properties.y)),
               cubic: {
-                rotation: deg(o.properties.outRotation), inRotation: deg(o.properties.inRotation),
-                inDistance: num(o.properties.inDistance), outDistance: num(o.properties.outDistance),
+                rotation: tfRotDeg(deg(o.properties.outRotation)), inRotation: tfRotDeg(deg(o.properties.inRotation)),
+                inDistance: tfDist(num(o.properties.inDistance)), outDistance: tfDist(num(o.properties.outDistance)),
               },
             });
             decompiled++;
@@ -445,6 +467,7 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
         }
       }
     }
+    for (const s of ab.shapes!) if (s.subpaths) for (const sp of s.subpaths) delete (sp as { __tf?: unknown }).__tf;
     if (!ab.groups!.length) delete ab.groups;
     artboards.push(ab);
   }

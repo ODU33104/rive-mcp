@@ -19,7 +19,7 @@ import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, type Mood } from "./designTokens.js";
-import { computeMetrics, CRITIQUE_CHECKLIST } from "./critique.js";
+import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
 import { importSvg } from "./svgImport.js";
 import { decompileRiv } from "./rivDecompile.js";
 
@@ -534,20 +534,21 @@ server.registerTool(
 server.registerTool(
   "riv_critique",
   {
-    title: "Critique a .riv: frames + objective metrics + scoring checklist",
+    title: "Critique a .riv: filmstrip + onion skin + motion vectors + metrics + checklist",
     description:
-      "One-call review bundle for the render→critique→revise loop: renders N frames spread across the animation, computes objective design metrics (bezier-vs-primitive ratio, palette & saturation flags, easing distribution, rig/SM structure) plus all lint findings, and returns a fixed 6-axis scoring checklist. LOOK at the frames, score each axis 1-5, and fix anything below 4 (riv_edit / regenerate), then re-run. Iterate at least twice before delivering any non-trivial scene.",
+      "One-call review bundle for the render→critique→revise loop. Returns (1) a FILMSTRIP image — N frames left→right across the duration, so motion is readable as a sequence, (2) an ONION-SKIN image — all frames ghost-overlaid so every mover leaves a visible trail (use it to check trajectories and travel direction vs the artwork's facing), (3) a MOTION REPORT — net displacement/rotation vector per animated object computed from the file data, (4) objective design metrics + lint findings, and (5) a fixed 7-axis scoring checklist (incl. spatial/directional coherence). LOOK at the images, score each axis 1-5, fix anything below 4 (riv_edit / regenerate), then re-run. Iterate at least twice before delivering any non-trivial scene.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
       artboard: z.string().optional(),
       animation: z.string().optional().describe("Animation to sample (default: first)"),
       stateMachine: z.string().optional(),
-      frames: z.number().int().min(2).max(8).optional().describe("Frames to sample across the duration (default 4)"),
-      width: z.number().int().min(160).max(800).optional().describe("Frame width (default 320 — keep small, it saves tokens)"),
+      frames: z.number().int().min(2).max(10).optional().describe("Frames to sample across the duration (default 6)"),
+      width: z.number().int().min(120).max(480).optional().describe("Width of each filmstrip cell (default 200 — keep small, it saves tokens)"),
+      individualFrames: z.boolean().optional().describe("Also return each sampled frame as a separate full-size image (default false)"),
     },
   },
   wrap(
-    async (a: { path: string; artboard?: string; animation?: string; stateMachine?: string; frames?: number; width?: number }) => {
+    async (a: { path: string; artboard?: string; animation?: string; stateMachine?: string; frames?: number; width?: number; individualFrames?: boolean }) => {
       const { bytes } = loadRiv(a.path);
       const buf = Buffer.from(bytes);
       const metrics = computeMetrics(bytes);
@@ -555,7 +556,7 @@ server.registerTool(
       const ab = (a.artboard && info.artboards.find((x) => x.name === a.artboard)) || info.artboards[0];
       const anim = a.animation ? ab?.animations.find((x) => x.name === a.animation) : ab?.animations[0];
       const durationSec = anim?.durationSeconds ?? 2;
-      const n = a.frames ?? 4;
+      const n = a.frames ?? 6;
       const fps = durationSec > 0 ? Math.max(0.2, (n - 1) / durationSec) : 1;
       const r = await host.renderFrames(buf, {
         artboard: a.artboard,
@@ -564,19 +565,34 @@ server.registerTool(
         startTime: 0,
         frameCount: n,
         fps,
-        width: a.width ?? 320,
-        format: "png",
+        width: a.width ?? 200,
+        format: "rgba",
       });
+      const rgbaFrames = r.frames.map((f) => new Uint8Array(Buffer.from(f, "base64")));
+      const strip = composeFilmstrip(rgbaFrames, r.width, r.height);
+      const onion = composeOnionSkin(rgbaFrames, r.width, r.height);
+      const stripPng = Buffer.from(encodePng(strip.rgba, strip.width, strip.height)).toString("base64");
+      const onionPng = Buffer.from(encodePng(onion.rgba, onion.width, onion.height)).toString("base64");
       const times = Array.from({ length: n }, (_, i) => Math.round((i / fps) * 100) / 100);
       return {
         content: [
           {
             type: "text",
             text:
-              `Sampled "${anim?.name ?? a.stateMachine ?? "?"}" at t=[${times.join(", ")}]s (${r.width}x${r.height})\n` +
+              `Sampled "${anim?.name ?? a.stateMachine ?? "?"}" at t=[${times.join(", ")}]s (cells ${r.width}x${r.height}). ` +
+              `Image 1 = filmstrip (time flows left→right), image 2 = onion skin (motion trails).\n` +
+              `${motionReport(bytes)}\n` +
               `METRICS ${JSON.stringify(metrics, null, 1)}\n\n${CRITIQUE_CHECKLIST}`,
           },
-          ...r.frames.map((f) => ({ type: "image" as const, data: f, mimeType: "image/png" })),
+          { type: "image" as const, data: stripPng, mimeType: "image/png" },
+          { type: "image" as const, data: onionPng, mimeType: "image/png" },
+          ...(a.individualFrames
+            ? rgbaFrames.map((f) => ({
+                type: "image" as const,
+                data: Buffer.from(encodePng(f, r.width, r.height)).toString("base64"),
+                mimeType: "image/png",
+              }))
+            : []),
         ],
       };
     }
@@ -1414,9 +1430,9 @@ server.registerPrompt(
 
 **Mandatory workflow for any non-trivial scene**:
 1. \`riv_design_tokens\` (seed/mood/scheme) → use ONLY the returned palette/gradients/durations/easings/spacing. Never invent raw hex colors or ad-hoc durations.
-2. **Ingest professional artwork — do NOT free-draw illustrative art.** Characters/objects/icons must come from a pro source: \`riv_asset_search\` (Iconify, needs network), \`riv_import_svg\` (Figma/Illustrator exports, or npm SVG sets when network is limited: \`npm pack @twemoji/svg\` CC-BY 4.0, \`@mdi/svg\`, \`@tabler/icons\`), or \`riv_decompile\` (remix pro-made .riv art + its hand-tuned animation tracks). Hand-drawn primitives are for backgrounds/panels/particles only.
-3. \`riv_create\` — express motion with \`presets\` (pop-in, rise-in+stagger, float, breathing, …) instead of hand-authored keyframes wherever a preset fits; hand-keyframe only what presets can't express.
-4. \`riv_critique\` — look at the sampled frames, score the 6-axis checklist, fix anything below 4 with riv_edit or a regenerate, and re-run. Iterate at least twice.
+2. **Ingest professional artwork — do NOT free-draw illustrative art.** Characters/objects/icons must come from a pro source: \`riv_asset_search\` (Iconify, needs network), \`riv_import_svg\` (Figma/Illustrator exports, or npm SVG sets when network is limited: \`npm pack @twemoji/svg\` CC-BY 4.0, \`@mdi/svg\`, \`@tabler/icons\`), or \`riv_decompile\` (remix pro-made .riv art + its hand-tuned animation tracks). Hand-drawn primitives are for backgrounds/panels/particles only. **Respect the asset's viewpoint**: state its facing direction & perspective (side/isometric/front) before animating — movers travel toward their own visual front, and the whole scene keeps ONE consistent perspective (isometric art never sits on a flat side-view ground).
+3. \`riv_create\` — express motion with \`presets\` (pop-in, rise-in+stagger, float, breathing, …) instead of hand-authored keyframes wherever a preset fits; hand-keyframe only what presets can't express. Icon micro-animation recipe: riv_asset_search icon → \`spin\` (loader) / \`pop-in\`·\`tada\` (success) / \`shake\` (error) / \`glow-pulse\` (notification) / stroke-trim draw-on.
+4. \`riv_critique\` — read the filmstrip (time left→right), onion skin (motion trails) and motion report (displacement vectors), check every mover's direction against its artwork's facing, score the 7-axis checklist, fix anything below 4 with riv_edit or a regenerate, and re-run. Iterate at least twice.
 
 Craft knowledge for the parts you author by hand:
 - **Color**: no saturated primaries (#FF0000-style). Use \`fill.gradient\` on hero shapes far more often than flat \`fill.color\`.

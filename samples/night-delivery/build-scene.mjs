@@ -22,15 +22,25 @@ const W = 480, H = 360;
 // --- プロ製トラックの取り込み (vehicles.riv 第1アートボード) ---
 const { scene: veh } = decompileRiv(new Uint8Array(readFileSync(join(R, "samples", "vehicles.riv"))));
 const truck = veh.artboards[0];
-const DROP = /^(road_texture|smoke_effect)/;
+// トラックはアイソメ(右奥→左下向き)で描かれている。進行方向の表現は
+// プロが作った斜めストリーク(road_texture)とそのアニメをそのまま使う。
+// 落とすのはボーン駆動で復元できない煙エフェクトのみ。
+const DROP = /^smoke_effect/;
 const groups = truck.groups.filter((g) => !DROP.test(g.id));
 const gids = new Set(groups.map((g) => g.id));
 const shapes = truck.shapes.filter((s) => s.id !== "__background" && (!s.parent || gids.has(s.parent) || truck.shapes.some((o) => o.id === s.parent)));
 const sids = new Set(shapes.map((s) => s.id));
 const validTarget = (t) => gids.has(t) || sids.has(t);
-// トラック本来の idle (バウンス+車輪) を流用。消したパーツ向けトラックは除去
+// トラック本来の idle (バウンス+車輪+路面ストリーク) を流用。消したパーツ向けトラックは除去
 const truckIdle = truck.animations.find((a) => a.name === "idle");
 const truckTracks = truckIdle.tracks.filter((t) => validTarget(t.target));
+// 夜景に合わせ、路面ストリークは減光し夜パレットの色に置換
+for (const s of shapes) if (/^road_texture/.test(s.parent || "")) {
+  s.opacity = (s.opacity ?? 1) * 0.45;
+  s.fill = { color: "#5b6f80" };
+  delete s.stroke;
+}
+const roadTexGroups = groups.filter((g) => /^road_texture/.test(g.id)).map((g) => g.id);
 console.log("truck: groups", groups.length, "shapes", shapes.length, "idle tracks kept", truckTracks.length, "/", truckIdle.tracks.length);
 
 // root を新シーンのラッパーへ載せ替え (rootの元transform(1032,796,scale0.8)は保持)
@@ -59,16 +69,11 @@ const scene = {
       fill: { gradient: { type: "linear", stops: [
         { color: T.gradients.bg[0], position: 0 }, { color: T.gradients.bg[1], position: 1 } ],
         start: { x: 0, y: -H / 2 }, end: { x: 0, y: H / 2 } } } },
-    // 路面
-    { id: "road", type: "rect", x: W / 2, y: H * 0.78, width: W, height: H * 0.16, z: 500,
-      fill: { color: P.surface } },
-    { id: "roadEdge", type: "rect", x: W / 2, y: H * 0.702, width: W, height: 2, z: 501,
-      fill: { color: P.outline } },
-    // 車線ダッシュ (スクロール)
-    ...[0, 1, 2, 3, 4].map((i) => ({
-      id: `dash${i}`, type: "rect", x: i * 120, y: H * 0.78, width: 46, height: 4, cornerRadius: 2,
-      z: 510, fill: { color: P.textMuted }, opacity: 0.7,
-    })),
+    // 地面: 視点を固定しない柔らかい面 (水平線の帯はアイソメの車と矛盾するため置かない)
+    { id: "ground", type: "ellipse", x: W * 0.42, y: H * 0.92, width: W * 1.5, height: H * 0.55, z: 2, opacity: 0.55,
+      fill: { gradient: { type: "linear", stops: [
+        { color: P.surface, position: 0 }, { color: T.gradients.bg[1], position: 1 } ],
+        start: { x: 0, y: -H * 0.28 }, end: { x: 0, y: H * 0.1 } } } },
     // ヘッドライトビーム (screen合成 — 新機能)。truckWの子=トラックと一緒に入場
     { id: "beam", type: "polygon", x: 0, y: 0, parent: "truckW", z: 100200, blendMode: "screen", opacity: 0.5,
       points: [
@@ -95,9 +100,25 @@ const scene = {
         { preset: "fade-in", target: "beam", at: 96 },
       ],
       tracks: [
+        // 入場は素材の向き(アイソメ右奥→左下)に沿った対角線。真横移動はNG
         { target: "truckW", property: "x", keyframes: [
-          { frame: 0, value: W + 60 }, { frame: 78, value: TRUCK_X, easing: "emphasized-decel" },
+          { frame: 0, value: TRUCK_X + 330 }, { frame: 78, value: TRUCK_X, easing: "emphasized-decel" },
           { frame: 150, value: TRUCK_X } ] },
+        { target: "truckW", property: "y", keyframes: [
+          { frame: 0, value: TRUCK_Y - 165 }, { frame: 78, value: TRUCK_Y, easing: "emphasized-decel" },
+          { frame: 150, value: TRUCK_Y } ] },
+        // 奥(小さい)→手前(等倍): アイソメの奥行きを補強
+        { target: "truckW", property: "scaleX", keyframes: [
+          { frame: 0, value: TRUCK_SCALE * 0.78 }, { frame: 78, value: TRUCK_SCALE, easing: "emphasized-decel" } ] },
+        { target: "truckW", property: "scaleY", keyframes: [
+          { frame: 0, value: TRUCK_SCALE * 0.78 }, { frame: 78, value: TRUCK_SCALE, easing: "emphasized-decel" } ] },
+        // 路面ストリークはidleでアニメが始まるまで隠す (intro中は凍結ポーズのため)
+        ...roadTexGroups.map((id) => ({
+          target: id, property: "opacity",
+          keyframes: [
+            { frame: 0, value: 0 }, { frame: 112, value: 0 },
+            { frame: 148, value: 1, easing: "smooth" } ],
+        })),
       ] },
     { name: "idle", duration: 120, fps: 60, loop: "loop",
       presets: [
@@ -105,14 +126,8 @@ const scene = {
         { preset: "glow-pulse", targets: ["tws1", "tws3"], cycleSeconds: 1.6 },
       ],
       tracks: [
-        // プロ製トラックの idle をそのまま移植 (車体バウンス+車輪)
+        // プロ製トラックの idle をそのまま移植 (車体バウンス+車輪+斜めの路面ストリーク)
         ...truckTracks,
-        // 車線スクロール (等速=リニアが正解)
-        ...[0, 1, 2, 3, 4].map((i) => ({
-          target: `dash${i}`, property: "x",
-          keyframes: [
-            { frame: 0, value: i * 120 }, { frame: 120, value: i * 120 - 120 } ],
-        })),
         // ビームのゆらぎ
         { target: "beam", property: "opacity", keyframes: [
           { frame: 0, value: 0.5 }, { frame: 30, value: 0.42, easing: "smooth" },

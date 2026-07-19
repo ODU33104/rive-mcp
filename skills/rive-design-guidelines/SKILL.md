@@ -17,8 +17,20 @@ Aim for the quality of a modern SaaS product or game UI, not flat placeholder sh
    - `riv_import_svg` — any SVG file: Figma/Illustrator exports, or **professional SVG sets fetched via npm** when direct network is limited: `npm pack @twemoji/svg` (3,700+ color illustrations, CC-BY 4.0 — credit "Twemoji"), `@mdi/svg` (Material Design Icons, Apache-2.0), `@tabler/icons` (MIT). Extract the tarball and import the `.svg` files directly.
    - `riv_decompile` — remix professionally-made `.riv` files (e.g. Rive's official examples, CC-BY marketplace files): extract their hand-drawn bezier art AND their hand-tuned animation tracks into your scene (see `samples/night-delivery/`).
    Reserve hand-drawn primitives for backgrounds, roads, panels, particles — simple geometry only.
+
+   **Respect the asset's viewpoint.** Before animating anything imported, LOOK at it and state its facing direction and perspective (side view / isometric / three-quarter / front). Then: (a) movers travel toward their own visual front — a vehicle/character/rocket must never slide sideways or backwards relative to how it's drawn; (b) the whole scene keeps ONE perspective — isometric artwork must not sit on a flat side-view road or horizon; (c) speed lines / ground scroll run along the same axis the artwork faces.
 3. **`riv_create`** — express motion with `presets` (`pop-in`, `rise-in` + `stagger`, `float`, `breathing`, …) instead of hand-authored keyframes wherever a preset fits. Hand-keyframe only what presets can't express.
-4. **`riv_critique`** — look at the sampled frames, score the 6-axis checklist, fix anything below 4 (riv_edit or regenerate), re-run. Iterate at least twice.
+4. **`riv_critique`** — it returns a **filmstrip** (time flows left→right), an **onion skin** (motion trails), and a **motion report** (net displacement vector per object). Read all three: check every trail/vector against the artwork's facing (checklist axis 7), then score the 7-axis checklist and fix anything below 4 (riv_edit or regenerate), re-run. Iterate at least twice.
+
+## Recipe: animated icons (loaders, button feedback, status)
+
+For any "animate an icon" request, this is the default path — no drawing at all:
+
+1. `riv_asset_search` with a keyword (`"search"`, `"bell"`, `"cart"`, …) → import the icon (or import an SVG from an npm icon set offline).
+2. Apply presets by intent: loader → `spin`; success → `pop-in` or `tada`; error → `shake`; notification → `glow-pulse` or `heartbeat`; attention → `pulse`; draw-on reveal → stroke `trim` from 0→1 (`trimEnd` track).
+3. Wire triggers as state-machine inputs (`hover`/`click` listeners) when it's for UI.
+
+Icons are stroke-heavy: keep `stroke.cap: "round"`, scale motion amplitudes down (icons read at 16-48px), and prefer 200-400ms durations from the motion tokens.
 
 ## Craft rules for hand-authored parts
 

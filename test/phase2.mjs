@@ -125,6 +125,23 @@ try {
     assert.ok(r.frames[0].length > 1000);
     console.log(`  ok runtime accepts+renders ${name}`);
   }
+  // プロのエディタ製ファイルの往復忠実度: decompile→recompile がピクセル一致すること
+  {
+    const vab = (vehicles.scene.artboards ?? [vehicles.scene])[0];
+    const vBytes = createRiv({
+      artboard: { name: vab.name, width: vab.width, height: vab.height },
+      groups: vab.groups, shapes: vab.shapes, animations: vab.animations,
+      constraints: vab.constraints, backgroundColor: vab.backgroundColor,
+    }).bytes;
+    const orig = await host.renderFrames(readFileSync(new URL("../samples/vehicles.riv", import.meta.url)), { artboard: "Truck", animation: "idle", startTime: 0, frameCount: 1, width: 480, format: "rgba" });
+    const rec = await host.renderFrames(Buffer.from(vBytes), { animation: "idle", startTime: 0, frameCount: 1, width: 480, format: "rgba" });
+    const A = Buffer.from(orig.frames[0], "base64"), B = Buffer.from(rec.frames[0], "base64");
+    let diff = 0;
+    for (let i = 0; i < A.length; i += 4) if (Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]) > 60) diff++;
+    const pct = (100 * diff) / (A.length / 4);
+    assert.ok(pct < 0.5, `pro-file roundtrip pixel diff ${pct.toFixed(2)}% (must be < 0.5%)`);
+    console.log(`  ok pro-file roundtrip pixel-faithful (diff ${pct.toFixed(2)}%)`);
+  }
 } catch (e) {
   failures++;
   console.error("  FAIL runtime -", e.message);
