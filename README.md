@@ -17,13 +17,14 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 
 - **Generate `.riv` from JSON** — shapes, gradients, embedded PNGs, text, bones + skinning, IK, mesh deformation, keyframe animation with easing, multi-layer state machines, listeners, events, physics baking, particles
 - **Pro-quality by construction** — 21 semantic motion presets (`pop-in`, staggered `rise-in`, `breathing`, …) with professionally tuned amplitudes/easings, an OKLCH design-token generator (`riv_design_tokens`), motion-quality lint rules (robotic linear movement, teleports, missing stagger), and a one-call critique loop (`riv_critique`: frames + objective metrics + scoring checklist)
+- **Real vector art pipeline** — import SVG (Figma/Illustrator/Iconify) as true bezier paths (`riv_import_svg`, `riv_asset_search`), decompile existing `.riv` files into editable specs (`riv_decompile`), plus trim paths (draw-on), clipping masks, follow-path motion, solos and detached bezier handles in the scene spec
 - **Losslessly edit existing `.riv`** — change any property, swap text, delete subtrees (references auto-remapped); round-trip verified pixel-perfect
 - **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live
 - **Human ⇄ AI loop** — an "Instructions for AI" box in the Studio: you type feedback, the AI picks it up via `riv_studio_notes` and fixes the file, your browser updates instantly
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (22)
+## Tools (25)
 
 | Tool | What it does |
 |---|---|
@@ -39,6 +40,9 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_generate_code` | Integration code with real artboard/SM/input names (React / JS / Vue / Svelte / Flutter) |
 | `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview. Supports bezier-handled vertices, elastic easing, gradients, physics baking, particles, and **semantic motion presets** (`{"preset":"pop-in","target":"card"}` expands server-side into professionally tuned keyframes — entrances/exits/emphasis/ambient loops, with `stagger` for groups) |
 | `riv_design_tokens` | **Generate design tokens before designing**: OKLCH-harmonized palette (+WCAG contrast), gradient pairs, Material-Motion durations & easing roles, spacing/radius/type scales — deterministic from seed color + mood |
+| `riv_import_svg` | **SVG → Rive bezier shapes** (Figma/Illustrator exports, icons, illustrations): full cubic vertices, multi-contour paths, gradients, strokes, nested transforms — so the AI composes pro artwork instead of drawing with primitives. Fragments plug into riv_create via `imports` |
+| `riv_asset_search` | Search **Iconify's ~200k professionally designed icons** and import one directly as Rive shapes (needs network) |
+| `riv_decompile` | **.riv → editable scene spec**: study or remix professional files (bezier paths, gradients, solos, trim paths, animations with named easings); unsupported types are counted, not silently dropped |
 | `riv_critique` | **One-call review bundle**: sampled frames across the animation + objective metrics (bezier-vs-primitive ratio, palette saturation flags, easing distribution, rig/SM stats) + lint findings + a fixed 6-axis scoring checklist for the render→critique→revise loop |
 | `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |

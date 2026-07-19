@@ -58,6 +58,9 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
 | `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ21種、`stagger`で時差出現）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
 | `riv_design_tokens` | **設計前にデザイントークンを生成**: OKLCH色空間で調和させたパレット（WCAGコントラスト比付き）、グラデーションペア、Material Motion準拠のduration/easingロール、余白・角丸・文字スケール。シード色+ムードから決定論的に生成 |
+| `riv_import_svg` | **SVG → Riveベジェシェイプ変換**（Figma/Illustrator書き出し・アイコン・イラスト）: cubic頂点・複合パス（穴あき）・グラデーション・ストローク・入れ子transformを完全変換。AIが「プリミティブで描く」代わりに「プロが描いたベクターを構成する」ための素材パイプライン。`riv_create` の `imports` で配置 |
+| `riv_asset_search` | **Iconifyの約20万個のプロ製アイコンを検索**し、そのままRiveシェイプとしてインポート（要ネットワーク） |
+| `riv_decompile` | **.riv → 編集可能なシーン仕様**: プロのファイルを手本として解析・リミックス（ベジェパス・グラデ・Solo・トリムパス・名前付きイージングのアニメを復元）。未対応型は隠さずカウント報告 |
 | `riv_critique` | **ワンコールのレビューバンドル**: アニメ全域からサンプリングしたフレーム + 客観メトリクス（ベジェ/プリミティブ比・彩度フラグ・イージング分布・リグ/SM統計）+ lint結果 + 6軸採点チェックリスト。「レンダ→批評→修正」ループ用 |
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |

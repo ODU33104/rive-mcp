@@ -20,6 +20,8 @@ import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, type Mood } from "./designTokens.js";
 import { computeMetrics, CRITIQUE_CHECKLIST } from "./critique.js";
+import { importSvg } from "./svgImport.js";
+import { decompileRiv } from "./rivDecompile.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 
@@ -581,6 +583,125 @@ server.registerTool(
   )
 );
 
+// ---- riv_import_svg ----------------------------------------------------
+// SVG→シーン断片。プレビュー用の一時rivも組んで画像を返す
+async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string) {
+  const res = importSvg(svgText, { idPrefix });
+  const specPath = resolve(outSpec);
+  writeFileSync(specPath, JSON.stringify({ sourceWidth: res.width, sourceHeight: res.height, shapes: res.shapes }, null, 0));
+  const previewScene: SceneSpec = {
+    artboard: { name: "SvgPreview", width: Math.max(64, res.width), height: Math.max(64, res.height) },
+    shapes: res.shapes,
+  };
+  const { bytes } = createRiv(previewScene);
+  const r = await host.renderFrames(Buffer.from(bytes), { frameCount: 1, width: Math.min(480, Math.max(160, Math.round(res.width))), format: "png" });
+  const totalPoints = res.shapes.reduce((n, s) => n + (s.subpaths?.reduce((m, sp) => m + sp.points.length, 0) ?? 0), 0);
+  return {
+    text:
+      `Imported ${res.shapes.length} shapes (${totalPoints} bezier vertices) from ${res.width}x${res.height} SVG -> ${specPath}\n` +
+      `shape ids: ${res.shapes.map((s) => s.id).join(", ")}\n` +
+      (res.warnings.length ? `warnings: ${res.warnings.join("; ")}\n` : "") +
+      `Use in riv_create via "imports":[{"spec":"${specPath}","x":...,"y":...,"scale":...}] — then animate the wrapper group or individual shape ids.`,
+    image: r.frames[0],
+  };
+}
+
+server.registerTool(
+  "riv_import_svg",
+  {
+    title: "Import an SVG as Rive vector shapes",
+    description:
+      "Convert an SVG file (Figma/Illustrator export, icon, illustration) into Rive bezier path shapes — the professional way to get high-quality artwork instead of drawing with primitives. Writes a scene-fragment JSON (shapes with full cubic vertices, gradients, strokes) and returns a rendered preview. Use the fragment in riv_create via \"imports\". Supports path/rect/circle/ellipse/polygon/polyline/line, nested transforms, style attrs, linear/radial gradients. Not imported: <text> (use texts[] with a font), <image>, filters, masks.",
+    inputSchema: {
+      svgPath: z.string().optional().describe("Path to the .svg file"),
+      svg: z.string().optional().describe("Inline SVG markup (alternative to svgPath)"),
+      outSpec: z.string().describe("Output scene-fragment JSON path (e.g. logo.scene.json)"),
+      idPrefix: z.string().optional().describe("Prefix for generated shape ids (avoid collisions)"),
+    },
+  },
+  wrap(async ({ svgPath, svg, outSpec, idPrefix }: { svgPath?: string; svg?: string; outSpec: string; idPrefix?: string }) => {
+    const text = svg ?? (svgPath ? readFileSync(resolve(svgPath), "utf8") : null);
+    if (!text) return err("Provide svgPath or svg");
+    const out = await svgToSpecFile(text, outSpec, idPrefix);
+    return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
+  })
+);
+
+// ---- riv_asset_search --------------------------------------------------
+server.registerTool(
+  "riv_asset_search",
+  {
+    title: "Search/fetch professional vector icons (Iconify)",
+    description:
+      "Search Iconify's ~200k professionally designed open-source icons and convert one directly into Rive shapes. Two modes: query-only returns matching icon names; icon+outSpec downloads the SVG and imports it (same output as riv_import_svg). Requires network access to api.iconify.design.",
+    inputSchema: {
+      query: z.string().optional().describe("Search terms, e.g. 'rocket launch'"),
+      limit: z.number().int().min(1).max(64).optional().describe("Max results (default 24)"),
+      icon: z.string().optional().describe("Icon to fetch, e.g. 'solar:rocket-bold' (from a previous search)"),
+      outSpec: z.string().optional().describe("Required with icon: output scene-fragment JSON path"),
+      idPrefix: z.string().optional(),
+    },
+  },
+  wrap(async ({ query, limit, icon, outSpec, idPrefix }: { query?: string; limit?: number; icon?: string; outSpec?: string; idPrefix?: string }) => {
+    const get = async (url: string): Promise<string> => {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) }).catch((e) => {
+        throw new Error(`Iconify API unreachable (${e.message}) — this tool needs network access to api.iconify.design`);
+      });
+      if (!res.ok) throw new Error(`Iconify API ${res.status} for ${url}`);
+      return res.text();
+    };
+    if (icon) {
+      if (!outSpec) return err("outSpec is required when fetching an icon");
+      const [prefix, name] = icon.split(":");
+      if (!prefix || !name) return err("icon must be 'prefix:name' (e.g. 'solar:rocket-bold')");
+      const svg = await get(`https://api.iconify.design/${prefix}/${name}.svg`);
+      if (!svg.includes("<svg")) return err(`Icon '${icon}' not found`);
+      const out = await svgToSpecFile(svg, outSpec, idPrefix ?? name.replace(/[^a-z0-9]/gi, "_") + "_");
+      return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
+    }
+    if (!query) return err("Provide query (search) or icon (fetch)");
+    const json = JSON.parse(await get(`https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=${limit ?? 24}`));
+    const icons: string[] = json.icons ?? [];
+    return {
+      content: [{
+        type: "text",
+        text: icons.length
+          ? `${icons.length} icons:\n${icons.join("\n")}\nFetch one with {icon:"<prefix:name>", outSpec:"..."}.`
+          : `No icons found for '${query}'`,
+      }],
+    };
+  })
+);
+
+// ---- riv_decompile -----------------------------------------------------
+server.registerTool(
+  "riv_decompile",
+  {
+    title: "Decompile a .riv into an editable scene spec",
+    description:
+      "Reverse a .riv file into a riv_create scene spec (shapes with bezier vertices, gradients, groups/solos, trim paths, animations with named easings, loop modes). Use it to study professional files as few-shot examples, or to remix them (decompile → edit spec → riv_create). Object types outside the writer's coverage are counted in 'skipped', not silently dropped. Note: community/marketplace files are CC BY 4.0 — keep attribution.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      outSpec: z.string().optional().describe("Write the scene spec JSON here (default: return summary only)"),
+    },
+  },
+  wrap(async ({ path, outSpec }: { path: string; outSpec?: string }) => {
+    const { bytes } = loadRiv(path);
+    const { scene, coverage } = decompileRiv(bytes);
+    let text = `decompiled ${coverage.decompiled} objects; skipped: ${JSON.stringify(coverage.skipped)}`;
+    if (coverage.warnings.length) text += `\nwarnings: ${coverage.warnings.slice(0, 12).join("; ")}`;
+    if (outSpec) {
+      const p = resolve(outSpec);
+      writeFileSync(p, JSON.stringify(scene, null, 1));
+      text += `\nscene spec -> ${p}`;
+    } else {
+      const s = JSON.stringify(scene);
+      text += s.length > 6000 ? `\n(spec is ${s.length} chars — pass outSpec to write it to a file)` : `\n${s}`;
+    }
+    return { content: [{ type: "text", text }] };
+  })
+);
+
 // ---- riv_create --------------------------------------------------------
 server.registerTool(
   "riv_create",
@@ -629,7 +750,9 @@ Motion presets — PREFER these over hand-authored keyframes (professionally tun
   {"preset":"float","target":"logo"}
 ],"tracks":[]}]
 Available: fade-in rise-in drop-in slide-in pop-in bounce-in | fade-out sink-out slide-out pop-out | pulse heartbeat tada shake wobble | breathing float sway spin glow-pulse blink(for eyelid overlays). Options: at(start frame), stagger(frames between targets), intensity(0.25-3), direction(left|right|up|down), cycleSeconds. Ambient presets (breathing..blink) span the whole animation seamlessly. A preset and a manual track must not drive the same target+property.
-Recommended flow: riv_design_tokens → riv_create (use ONLY token values + presets) → riv_critique → fix → re-critique.
+Pro features: stroke.trim {start,end,mode} + trimStart/trimEnd tracks (draw-on effect), shapes[].clipBy (mask via an invisible shape), groups[].solo+active + soloActive track with keyframes[].ref (pose/mouth switching), constraints [{type:"followPath",item,path}] + followDistance track 0-1 (motion along a path), open paths (closed:false), multi-contour shapes (subpaths), stroke cap/join.
+"imports":[{"spec":"logo.scene.json","x":200,"y":150,"scale":0.8}] places riv_import_svg / riv_asset_search fragments under a wrapper group (id = file basename) — animate the wrapper or individual shape ids. PREFER imported real vector art over drawing with primitives for anything illustrative.
+Recommended flow: riv_design_tokens → (riv_import_svg / riv_asset_search for artwork) → riv_create (token values + presets + imports) → riv_critique → fix → re-critique.
 Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
@@ -639,7 +762,28 @@ Shape z-order: later in array = on top; images render above shapes. properties f
   },
   wrap(
     async ({ outPath, scene, previewTime }: { outPath: string; scene: Record<string, unknown>; previewTime?: number }) => {
-      const spec = scene as unknown as SceneSpec;
+      const spec = scene as unknown as SceneSpec & {
+        imports?: Array<{ spec: string; id?: string; parent?: string; x?: number; y?: number; scale?: number; z?: number }>;
+      };
+      // imports: riv_import_svg / riv_asset_search の scene断片をラッパーグループ付きでマージ
+      if (spec.imports?.length) {
+        spec.groups = spec.groups ?? [];
+        spec.shapes = spec.shapes ?? [];
+        for (const imp of spec.imports) {
+          const p = resolve(imp.spec);
+          if (!existsSync(p)) return err(`import spec not found: ${p}`);
+          const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> };
+          const gid = imp.id ?? basename(p).replace(/\.(scene\.)?json$/i, "");
+          spec.groups.push({
+            id: gid, x: imp.x ?? 0, y: imp.y ?? 0, parent: imp.parent,
+            ...(imp.scale !== undefined ? { scaleX: imp.scale, scaleY: imp.scale } : {}),
+          });
+          frag.shapes.forEach((s, i) => {
+            spec.shapes!.push({ ...s, parent: s.parent ?? gid, z: imp.z !== undefined ? imp.z + i * 0.001 : s.z });
+          });
+        }
+        delete spec.imports;
+      }
       // pngPath/フォントpath → bytes 解決（cwd 基準）
       const imageLists = [spec.images ?? [], ...(spec.artboards ?? []).map((a) => a.images ?? [])];
       for (const img of imageLists.flat()) {

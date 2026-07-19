@@ -157,6 +157,11 @@ export interface GroupSpec {
   parent?: string; // グループ or ボーン
   rotation?: number; // 度
   opacity?: number;
+  scaleX?: number;
+  scaleY?: number;
+  solo?: boolean; // trueでSoloノード: 子のうちactiveの1つだけ表示（口パク・ポーズ切替用）
+  active?: string; // solo時の初期アクティブ子要素id
+  clipBy?: string;
 }
 export interface MeshSpec {
   columns?: number; // 自動グリッド（既定6x6）。頂点は "<imageId>#v<row>_<col>" で参照可能
@@ -172,12 +177,19 @@ export interface BoneSpec {
   length: number;
 }
 export interface ConstraintSpec {
-  type: "ik";
-  bone: string; // チェーン末端のボーン
-  target: string; // 目標のグループ（このグループのx/yをアニメするとIKが解決）
+  type: "ik" | "followPath";
+  // ik
+  bone?: string; // チェーン末端のボーン
+  target?: string; // 目標のグループ（このグループのx/yをアニメするとIKが解決）
   parentBoneCount?: number; // 末端から遡って参加するボーン数（既定1）
   invertDirection?: boolean;
   strength?: number; // 0-1
+  // followPath: item(グループ/画像)を path(シェイプ)のパスに沿って配置。
+  // followDistance トラック(0-1)をアニメすると軌道に沿って移動する
+  item?: string;
+  path?: string;
+  distance?: number; // 0-1 初期位置
+  orient?: boolean; // パスの向きに回転を合わせる（既定 true）
 }
 export interface ImageSpec {
   id: string;
@@ -190,6 +202,7 @@ export interface ImageSpec {
   opacity?: number;
   parent?: string;
   mesh?: MeshSpec;
+  clipBy?: string;
   z?: number; // 描画順（大きいほど前面）。既定: shapes=配列順, images=1000+, texts=2000+, nested=3000+
 }
 export interface ShapeSpec {
@@ -204,20 +217,34 @@ export interface ShapeSpec {
   rotation?: number;
   opacity?: number;
   cornerRadius?: number;
+  closed?: boolean; // polygon専用。false で開いたパス（線・軌跡など）。既定 true
+  clipBy?: string; // このシェイプを指定シェイプの形でクリップ（マスク元は fill/stroke 無しの不可視シェイプ推奨）
+  // polygon専用: 複数輪郭（穴あき形状・複合パス）。points の代わりに指定
+  subpaths?: Array<{ closed?: boolean; points: NonNullable<ShapeSpec["points"]> }>;
   points?: Array<{
     x: number;
     y: number;
     radius?: number; // 直線頂点(StraightVertex)の角丸半径。cubicと併用不可
     // 指定するとベジェハンドル付き頂点(Cubic*Vertex)になる。有機的な曲線シェイプ用
     cubic?: {
-      rotation: number; // 度。この頂点の接線方向
+      rotation: number; // 度。この頂点の接線方向（out側。inRotation指定時はout側のみ）
       distance?: number; // 対称ハンドル長（省略時はinDistance/outDistanceを個別指定）
       inDistance?: number; // 非対称: 入り側ハンドル長
       outDistance?: number; // 非対称: 出側ハンドル長
+      inRotation?: number; // 度。入り側の接線方向（指定すると CubicDetachedVertex。SVGインポート用）
     };
   }>;
   fill?: { color?: string; gradient?: GradientSpec; feather?: FeatherSpec };
-  stroke?: { color: string; thickness: number; feather?: FeatherSpec };
+  stroke?: {
+    color: string;
+    thickness: number;
+    feather?: FeatherSpec;
+    cap?: "butt" | "round" | "square";
+    join?: "miter" | "round" | "bevel";
+    // トリムパス: ストロークの一部だけ描く。start/end 0-1。trimStart/trimEnd トラックで
+    // アニメすると「線が描かれていく」draw-on 演出になる
+    trim?: { start?: number; end?: number; offset?: number; mode?: "sequential" | "synchronized" };
+  };
 }
 export interface FeatherSpec {
   strength?: number; // ぼかし半径。既定 12
@@ -261,6 +288,7 @@ export interface KeyframeSpec {
   frame: number;
   value?: number;
   color?: string;
+  ref?: string; // soloActive 専用: アクティブにする子要素の id
   easing?: EasingName;
   amplitude?: number; // elastic-* 専用。既定 1
   period?: number; // elastic-* 専用。既定 0.5（秒）
@@ -274,7 +302,10 @@ export interface TrackSpec {
   target: string;
   property:
     | "x" | "y" | "rotation" | "scaleX" | "scaleY" | "opacity"
-    | "width" | "height" | "fillColor";
+    | "width" | "height" | "fillColor"
+    | "trimStart" | "trimEnd" | "trimOffset" // stroke.trim を持つシェイプ対象。0-1
+    | "followDistance" // followPath 制約を持つ item 対象。0-1
+    | "soloActive"; // solo グループ対象。keyframes[].ref に子id
   keyframes: KeyframeSpec[];
 }
 export interface AnimationSpec {
@@ -487,6 +518,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     const groupIds = new Map<string, number>();
     const boneIds = new Map<string, number>();
     const worldOf = new Map<string, Mat>();
+    // 前方参照の解決を全drawable出力後に行うための遅延リスト
+    const soloFixups: Array<{ objIndex: number; active?: string; groupId: string }> = [];
+    const pendingClips: Array<{ nodeId: number; source: string; owner: string }> = [];
     const emitGroup = (g: GroupSpec): void => {
       let parentLocal = 0;
       let parentWorld = matIdentity;
@@ -501,8 +535,13 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       const props: Record<string, unknown> = { name: g.id, parentId: parentLocal, x: g.x, y: g.y };
       if (g.rotation) props.rotation = (g.rotation * Math.PI) / 180;
       if (g.opacity !== undefined) props.opacity = g.opacity;
-      worldOf.set(g.id, matMul(parentWorld, matTRS(g.x, g.y, ((g.rotation ?? 0) * Math.PI) / 180)));
-      groupIds.set(g.id, push({ type: "Node", props }));
+      if (g.scaleX !== undefined) props.scaleX = g.scaleX;
+      if (g.scaleY !== undefined) props.scaleY = g.scaleY;
+      worldOf.set(g.id, matMul(parentWorld, matTRS(g.x, g.y, ((g.rotation ?? 0) * Math.PI) / 180, g.scaleX ?? 1, g.scaleY ?? 1)));
+      const gid = push({ type: g.solo ? "Solo" : "Node", props });
+      groupIds.set(g.id, gid);
+      if (g.solo) soloFixups.push({ objIndex: objects.length - 1, active: g.active, groupId: g.id });
+      if (g.clipBy) pendingClips.push({ nodeId: gid, source: g.clipBy, owner: g.id });
     };
     const boneNames = new Set((ab.bones ?? []).map((b) => b.id));
     const deferredGroups: GroupSpec[] = [];
@@ -542,9 +581,11 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     }
     for (const g of deferredGroups) emitGroup(g);
 
-    // コンストレイント（IK）
+    // コンストレイント（IK。followPath はシェイプ出力後に遅延emit）
     for (const c of ab.constraints ?? []) {
+      if (c.type === "followPath") continue;
       if (c.type !== "ik") throw new Error(`Unsupported constraint type '${c.type}'`);
+      if (!c.bone || !c.target) throw new Error(`ik constraint needs 'bone' and 'target'`);
       const bone = boneIds.get(c.bone);
       if (bone === undefined) throw new Error(`IK bone '${c.bone}' not found`);
       const target = groupIds.get(c.target);
@@ -570,6 +611,8 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
 
     const shapeIds = new Map<string, number>();
     const fillColorIds = new Map<string, number>();
+    const trimIds = new Map<string, number>();
+    const followIds = new Map<string, number>();
     const imageIds = new Map<string, number>();
     const textIds = new Map<string, number>();
     const nestedIds = new Map<string, number>();
@@ -592,6 +635,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       if (img.opacity !== undefined) imgProps.opacity = img.opacity;
       const image = push({ type: "Image", props: imgProps });
       imageIds.set(img.id, image);
+      if (img.clipBy) pendingClips.push({ nodeId: image, source: img.clipBy, owner: img.id });
 
       if (img.mesh) {
         const dims = pngSize(img.bytes!);
@@ -692,30 +736,45 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       const shape = push({ type: "Shape", props: shapeProps });
       shapeIds.set(s.id, shape);
 
+      if (s.clipBy) pendingClips.push({ nodeId: shape, source: s.clipBy, owner: s.id });
+
       if (s.type === "polygon") {
-        if (!s.points || s.points.length < 3) throw new Error(`polygon '${s.id}' needs >=3 points`);
-        const path = push({ type: "PointsPath", props: { parentId: shape, isClosed: true } });
-        for (const p of s.points) {
-          if (p.cubic) {
-            const rotation = (p.cubic.rotation * Math.PI) / 180;
-            const inDistance = p.cubic.inDistance ?? p.cubic.distance ?? 0;
-            const outDistance = p.cubic.outDistance ?? p.cubic.distance ?? 0;
-            if (inDistance === outDistance) {
-              push({
-                type: "CubicMirroredVertex",
-                props: { parentId: path, x: p.x, y: p.y, rotation, distance: inDistance },
-              });
+        const subpaths = s.subpaths ?? (s.points ? [{ closed: s.closed, points: s.points }] : []);
+        if (!subpaths.length || subpaths.some((sp) => sp.points.length < 2))
+          throw new Error(`polygon '${s.id}' needs points (>=2 per subpath)`);
+        for (const sp of subpaths) {
+          const path = push({ type: "PointsPath", props: { parentId: shape, isClosed: sp.closed ?? s.closed ?? true } });
+          for (const p of sp.points) {
+            if (p.cubic) {
+              const rotation = (p.cubic.rotation * Math.PI) / 180;
+              const inDistance = p.cubic.inDistance ?? p.cubic.distance ?? 0;
+              const outDistance = p.cubic.outDistance ?? p.cubic.distance ?? 0;
+              if (p.cubic.inRotation !== undefined) {
+                push({
+                  type: "CubicDetachedVertex",
+                  props: {
+                    parentId: path, x: p.x, y: p.y,
+                    inRotation: (p.cubic.inRotation * Math.PI) / 180, inDistance,
+                    outRotation: rotation, outDistance,
+                  },
+                });
+              } else if (inDistance === outDistance) {
+                push({
+                  type: "CubicMirroredVertex",
+                  props: { parentId: path, x: p.x, y: p.y, rotation, distance: inDistance },
+                });
+              } else {
+                push({
+                  type: "CubicAsymmetricVertex",
+                  props: { parentId: path, x: p.x, y: p.y, rotation, inDistance, outDistance },
+                });
+              }
             } else {
               push({
-                type: "CubicAsymmetricVertex",
-                props: { parentId: path, x: p.x, y: p.y, rotation, inDistance, outDistance },
+                type: "StraightVertex",
+                props: { parentId: path, x: p.x, y: p.y, ...(p.radius ? { radius: p.radius } : {}) },
               });
             }
-          } else {
-            push({
-              type: "StraightVertex",
-              props: { parentId: path, x: p.x, y: p.y, ...(p.radius ? { radius: p.radius } : {}) },
-            });
           }
         }
       } else {
@@ -782,9 +841,23 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       }
 
       if (s.stroke) {
-        const stroke = push({ type: "Stroke", props: { parentId: shape, thickness: s.stroke.thickness } });
+        const strokeProps: Record<string, unknown> = { parentId: shape, thickness: s.stroke.thickness };
+        if (s.stroke.cap) strokeProps.cap = { butt: 0, round: 1, square: 2 }[s.stroke.cap];
+        if (s.stroke.join) strokeProps.join = { miter: 0, round: 1, bevel: 2 }[s.stroke.join];
+        const stroke = push({ type: "Stroke", props: strokeProps });
         if (s.stroke.feather) emitFeather(stroke, s.stroke.feather);
         push({ type: "SolidColor", props: { parentId: stroke, colorValue: parseColor(s.stroke.color) } });
+        if (s.stroke.trim) {
+          const t = s.stroke.trim;
+          trimIds.set(s.id, push({
+            type: "TrimPath",
+            props: {
+              parentId: stroke,
+              start: t.start ?? 0, end: t.end ?? 1, offset: t.offset ?? 0,
+              modeValue: t.mode === "synchronized" ? 2 : 1,
+            },
+          }));
+        }
       }
     };
 
@@ -863,6 +936,42 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     ];
     drawables.sort((a, b) => b.z - a.z);
     for (const d of drawables) d.emit();
+
+    // 前方参照の解決: id解決ヘルパ（drawable/グループ/ボーン横断）
+    const anyIdOf = (id: string): number | undefined =>
+      shapeIds.get(id) ?? imageIds.get(id) ?? groupIds.get(id) ?? boneIds.get(id) ??
+      textIds.get(id) ?? nestedIds.get(id);
+
+    // followPath コンストレイント（パスのシェイプ出力後）
+    for (const c of ab.constraints ?? []) {
+      if (c.type !== "followPath") continue;
+      if (!c.item || !c.path) throw new Error(`followPath constraint needs 'item' and 'path'`);
+      const item = anyIdOf(c.item);
+      if (item === undefined) throw new Error(`followPath item '${c.item}' not found`);
+      const target = shapeIds.get(c.path);
+      if (target === undefined) throw new Error(`followPath path shape '${c.path}' not found`);
+      const props: Record<string, unknown> = {
+        parentId: item, targetId: target,
+        distance: c.distance ?? 0, orient: c.orient ?? true, offset: false,
+      };
+      if (c.strength !== undefined) props.strength = c.strength;
+      followIds.set(c.item, push({ type: "FollowPathConstraint", props }));
+    }
+
+    // クリッピング（クリップ元シェイプの出力後に解決）
+    for (const clip of pendingClips) {
+      const source = shapeIds.get(clip.source);
+      if (source === undefined) throw new Error(`clipBy source shape '${clip.source}' not found (for '${clip.owner}')`);
+      push({ type: "ClippingShape", props: { parentId: clip.nodeId, sourceId: source } });
+    }
+
+    // Solo の activeComponentId 解決
+    for (const fix of soloFixups) {
+      if (!fix.active) continue;
+      const active = anyIdOf(fix.active);
+      if (active === undefined) throw new Error(`solo '${fix.groupId}' active child '${fix.active}' not found`);
+      objects[fix.objIndex].props.activeComponentId = active;
+    }
 
     // 背景（最後 = 最背面）
     if (ab.backgroundColor) {
@@ -943,9 +1052,22 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       for (const t of a.tracks) {
         const isColor = t.property === "fillColor";
         const isVertex = t.target.includes("#v");
+        const isSolo = t.property === "soloActive";
         let targetId: number | undefined;
         let propRef: { type: string; prop: string } | undefined;
-        if (isColor) {
+        if (t.property.startsWith("trim")) {
+          targetId = trimIds.get(t.target);
+          if (targetId === undefined) throw new Error(`Track target '${t.target}' has no stroke.trim (needed for ${t.property})`);
+          propRef = { type: "TrimPath", prop: t.property === "trimStart" ? "start" : t.property === "trimEnd" ? "end" : "offset" };
+        } else if (t.property === "followDistance") {
+          targetId = followIds.get(t.target);
+          if (targetId === undefined) throw new Error(`Track target '${t.target}' has no followPath constraint`);
+          propRef = { type: "FollowPathConstraint", prop: "distance" };
+        } else if (isSolo) {
+          targetId = groupIds.get(t.target);
+          if (targetId === undefined) throw new Error(`soloActive target group '${t.target}' not found`);
+          propRef = { type: "Solo", prop: "activeComponentId" };
+        } else if (isColor) {
           targetId = fillColorIds.get(t.target);
           if (targetId === undefined) {
             throw new Error(`Track target '${t.target}' has no solid fill (gradient fills can't be color-keyed)`);
@@ -994,6 +1116,11 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           if (isColor) {
             if (k.color === undefined) throw new Error(`fillColor keyframe needs 'color'`);
             push({ type: "KeyFrameColor", props: { ...kfProps, value: parseColor(k.color) } });
+          } else if (isSolo) {
+            if (!k.ref) throw new Error(`soloActive keyframe needs 'ref' (child id)`);
+            const child = shapeIds.get(k.ref) ?? imageIds.get(k.ref) ?? groupIds.get(k.ref) ?? textIds.get(k.ref) ?? nestedIds.get(k.ref);
+            if (child === undefined) throw new Error(`soloActive ref '${k.ref}' not found`);
+            push({ type: "KeyFrameId", props: { ...kfProps, interpolationType: 0, value: child } });
           } else {
             let v = k.value ?? 0;
             if (t.property === "rotation") v = (v * Math.PI) / 180;
