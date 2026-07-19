@@ -61,6 +61,7 @@ interface MotionTrack {
 interface MotionAnim {
   name: string;
   fps: number;
+  loop: number;
   tracks: MotionTrack[];
 }
 
@@ -88,7 +89,7 @@ export function lintMotion(objects: RivObject[], findings: LintFinding[]): void 
       abH = (o.properties.height as number) ?? abH;
     } else if (o.typeName === "LinearAnimation") {
       closeAnim();
-      anim = { name: (o.properties.name as string) ?? "?", fps: (o.properties.fps as number) ?? 60, tracks: [] };
+      anim = { name: (o.properties.name as string) ?? "?", fps: (o.properties.fps as number) ?? 60, loop: (o.properties.loopValue as number) ?? 1, tracks: [] };
     } else if (o.typeName === "KeyedObject") {
       closeTrack();
       objectId = (o.properties.objectId as number) ?? -1;
@@ -118,6 +119,16 @@ export function lintMotion(objects: RivObject[], findings: LintFinding[]): void 
       const keys = t.keys.slice().sort((p, q) => p.frame - q.frame);
       const isScale = t.prop === "scaleX" || t.prop === "scaleY";
       const minDelta = isScale ? 0.01 : 0.5;
+      // linear が正当なパターンは robotic 判定から除外する:
+      //  - 高頻度ジッター (全区間<10フレーム。プロ実ファイルの車体振動は3フレーム刻みのlinear)
+      //  - ループアニメの単調移動 (スクロール/スピン=等速が正解)
+      const segFrames = keys.slice(1).map((kf, n) => kf.frame - keys[n].frame).filter((d) => d > 0);
+      const isJitter = segFrames.length >= 3 && segFrames.every((d) => d < 10);
+      const monotonic = keys.length >= 2 && (
+        keys.every((kf, n) => n === 0 || kf.value >= keys[n - 1].value) ||
+        keys.every((kf, n) => n === 0 || kf.value <= keys[n - 1].value));
+      const isLoopScroll = a.loop !== 0 && monotonic && (t.prop === "x" || t.prop === "y" || t.prop === "rotation");
+      const exemptLinear = isJitter || isLoopScroll;
       for (let n = 1; n < keys.length; n++) {
         const prev = keys[n - 1], cur = keys[n];
         const delta = Math.abs(cur.value - prev.value);
@@ -125,7 +136,7 @@ export function lintMotion(objects: RivObject[], findings: LintFinding[]): void 
         // 区間 prev→cur の補間は prev(出発側キーフレーム)の interpolationType に格納される
         const segInterp = prev.interp;
         if (TRANSFORM_PROPS.has(t.prop) && delta > minDelta && df > 0) {
-          if (segInterp === 1) linearMoves++;
+          if (segInterp === 1) { if (!exemptLinear) linearMoves++; }
           else if (segInterp >= 2) easedMoves++;
           // 瞬間移動: アートボードの4割超を5フレーム(60fps換算~80ms)未満で移動
           if ((t.prop === "x" || t.prop === "y") && delta > maxDim * 0.4 && df < a.fps * 0.09 && segInterp !== 0) {

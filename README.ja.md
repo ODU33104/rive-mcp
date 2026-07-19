@@ -77,8 +77,21 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 `riv_create` はシーン仕様を雑に書くと、いかにも「AIが仮置きした」ような平坦な図形になりがちです。品質を構造的に担保するため、複雑なシーンでは次のフローを推奨します:
 
 1. `riv_design_tokens` → 返ってきたパレット/グラデ/duration/easing**だけ**を使う（生の16進数や恣意的な時間を発明しない）
-2. `riv_create` — キーフレーム手打ちの代わりに、当てはまる箇所は全てモーション`presets`で表現
-3. `riv_critique` → フレームを見て6軸チェックリストで採点し、4未満を修正して再実行（最低2周）
+2. **プロ製アートワークを取り込む（イラスト的な要素をAIがフリーハンドで描かない）**: `riv_asset_search`（Iconify約20万アイコン、要ネットワーク）/ `riv_import_svg`（Figma/Illustrator書き出し。ネットワーク制限下でも npm から `npm pack @twemoji/svg`(CC-BY 4.0)・`@mdi/svg`・`@tabler/icons` 等のプロ製SVG集を取得可）/ `riv_decompile`（プロ製.rivの手打ちベジェ+調整済みアニメトラックをリミックス）。プリミティブ手描きは背景・パネル・パーティクル等の単純形状のみ
+3. `riv_create` — キーフレーム手打ちの代わりに、当てはまる箇所は全てモーション`presets`で表現
+4. `riv_critique` → フレームを見て6軸チェックリストで採点し、4未満を修正して再実行（最低2周）
+
+### ショーケース: プロ素材イン→プロ品質アウト
+
+いずれも `node samples/<名前>/build-scene.mjs` で再現可能:
+
+- [`samples/cosmic-journey/`](samples/cosmic-journey/) — **アートワークが全てプロデザイン**（Twemojiのロケット/環付き惑星/月/星/彗星をnpm経由で取得し `riv_import_svg` で変換）。配色はトークン、動きはプリセット、構図はcritiqueループで修正
+- [`samples/night-delivery/`](samples/night-delivery/) — **プロ製.rivのリミックス**: Rive公式トラック（手打ちベジェ+調整済み車輪/車体アニメ）を `riv_decompile` で抽出し、Twemojiの月・スクロールする道路・`screen`合成のヘッドライトと合成
+- [`samples/launch-success/`](samples/launch-success/) — 自作SVG+トークン+プリセット+TrimPath描画演出+パーティクル+SM
+
+<p align="center"><img src="samples/cosmic-journey/cosmic.gif" width="420" alt="Cosmic Journey"><br><img src="samples/night-delivery/delivery.gif" width="420" alt="Night Delivery"></p>
+
+Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)）、トラックはRive公式サンプル由来。
 
 同じワークフロー+手打ち部分の作法（ベジェ曲線・イージングの意味論・リギング）は `rive-design-guidelines` MCP prompt として公開。MCP prompts 非対応クライアント向けに [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としても同梱している。
 

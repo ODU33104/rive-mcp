@@ -679,7 +679,7 @@ server.registerTool(
   {
     title: "Decompile a .riv into an editable scene spec",
     description:
-      "Reverse a .riv file into a riv_create scene spec (shapes with bezier vertices, gradients, groups/solos, trim paths, animations with named easings, loop modes). Use it to study professional files as few-shot examples, or to remix them (decompile → edit spec → riv_create). Object types outside the writer's coverage are counted in 'skipped', not silently dropped. Note: community/marketplace files are CC BY 4.0 — keep attribution.",
+      "Reverse a .riv file into a riv_create scene spec (shapes with bezier vertices, solid/gradient fills incl. gradient opacity, blend modes, artboard background, groups/solos, trim paths, clipping, animations with named easings, loop modes). Paint objects are resolved by parentId, so editor-authored files (paints deferred to the stream tail) decompile correctly. Use it to study professional files as few-shot examples, or to remix them — art AND hand-tuned animation tracks — into new scenes (decompile → edit spec → riv_create; see samples/night-delivery). Object types outside the writer's coverage are counted in 'skipped', not silently dropped. Note: community/marketplace files are CC BY 4.0 — keep attribution.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
       outSpec: z.string().optional().describe("Write the scene spec JSON here (default: return summary only)"),
@@ -1414,8 +1414,9 @@ server.registerPrompt(
 
 **Mandatory workflow for any non-trivial scene**:
 1. \`riv_design_tokens\` (seed/mood/scheme) → use ONLY the returned palette/gradients/durations/easings/spacing. Never invent raw hex colors or ad-hoc durations.
-2. \`riv_create\` — express motion with \`presets\` (pop-in, rise-in+stagger, float, breathing, …) instead of hand-authored keyframes wherever a preset fits; hand-keyframe only what presets can't express.
-3. \`riv_critique\` — look at the sampled frames, score the 6-axis checklist, fix anything below 4 with riv_edit or a regenerate, and re-run. Iterate at least twice.
+2. **Ingest professional artwork — do NOT free-draw illustrative art.** Characters/objects/icons must come from a pro source: \`riv_asset_search\` (Iconify, needs network), \`riv_import_svg\` (Figma/Illustrator exports, or npm SVG sets when network is limited: \`npm pack @twemoji/svg\` CC-BY 4.0, \`@mdi/svg\`, \`@tabler/icons\`), or \`riv_decompile\` (remix pro-made .riv art + its hand-tuned animation tracks). Hand-drawn primitives are for backgrounds/panels/particles only.
+3. \`riv_create\` — express motion with \`presets\` (pop-in, rise-in+stagger, float, breathing, …) instead of hand-authored keyframes wherever a preset fits; hand-keyframe only what presets can't express.
+4. \`riv_critique\` — look at the sampled frames, score the 6-axis checklist, fix anything below 4 with riv_edit or a regenerate, and re-run. Iterate at least twice.
 
 Craft knowledge for the parts you author by hand:
 - **Color**: no saturated primaries (#FF0000-style). Use \`fill.gradient\` on hero shapes far more often than flat \`fill.color\`.

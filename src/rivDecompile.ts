@@ -2,7 +2,7 @@
 // 目的: プロが作った .riv を「編集可能なシーン仕様 + few-shot手本」に変換する。
 // ライターが表現できる範囲を復元し、範囲外の型は coverage.skipped に集計して隠さない。
 import { readRiv, loadDefs, type RivObject } from "./rivBinary.js";
-import { EASING_BEZIER, type SceneSpec, type ArtboardSpec, type ShapeSpec, type GroupSpec, type AnimationSpec, type TrackSpec, type KeyframeSpec, type EasingName } from "./rivWriter.js";
+import { EASING_BEZIER, BLEND_MODE_VALUE, type BlendModeName, type SceneSpec, type ArtboardSpec, type ShapeSpec, type GroupSpec, type AnimationSpec, type TrackSpec, type KeyframeSpec, type EasingName } from "./rivWriter.js";
 
 export interface DecompileResult {
   scene: SceneSpec;
@@ -16,6 +16,14 @@ const num = (v: unknown, d = 0): number => (typeof v === "number" ? v : d);
 function colorOf(v: unknown): string {
   if (typeof v === "string") return v.startsWith("#ff") && v.length === 9 ? "#" + v.slice(3) : v;
   return "#888888";
+}
+
+// "#rrggbb" / "#aarrggbb" のアルファを係数倍する
+function scaleAlpha(color: string, k: number): string {
+  const hex = color.replace("#", "");
+  const a = hex.length === 8 ? parseInt(hex.slice(0, 2), 16) : 255;
+  const rgb = hex.length === 8 ? hex.slice(2) : hex;
+  return "#" + Math.round(a * k).toString(16).padStart(2, "0") + rgb;
 }
 
 export function decompileRiv(bytes: Uint8Array): DecompileResult {
@@ -57,13 +65,17 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
     };
 
     // 第1パス: コンポーネント復元
+    // 塗り(Fill/Stroke/SolidColor/グラデ)は隣接順に依存しない: Rive editor は
+    // Fill/Stroke をストリーム末尾へ後置し、SolidColor 等が parentId で未来の
+    // paint を参照する。→ いったん収集して parentId ベースで後解決する。
     interface ShapeCtx { spec: ShapeSpec; li: number }
     let curShape: ShapeCtx | null = null;
     let curPath: { closed?: boolean; points: NonNullable<ShapeSpec["points"]> } | null = null;
-    let curPaint: { kind: "fill" | "stroke"; li: number } | null = null;
-    let curGradient: { spec: NonNullable<ShapeSpec["fill"]>["gradient"] } | null = null;
+    const shapeByLi = new Map<number, ShapeSpec>();
+    const paintRaw: { li: number; o: RivObject }[] = [];
+    const deferredRaw: { li: number; o: RivObject }[] = []; // ClippingShape / FollowPathConstraint (前方参照あり得る)
 
-    const flushShape = () => { curShape = null; curPath = null; curPaint = null; curGradient = null; };
+    const flushShape = () => { curShape = null; curPath = null; };
     const parentIdStr = (o: RivObject): string | undefined => {
       const p = o.properties.parentId;
       if (typeof p !== "number" || p === 0) return undefined;
@@ -107,8 +119,14 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
           if (par) s.parent = par;
           if (o.properties.rotation !== undefined) s.rotation = deg(o.properties.rotation);
           if (o.properties.opacity !== undefined) s.opacity = num(o.properties.opacity, 1);
+          if (typeof o.properties.blendModeValue === "number") {
+            const bm = (Object.entries(BLEND_MODE_VALUE) as [BlendModeName, number][])
+              .find(([, v]) => v === o.properties.blendModeValue)?.[0];
+            if (bm && bm !== "srcOver") s.blendMode = bm;
+          }
           ab.shapes!.push(s);
           curShape = { spec: s, li };
+          shapeByLi.set(li, s);
           decompiled++;
           break;
         }
@@ -179,85 +197,13 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
             decompiled++;
           }
           break;
-        case "Fill":
-          if (curShape) { curPaint = { kind: "fill", li }; curShape.spec.fill = {}; decompiled++; }
+        case "Fill": case "Stroke": case "SolidColor":
+        case "LinearGradient": case "RadialGradient": case "GradientStop": case "TrimPath":
+          paintRaw.push({ li, o });
           break;
-        case "Stroke":
-          if (curShape) {
-            curPaint = { kind: "stroke", li };
-            curShape.spec.stroke = { color: "#888888", thickness: num(o.properties.thickness, 1) };
-            const cap = o.properties.cap, join = o.properties.join;
-            if (cap === 1) curShape.spec.stroke.cap = "round"; else if (cap === 2) curShape.spec.stroke.cap = "square";
-            if (join === 1) curShape.spec.stroke.join = "round"; else if (join === 2) curShape.spec.stroke.join = "bevel";
-            decompiled++;
-          }
+        case "ClippingShape": case "FollowPathConstraint":
+          deferredRaw.push({ li, o });
           break;
-        case "SolidColor":
-          if (curShape && curPaint) {
-            const c = colorOf(o.properties.colorValue);
-            if (curPaint.kind === "fill") curShape.spec.fill = { color: c };
-            else curShape.spec.stroke!.color = c;
-            idOf.set(li, `${curShape.spec.id}#${curPaint.kind}Color`);
-            decompiled++;
-          }
-          break;
-        case "LinearGradient": case "RadialGradient":
-          if (curShape && curPaint?.kind === "fill") {
-            curGradient = {
-              spec: {
-                type: o.typeName === "RadialGradient" ? "radial" : "linear",
-                stops: [],
-                start: { x: num(o.properties.startX), y: num(o.properties.startY) },
-                end: { x: num(o.properties.endX), y: num(o.properties.endY) },
-              },
-            };
-            curShape.spec.fill = { gradient: curGradient.spec };
-            decompiled++;
-          } else skip(o.typeName);
-          break;
-        case "GradientStop":
-          if (curGradient) {
-            curGradient.spec!.stops.push({ color: colorOf(o.properties.colorValue), position: num(o.properties.position) });
-            decompiled++;
-          }
-          break;
-        case "TrimPath":
-          if (curShape?.spec.stroke) {
-            curShape.spec.stroke.trim = {
-              start: num(o.properties.start), end: num(o.properties.end, 1), offset: num(o.properties.offset),
-              mode: o.properties.modeValue === 2 ? "synchronized" : "sequential",
-            };
-            idOf.set(li, `${curShape.spec.id}#trim`);
-            decompiled++;
-          }
-          break;
-        case "ClippingShape": {
-          const owner = idOf.get(num(o.properties.parentId, -1));
-          const source = idOf.get(num(o.properties.sourceId, -1));
-          if (owner && source) {
-            const ownerShape = ab.shapes!.find((s) => s.id === owner);
-            const ownerGroup = ab.groups!.find((g) => g.id === owner);
-            if (ownerShape) ownerShape.clipBy = source;
-            else if (ownerGroup) ownerGroup.clipBy = source;
-            decompiled++;
-          } else skip(o.typeName);
-          break;
-        }
-        case "FollowPathConstraint": {
-          const item = idOf.get(num(o.properties.parentId, -1));
-          const path = idOf.get(num(o.properties.targetId, -1));
-          if (item && path) {
-            ab.constraints = ab.constraints ?? [];
-            ab.constraints.push({
-              type: "followPath", item, path,
-              distance: num(o.properties.distance),
-              orient: o.properties.orient !== false && o.properties.orient !== 0,
-            });
-            idOf.set(li, `${item}#follow`);
-            decompiled++;
-          } else skip(o.typeName);
-          break;
-        }
         case "LinearAnimation": case "StateMachine":
           flushShape();
           skip(o.typeName); // 第2パスで扱う（skipped集計からは後で除去）
@@ -271,6 +217,131 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
     }
     delete skipped.LinearAnimation;
     delete skipped.StateMachine;
+
+    // 塗り解決 (parentIdベース)
+    interface PaintRec { kind: "fill" | "stroke"; shape?: ShapeSpec; onArtboard?: boolean; visible: boolean }
+    type GradSpec = NonNullable<NonNullable<ShapeSpec["fill"]>["gradient"]>;
+    const paintByLi = new Map<number, PaintRec>();
+    const gradByLi = new Map<number, { spec: GradSpec; paint: PaintRec; opacity: number }>();
+    const byType = (t: string) => paintRaw.filter((r) => r.o.typeName === t);
+
+    for (const { li, o } of [...byType("Fill"), ...byType("Stroke")]) {
+      const parentLi = num(o.properties.parentId, -1);
+      const kind = o.typeName === "Fill" ? "fill" : "stroke";
+      const visible = o.properties.isVisible !== 0 && o.properties.isVisible !== false;
+      const shape = shapeByLi.get(parentLi);
+      if (shape) {
+        const rec: PaintRec = { kind, shape, visible };
+        if (visible) {
+          if (kind === "fill") shape.fill = shape.fill ?? {};
+          else {
+            shape.stroke = { color: "#888888", thickness: num(o.properties.thickness, 1) };
+            const cap = o.properties.cap, join = o.properties.join;
+            if (cap === 1) shape.stroke.cap = "round"; else if (cap === 2) shape.stroke.cap = "square";
+            if (join === 1) shape.stroke.join = "round"; else if (join === 2) shape.stroke.join = "bevel";
+          }
+        }
+        paintByLi.set(li, rec);
+        decompiled++;
+      } else if (parentLi === 0 && kind === "fill") {
+        paintByLi.set(li, { kind, onArtboard: true, visible });
+        decompiled++;
+      } else skip(o.typeName);
+    }
+    for (const { li, o } of [...byType("LinearGradient"), ...byType("RadialGradient")]) {
+      const paint = paintByLi.get(num(o.properties.parentId, -1));
+      if (!paint) { skip(o.typeName); continue; }
+      const spec: GradSpec = {
+        type: o.typeName === "RadialGradient" ? "radial" : "linear",
+        stops: [],
+        start: { x: num(o.properties.startX), y: num(o.properties.startY) },
+        end: { x: num(o.properties.endX), y: num(o.properties.endY) },
+      };
+      gradByLi.set(li, { spec, paint, opacity: num(o.properties.opacity, 1) });
+      if (paint.visible && paint.shape) {
+        if (paint.kind === "fill") paint.shape.fill = { gradient: spec };
+        // stroke のグラデはライター未対応 → 最初のstop色で近似 (stop解決後に反映)
+      }
+      decompiled++;
+    }
+    for (const { o } of byType("GradientStop")) {
+      const g = gradByLi.get(num(o.properties.parentId, -1));
+      if (!g) { skip(o.typeName); continue; }
+      g.spec.stops.push({ color: colorOf(o.properties.colorValue), position: num(o.properties.position) });
+      decompiled++;
+    }
+    for (const [, g] of gradByLi) {
+      const { spec, paint } = g;
+      if (g.opacity < 1) {
+        // グラデ自体のopacityはstopのアルファへ焼き込む
+        for (const st of spec.stops) st.color = scaleAlpha(st.color, g.opacity);
+      }
+      if (paint.kind === "stroke" && paint.visible && paint.shape?.stroke) {
+        paint.shape.stroke.color = spec.stops[0]?.color ?? "#888888";
+        warnings.push(`stroke gradient on "${paint.shape.id}" approximated with solid ${paint.shape.stroke.color}`);
+      } else if (paint.onArtboard && paint.visible) {
+        // アートボード背景のグラデ → 最背面の矩形として合成
+        ab.shapes!.unshift({
+          id: "__background", type: "rect", x: ab.width / 2, y: ab.height / 2,
+          width: ab.width, height: ab.height, z: -100000, fill: { gradient: spec },
+        });
+      }
+    }
+    for (const { li, o } of byType("SolidColor")) {
+      const paint = paintByLi.get(num(o.properties.parentId, -1));
+      if (!paint) { skip(o.typeName); continue; }
+      const c = colorOf(o.properties.colorValue);
+      if (paint.onArtboard) { if (paint.visible) ab.backgroundColor = c; }
+      else if (paint.visible && paint.shape) {
+        if (paint.kind === "fill") paint.shape.fill = { color: c };
+        else paint.shape.stroke!.color = c;
+        idOf.set(li, `${paint.shape.id}#${paint.kind}Color`);
+      }
+      decompiled++;
+    }
+    for (const { li, o } of byType("TrimPath")) {
+      const paint = paintByLi.get(num(o.properties.parentId, -1));
+      if (paint?.kind === "stroke" && paint.visible && paint.shape?.stroke) {
+        paint.shape.stroke.trim = {
+          start: num(o.properties.start), end: num(o.properties.end, 1), offset: num(o.properties.offset),
+          mode: o.properties.modeValue === 2 ? "synchronized" : "sequential",
+        };
+        idOf.set(li, `${paint.shape.id}#trim`);
+        decompiled++;
+      } else skip("TrimPath");
+    }
+    // fillが解決されなかったシェイプの空 {} を除去 (不可視Fillなど)
+    for (const s of ab.shapes!) {
+      if (s.fill && !("color" in s.fill) && !("gradient" in s.fill)) delete s.fill;
+    }
+
+    // ClippingShape / FollowPathConstraint (前方参照解決後)
+    for (const { li, o } of deferredRaw) {
+      if (o.typeName === "ClippingShape") {
+        const owner = idOf.get(num(o.properties.parentId, -1));
+        const source = idOf.get(num(o.properties.sourceId, -1));
+        const ownerShape = owner ? ab.shapes!.find((s) => s.id === owner) : undefined;
+        const ownerGroup = owner ? ab.groups!.find((g) => g.id === owner) : undefined;
+        if (source && (ownerShape || ownerGroup)) {
+          if (ownerShape) ownerShape.clipBy = source;
+          else ownerGroup!.clipBy = source;
+          decompiled++;
+        } else skip(o.typeName);
+      } else {
+        const item = idOf.get(num(o.properties.parentId, -1));
+        const path = idOf.get(num(o.properties.targetId, -1));
+        if (item && path) {
+          ab.constraints = ab.constraints ?? [];
+          ab.constraints.push({
+            type: "followPath", item, path,
+            distance: num(o.properties.distance),
+            orient: o.properties.orient !== false && o.properties.orient !== 0,
+          });
+          idOf.set(li, `${item}#follow`);
+          decompiled++;
+        } else skip(o.typeName);
+      }
+    }
 
     // 第2パス: アニメーション
     const propNameOf = buildPropKeyMap();
@@ -286,7 +357,10 @@ export function decompileRiv(bytes: Uint8Array): DecompileResult {
         const ev = io.properties.easingValue;
         return ev === 0 ? "elastic-in" : ev === 2 ? "elastic-in-out" : "elastic-out";
       }
-      const [x1, y1, x2, y2] = [num(io.properties.x1), num(io.properties.y1), num(io.properties.x2, 1), num(io.properties.y2, 1)];
+      // Rive の CubicInterpolator 既定値は (0.42, 0, 0.58, 1) = ease-in-out
+      const [x1, y1, x2, y2] = [num(io.properties.x1, 0.42), num(io.properties.y1), num(io.properties.x2, 0.58), num(io.properties.y2, 1)];
+      // (x1≈y1, x2≈y2) の cubic は直線 = リニア (editorはリニアもCubicEaseInterpolatorで書くことがある)
+      if (Math.abs(x1 - y1) < 0.02 && Math.abs(x2 - y2) < 0.02) return undefined;
       let best: EasingName = "smooth";
       let bestD = Infinity;
       for (const [name, bez] of Object.entries(EASING_BEZIER)) {

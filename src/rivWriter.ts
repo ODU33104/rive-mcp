@@ -220,6 +220,7 @@ export interface ShapeSpec {
   cornerRadius?: number;
   closed?: boolean; // polygon専用。false で開いたパス（線・軌跡など）。既定 true
   clipBy?: string; // このシェイプを指定シェイプの形でクリップ（マスク元は fill/stroke 無しの不可視シェイプ推奨）
+  blendMode?: BlendModeName; // 合成モード。影=multiply、光=screen/colorDodge が定番
   // polygon専用: 複数輪郭（穴あき形状・複合パス）。points の代わりに指定
   subpaths?: Array<{ closed?: boolean; points: NonNullable<ShapeSpec["points"]> }>;
   points?: Array<{
@@ -422,6 +423,17 @@ export function parseColor(c: string): number {
   if (s.length !== 8) throw new Error(`Invalid color: ${c} (use #RGB/#RRGGBB/#AARRGGBB)`);
   return Number.parseInt(s, 16) >>> 0;
 }
+
+// Rive の BlendMode 列挙値 (Skia SkBlendMode 準拠)
+export type BlendModeName =
+  | "srcOver" | "screen" | "overlay" | "darken" | "lighten" | "colorDodge" | "colorBurn"
+  | "hardLight" | "softLight" | "difference" | "exclusion" | "multiply"
+  | "hue" | "saturation" | "color" | "luminosity";
+export const BLEND_MODE_VALUE: Record<BlendModeName, number> = {
+  srcOver: 3, screen: 14, overlay: 15, darken: 16, lighten: 17, colorDodge: 18,
+  colorBurn: 19, hardLight: 20, softLight: 21, difference: 22, exclusion: 23,
+  multiply: 24, hue: 25, saturation: 26, color: 27, luminosity: 28,
+};
 
 export const EASING_BEZIER: Record<string, [number, number, number, number] | null> = {
   hold: null,
@@ -759,6 +771,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       const shapeProps: Record<string, unknown> = { name: s.id, parentId: parentOf(s.parent), x: s.x, y: s.y };
       if (s.rotation) shapeProps.rotation = (s.rotation * Math.PI) / 180;
       if (s.opacity !== undefined) shapeProps.opacity = s.opacity;
+      if (s.blendMode && s.blendMode !== "srcOver") shapeProps.blendModeValue = BLEND_MODE_VALUE[s.blendMode];
       const shape = push({ type: "Shape", props: shapeProps });
       shapeIds.set(s.id, shape);
 

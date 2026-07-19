@@ -17,7 +17,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 
 - **Generate `.riv` from JSON** — shapes, gradients, embedded PNGs, text, bones + skinning, IK, mesh deformation, keyframe animation with easing, multi-layer state machines, listeners, events, physics baking, particles
 - **Pro-quality by construction** — 21 semantic motion presets (`pop-in`, staggered `rise-in`, `breathing`, …) with professionally tuned amplitudes/easings, an OKLCH design-token generator (`riv_design_tokens`), motion-quality lint rules (robotic linear movement, teleports, missing stagger), and a one-call critique loop (`riv_critique`: frames + objective metrics + scoring checklist)
-- **Real vector art pipeline** — import SVG (Figma/Illustrator/Iconify) as true bezier paths (`riv_import_svg`, `riv_asset_search`), decompile existing `.riv` files into editable specs (`riv_decompile`), plus trim paths (draw-on), clipping masks, follow-path motion, solos and detached bezier handles in the scene spec
+- **Real vector art pipeline** — import SVG (Figma/Illustrator/Iconify, or npm SVG sets like `@twemoji/svg` when offline) as true bezier paths (`riv_import_svg`, `riv_asset_search`), decompile existing `.riv` files into editable specs **including gradients, blend modes and hand-tuned animation tracks** (`riv_decompile`), plus trim paths (draw-on), clipping masks, blend modes (`multiply` shadows, `screen` glows), follow-path motion, solos and detached bezier handles in the scene spec
 - **Losslessly edit existing `.riv`** — change any property, swap text, delete subtrees (references auto-remapped); round-trip verified pixel-perfect
 - **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live
 - **Human ⇄ AI loop** — an "Instructions for AI" box in the Studio: you type feedback, the AI picks it up via `riv_studio_notes` and fixes the file, your browser updates instantly
@@ -54,9 +54,17 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Fetch instructions the human typed into the Studio UI |
 
-### Showcase: the full pipeline in one scene
+### Showcases: professional assets in, professional motion out
 
-[`samples/launch-success/`](samples/launch-success/) is built end-to-end by the professional pipeline — `riv_design_tokens` (tech/dark palette), SVG-imported rocket & flame artwork (bezier paths + gradients), motion presets (`pop-in`, staggered `fade-in`, `rise-in`, `float`, fast `breathing` flame flicker), a TrimPath draw-on checkmark, spark particles, and an intro→idle state machine. No hand-picked hex colors, no hand-authored entrance keyframes. `node samples/launch-success/build-scene.mjs` rebuilds it.
+Three sample scenes are built end-to-end by the pipeline, each rebuildable with `node samples/<name>/build-scene.mjs`:
+
+- [`samples/cosmic-journey/`](samples/cosmic-journey/) — **every piece of artwork is professionally designed** (Twemoji rocket, ringed planet, moon, stars, comet — fetched as SVG via npm and converted with `riv_import_svg`); colors from `riv_design_tokens`, motion from presets, composition fixed through the `riv_critique` loop.
+- [`samples/night-delivery/`](samples/night-delivery/) — **remixes a professional `.riv`**: Rive's official truck (hand-drawn bezier art *and* its hand-tuned wheel/body animation tracks) is extracted with `riv_decompile` and composed into a new night scene with a Twemoji moon, scrolling road and a `screen`-blended headlight beam.
+- [`samples/launch-success/`](samples/launch-success/) — hand-authored SVG + tokens + presets + TrimPath draw-on + particles + intro→idle state machine.
+
+<p align="center"><img src="samples/cosmic-journey/cosmic.gif" width="420" alt="Cosmic Journey — all artwork imported from professionally designed SVGs"><br><img src="samples/night-delivery/delivery.gif" width="420" alt="Night Delivery — professional .riv decompiled and remixed"></p>
+
+Twemoji artwork © Twitter/X and contributors, [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/); truck artwork from Rive's official example files.
 
 ### Design quality guidance
 

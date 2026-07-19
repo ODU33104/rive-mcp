@@ -12,8 +12,13 @@ Aim for the quality of a modern SaaS product or game UI, not flat placeholder sh
 ## Mandatory workflow (non-trivial scenes)
 
 1. **`riv_design_tokens`** (seed/mood/scheme) → use ONLY the returned palette/gradients/durations/easings/spacing. Never invent raw hex colors or ad-hoc durations.
-2. **`riv_create`** — express motion with `presets` (`pop-in`, `rise-in` + `stagger`, `float`, `breathing`, …) instead of hand-authored keyframes wherever a preset fits. Hand-keyframe only what presets can't express.
-3. **`riv_critique`** — look at the sampled frames, score the 6-axis checklist, fix anything below 4 (riv_edit or regenerate), re-run. Iterate at least twice.
+2. **Ingest professional artwork — do NOT free-draw illustrative art.** Anything illustrative (characters, objects, icons, mascots) must come from a pro-made source:
+   - `riv_asset_search` — ~200k Iconify icons by name (needs network to api.iconify.design)
+   - `riv_import_svg` — any SVG file: Figma/Illustrator exports, or **professional SVG sets fetched via npm** when direct network is limited: `npm pack @twemoji/svg` (3,700+ color illustrations, CC-BY 4.0 — credit "Twemoji"), `@mdi/svg` (Material Design Icons, Apache-2.0), `@tabler/icons` (MIT). Extract the tarball and import the `.svg` files directly.
+   - `riv_decompile` — remix professionally-made `.riv` files (e.g. Rive's official examples, CC-BY marketplace files): extract their hand-drawn bezier art AND their hand-tuned animation tracks into your scene (see `samples/night-delivery/`).
+   Reserve hand-drawn primitives for backgrounds, roads, panels, particles — simple geometry only.
+3. **`riv_create`** — express motion with `presets` (`pop-in`, `rise-in` + `stagger`, `float`, `breathing`, …) instead of hand-authored keyframes wherever a preset fits. Hand-keyframe only what presets can't express.
+4. **`riv_critique`** — look at the sampled frames, score the 6-axis checklist, fix anything below 4 (riv_edit or regenerate), re-run. Iterate at least twice.
 
 ## Craft rules for hand-authored parts
 
