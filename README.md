@@ -16,19 +16,20 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 ## Highlights
 
 - **Generate `.riv` from JSON** — shapes, gradients, embedded PNGs, text, bones + skinning, IK, mesh deformation, keyframe animation with easing, multi-layer state machines, listeners, events, physics baking, particles
+- **Pro-quality by construction** — 21 semantic motion presets (`pop-in`, staggered `rise-in`, `breathing`, …) with professionally tuned amplitudes/easings, an OKLCH design-token generator (`riv_design_tokens`), motion-quality lint rules (robotic linear movement, teleports, missing stagger), and a one-call critique loop (`riv_critique`: frames + objective metrics + scoring checklist)
 - **Losslessly edit existing `.riv`** — change any property, swap text, delete subtrees (references auto-remapped); round-trip verified pixel-perfect
 - **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live
 - **Human ⇄ AI loop** — an "Instructions for AI" box in the Studio: you type feedback, the AI picks it up via `riv_studio_notes` and fixes the file, your browser updates instantly
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (20)
+## Tools (22)
 
 | Tool | What it does |
 |---|---|
 | `riv_list` | Recursively find `.riv` files (size, format version) |
 | `riv_inspect` | Full metadata: artboards, animations (duration/fps/loop), state machines and inputs |
-| `riv_lint` | Static diagnostic: broken references, oversized embedded assets, unreachable state-machine states, unconditional self-transitions (infinite-loop risk), unused inputs, easing silently discarded on a track's last keyframe |
+| `riv_lint` | Static diagnostic: broken references, oversized embedded assets, unreachable state-machine states, unconditional self-transitions (infinite-loop risk), unused inputs, easing silently discarded on a track's last keyframe, **motion-quality rules** (all-linear "robotic" movement, teleporting objects, missing stagger, one-sided scale) |
 | `riv_render_frame` | Render any moment to PNG (inline image + file) |
 | `riv_render_gif` | Turn an animation into a preview GIF |
 | `riv_render_apng` | Animated PNG export — 24-bit color + alpha transparency (plays on GitHub) |
@@ -36,7 +37,9 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_render_sprites` | Sprite-sheet PNG + JSON metadata (for game engines) |
 | `riv_play_state_machine` | Set/fire inputs → advance → state-transition report (+ optional frame captures) |
 | `riv_generate_code` | Integration code with real artboard/SM/input names (React / JS / Vue / Svelte / Flutter) |
-| `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview. Supports bezier-handled vertices, elastic easing, gradients, physics baking, particles |
+| `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview. Supports bezier-handled vertices, elastic easing, gradients, physics baking, particles, and **semantic motion presets** (`{"preset":"pop-in","target":"card"}` expands server-side into professionally tuned keyframes — entrances/exits/emphasis/ambient loops, with `stagger` for groups) |
+| `riv_design_tokens` | **Generate design tokens before designing**: OKLCH-harmonized palette (+WCAG contrast), gradient pairs, Material-Motion durations & easing roles, spacing/radius/type scales — deterministic from seed color + mood |
+| `riv_critique` | **One-call review bundle**: sampled frames across the animation + objective metrics (bezier-vs-primitive ratio, palette saturation flags, easing distribution, rig/SM stats) + lint findings + a fixed 6-axis scoring checklist for the render→critique→revise loop |
 | `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
 | `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |
@@ -49,7 +52,13 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 
 ### Design quality guidance
 
-`riv_create` output can look like flat "AI placeholder" shapes if a client just wings the scene spec. The server exposes a `rive-design-guidelines` MCP prompt (color/gradients, organic bezier curves, easing semantics, physics baking, rigging, a known feather/blur limitation) that any MCP client can fetch before designing a non-trivial scene. For clients without MCP prompts support, the same guidance ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
+`riv_create` output can look like flat "AI placeholder" shapes if a client just wings the scene spec. The server bakes quality in structurally — the recommended flow for any non-trivial scene is:
+
+1. `riv_design_tokens` → use only the returned palette/gradients/durations/easings (never invent raw hex or ad-hoc timings)
+2. `riv_create` with motion `presets` instead of hand-authored keyframes wherever one fits
+3. `riv_critique` → look at the frames, score the 6-axis checklist, fix anything below 4, re-run (at least twice)
+
+The same workflow plus hand-authoring craft rules (bezier curves, easing semantics, rigging) is exposed as the `rive-design-guidelines` MCP prompt. For clients without MCP prompts support, it ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
 
 ## Quick start
 

@@ -268,6 +268,7 @@ export interface KeyframeSpec {
 export type EasingName =
   | "hold" | "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out"
   | "ease-out-back" | "ease-in-back" | "smooth" | "snap"
+  | "emphasized-decel" | "emphasized-accel"
   | "elastic-in" | "elastic-out" | "elastic-in-out";
 export interface TrackSpec {
   target: string;
@@ -397,6 +398,8 @@ export const EASING_BEZIER: Record<string, [number, number, number, number] | nu
   "ease-in-back": [0.36, 0, 0.66, -0.56], // 溜め
   smooth: [0.4, 0, 0.2, 1], // Material standard
   snap: [0.7, 0, 0.1, 1],
+  "emphasized-decel": [0.05, 0.7, 0.1, 1], // M3 emphasized decelerate — 入場・到着
+  "emphasized-accel": [0.3, 0, 0.8, 0.15], // M3 emphasized accelerate — 退場・離脱
 };
 
 // ElasticInterpolator.easingValue: Easing::easeIn=0 / easeOut=1 / easeInOut=2 (rive-runtime)

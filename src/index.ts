@@ -18,6 +18,8 @@ import { editRiv, type EditOp } from "./rivEdit.js";
 import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
+import { generateTokens, type Mood } from "./designTokens.js";
+import { computeMetrics, CRITIQUE_CHECKLIST } from "./critique.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 
@@ -489,7 +491,7 @@ server.registerTool(
   {
     title: "Diagnose a .riv file for structural problems",
     description:
-      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, and keyframe easing silently discarded on a track's last keyframe. Complements riv_dump (which shows raw structure but doesn't judge it).",
+      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, keyframe easing silently discarded on a track's last keyframe, plus motion-quality rules (all-linear robotic movement, teleporting objects, missing stagger on simultaneous fade-ins, one-sided scale animation). Complements riv_dump (which shows raw structure but doesn't judge it).",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
     },
@@ -505,6 +507,78 @@ server.registerTool(
     };
     return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
   })
+);
+
+// ---- riv_design_tokens -------------------------------------------------
+server.registerTool(
+  "riv_design_tokens",
+  {
+    title: "Generate a design-token set (palette / motion / layout)",
+    description:
+      "Deterministically generate professional design tokens for a scene BEFORE calling riv_create: an OKLCH-harmonized palette (with WCAG contrast ratios), gradient pairs, Material-Motion-derived durations & easing roles, spacing/radius/stroke scales and a type scale. Call this first, then use ONLY the returned values in the scene spec — never invent raw hex colors or ad-hoc durations. Inputs: optional seed color, mood (calm|playful|elegant|tech|warm|natural), scheme (dark|light).",
+    inputSchema: {
+      seed: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe("Brand/seed color #RRGGBB (optional; mood default hue otherwise)"),
+      mood: z.enum(["calm", "playful", "elegant", "tech", "warm", "natural"]).optional(),
+      scheme: z.enum(["dark", "light"]).optional().describe("Default dark"),
+    },
+  },
+  wrap(async ({ seed, mood, scheme }: { seed?: string; mood?: Mood; scheme?: "dark" | "light" }) => {
+    const tokens = generateTokens({ seed, mood, scheme });
+    return { content: [{ type: "text", text: JSON.stringify(tokens, null, 1) }] };
+  })
+);
+
+// ---- riv_critique ------------------------------------------------------
+server.registerTool(
+  "riv_critique",
+  {
+    title: "Critique a .riv: frames + objective metrics + scoring checklist",
+    description:
+      "One-call review bundle for the render→critique→revise loop: renders N frames spread across the animation, computes objective design metrics (bezier-vs-primitive ratio, palette & saturation flags, easing distribution, rig/SM structure) plus all lint findings, and returns a fixed 6-axis scoring checklist. LOOK at the frames, score each axis 1-5, and fix anything below 4 (riv_edit / regenerate), then re-run. Iterate at least twice before delivering any non-trivial scene.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      artboard: z.string().optional(),
+      animation: z.string().optional().describe("Animation to sample (default: first)"),
+      stateMachine: z.string().optional(),
+      frames: z.number().int().min(2).max(8).optional().describe("Frames to sample across the duration (default 4)"),
+      width: z.number().int().min(160).max(800).optional().describe("Frame width (default 320 — keep small, it saves tokens)"),
+    },
+  },
+  wrap(
+    async (a: { path: string; artboard?: string; animation?: string; stateMachine?: string; frames?: number; width?: number }) => {
+      const { bytes } = loadRiv(a.path);
+      const buf = Buffer.from(bytes);
+      const metrics = computeMetrics(bytes);
+      const info = await host.inspect(buf);
+      const ab = (a.artboard && info.artboards.find((x) => x.name === a.artboard)) || info.artboards[0];
+      const anim = a.animation ? ab?.animations.find((x) => x.name === a.animation) : ab?.animations[0];
+      const durationSec = anim?.durationSeconds ?? 2;
+      const n = a.frames ?? 4;
+      const fps = durationSec > 0 ? Math.max(0.2, (n - 1) / durationSec) : 1;
+      const r = await host.renderFrames(buf, {
+        artboard: a.artboard,
+        animation: a.stateMachine ? undefined : anim?.name,
+        stateMachine: a.stateMachine,
+        startTime: 0,
+        frameCount: n,
+        fps,
+        width: a.width ?? 320,
+        format: "png",
+      });
+      const times = Array.from({ length: n }, (_, i) => Math.round((i / fps) * 100) / 100);
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Sampled "${anim?.name ?? a.stateMachine ?? "?"}" at t=[${times.join(", ")}]s (${r.width}x${r.height})\n` +
+              `METRICS ${JSON.stringify(metrics, null, 1)}\n\n${CRITIQUE_CHECKLIST}`,
+          },
+          ...r.frames.map((f) => ({ type: "image" as const, data: f, mimeType: "image/png" })),
+        ],
+      };
+    }
+  )
 );
 
 // ---- riv_create --------------------------------------------------------
@@ -548,7 +622,15 @@ Character animation (images/groups/mesh):
 - images[].pngPath: PNG file embedded into the .riv. mesh enables vertex deformation; vertices addressed as "<imageId>#v<row>_<col>" (row 0 = top), coordinates in the image's natural pixel space centered at origin. Mesh vertex tracks support x/y only.
 - groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
 - transitions support exitTimeMs (play source animation this long before transitioning).
-Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees.`,
+Motion presets — PREFER these over hand-authored keyframes (professionally tuned amplitudes/easings, ~10x fewer tokens):
+"animations":[{"name":"intro","duration":90,"presets":[
+  {"preset":"pop-in","target":"logo"},
+  {"preset":"rise-in","targets":["c1","c2","c3"],"at":12,"stagger":4},
+  {"preset":"float","target":"logo"}
+],"tracks":[]}]
+Available: fade-in rise-in drop-in slide-in pop-in bounce-in | fade-out sink-out slide-out pop-out | pulse heartbeat tada shake wobble | breathing float sway spin glow-pulse blink(for eyelid overlays). Options: at(start frame), stagger(frames between targets), intensity(0.25-3), direction(left|right|up|down), cycleSeconds. Ambient presets (breathing..blink) span the whole animation seamlessly. A preset and a manual track must not drive the same target+property.
+Recommended flow: riv_design_tokens → riv_create (use ONLY token values + presets) → riv_critique → fix → re-critique.
+Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
       scene: z.record(z.unknown()).describe("Scene spec (see tool description for schema)"),
@@ -632,7 +714,7 @@ server.registerTool(
             z.object({
               frame: z.number().int().min(0),
               value: z.number().optional(),
-              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap"]).optional(),
+              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap", "emphasized-decel", "emphasized-accel"]).optional(),
             })
           ).optional().describe("op=setKeyframes: keyframe list (value required unless mode=remove)"),
           mode: z.enum(["replace", "add", "remove"]).optional().describe("op=setKeyframes: default replace"),
@@ -1184,14 +1266,20 @@ server.registerPrompt(
         role: "user",
         content: {
           type: "text",
-          text: `When building a scene with riv_create, aim for the quality of a modern SaaS product or game UI, not flat placeholder shapes:
+          text: `When building a scene with riv_create, aim for the quality of a modern SaaS product or game UI, not flat placeholder shapes.
 
-- **Color**: avoid saturated primaries (#FF0000-style). Prefer restrained, modern tones (muted pastels, deep darks, earthy accents). Use \`fill.gradient\` (linear/radial) on primary shapes far more often than a flat \`fill.color\` — a subtle angled gradient reads as "designed" instead of "placeholder".
-- **Organic curves**: \`shapes[].type: "polygon"\` points support an optional \`cubic: { rotation, distance }\` (degrees + handle length) to turn a straight-line vertex into a bezier-handled one (CubicMirroredVertex/CubicAsymmetricVertex). Classic 4-point circle approximation: place points at 0/90/180/270°, each with \`cubic.rotation\` matching that tangent direction and \`distance ≈ radius * 0.5523\`. Use this for blobs, rounded organic shapes, and speech-bubble-like forms instead of chains of straight segments.
-- **Easing semantics (important, easy to misuse)**: a keyframe's \`easing\` describes the motion *arriving at that keyframe* (i.e. the transition from the previous keyframe to this one) — not what happens after it. Never leave every track on implicit \`linear\`; that reads as robotic. Match the easing to the physical intent: \`ease-out\`/\`ease-out-back\` for something settling or overshooting into place, \`ease-in\` for something building up speed (e.g. a drop), \`ease-in-out\` for a smooth back-and-forth, \`elastic-out\`/\`elastic-in\`/\`elastic-in-out\` (with optional \`amplitude\`/\`period\` on that keyframe) for a springy, bouncy pop-in — genuinely more lively than \`ease-out-back\` for UI elements appearing. Setting \`easing\` on a track's *first* keyframe has no visible effect (there is no incoming segment to apply it to) — put the easing on the keyframe(s) that follow instead.
-- **Physics bake**: prefer \`bake: { type: "pendulum"|"wind"|"spring"|"gravity", ... }\` over hand-authored keyframes for anything that should sway, drop, or bounce — it now carries proper per-segment easing automatically.
-- **Rigging**: chain \`bones\`/\`RootBone\` with \`mesh.bones\` skinning for anything that bends (limbs, tails, hair); add \`constraints: [{type:"ik"}]\` for reaching/pointing motions instead of animating raw bone rotations by hand.
-- **Known limitation**: \`fill.feather\`/\`stroke.feather\` (blur) writes correctly to the .riv but is NOT rendered by this server's preview pipeline (Canvas2D-based runtime) — only Rive's GPU renderer supports it. Don't rely on it for anything you need to see in riv_render_frame/gif/apng/studio previews.`,
+**Mandatory workflow for any non-trivial scene**:
+1. \`riv_design_tokens\` (seed/mood/scheme) → use ONLY the returned palette/gradients/durations/easings/spacing. Never invent raw hex colors or ad-hoc durations.
+2. \`riv_create\` — express motion with \`presets\` (pop-in, rise-in+stagger, float, breathing, …) instead of hand-authored keyframes wherever a preset fits; hand-keyframe only what presets can't express.
+3. \`riv_critique\` — look at the sampled frames, score the 6-axis checklist, fix anything below 4 with riv_edit or a regenerate, and re-run. Iterate at least twice.
+
+Craft knowledge for the parts you author by hand:
+- **Color**: no saturated primaries (#FF0000-style). Use \`fill.gradient\` on hero shapes far more often than flat \`fill.color\`.
+- **Organic curves**: \`shapes[].points[].cubic: { rotation, distance }\` turns a vertex into a bezier handle. 4-point circle: points at 0/90/180/270°, \`cubic.rotation\` along the tangent, \`distance ≈ radius * 0.5523\`. Use for blobs and organic forms — never chains of straight segments.
+- **Easing semantics**: a keyframe's \`easing\` describes the motion *arriving at* that keyframe, so it goes on the later keyframe (first keyframe easing has no effect). Enters decelerate (\`emphasized-decel\`/\`ease-out\`), exits accelerate (\`emphasized-accel\`/\`ease-in\`), back-and-forth is \`ease-in-out\`, springy pop-ins are \`elastic-out\` (optional \`amplitude\`/\`period\`). Never leave transform tracks all-linear — riv_lint flags this as motion-robotic.
+- **Physics bake**: prefer \`bake: { type: "pendulum"|"wind"|"spring"|"gravity", ... }\` for anything that sways, drops, or bounces.
+- **Rigging**: chain \`bones\`/RootBone with \`mesh.bones\` skinning for anything that bends; add \`constraints: [{type:"ik"}]\` for reaching/pointing instead of hand-animating bone rotations.
+- **Known limitation**: \`fill.feather\`/\`stroke.feather\` writes correctly but is NOT rendered by this server's Canvas2D preview pipeline — only Rive's GPU renderer shows it.`,
         },
       },
     ],

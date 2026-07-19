@@ -78,7 +78,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 20 tools", names.length === 20, names.join(","));
+  check("tools/list has 22 tools", names.length === 22, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -399,12 +399,13 @@ try {
     genPlayText.slice(0, 400)
   );
 
-  // riv_lint: 正常なファイルでは誤検知が無いこと
+  // riv_lint: 正常なファイルでは error/warning の誤検知が無いこと(モーション品質のinfo提案は許容)
   const lintClean = await callTool("riv_lint", { path: genPath });
   const lintCleanText = textOf(lintClean);
+  const lintCleanParsed = JSON.parse(lintCleanText);
   check(
-    "riv_lint reports no findings on a well-formed file",
-    !lintClean.isError && JSON.parse(lintCleanText).findings.length === 0,
+    "riv_lint reports no errors/warnings on a well-formed file",
+    !lintClean.isError && lintCleanParsed.errorCount === 0 && lintCleanParsed.warningCount === 0,
     lintCleanText.slice(0, 300)
   );
 

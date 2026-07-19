@@ -48,7 +48,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 |---|---|
 | `riv_list` | ディレクトリ配下の `.riv` を再帰検索（サイズ・フォーマット版） |
 | `riv_inspect` | アートボード / アニメーション（duration・fps・loop）/ State Machine と入力（型・初期値）の全メタデータ抽出 |
-| `riv_lint` | 静的診断: 壊れた参照、巨大な埋め込みアセット、到達不能な state、条件無しの自己遷移（無限ループの恐れ）、未使用input、トラック最終キーフレームで無効化されるeasingを検出 |
+| `riv_lint` | 静的診断: 壊れた参照、巨大な埋め込みアセット、到達不能な state、条件無しの自己遷移（無限ループの恐れ）、未使用input、トラック最終キーフレームで無効化されるeasing、**モーション品質ルール**（全区間linearの機械的な動き・瞬間移動・同時出現のstagger不足・片側だけのscale）を検出 |
 | `riv_render_frame` | 任意時刻の1フレームを PNG レンダリング（インライン画像 + ファイル保存） |
 | `riv_render_gif` | アニメーションをプレビュー GIF に変換 |
 | `riv_render_apng` | アニメーションPNG（APNG）書き出し — 24bit色+アルファ透過（GitHub上でも再生される） |
@@ -56,7 +56,9 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_render_sprites` | スプライトシート PNG + メタデータ JSON（ゲームエンジン向け） |
 | `riv_play_state_machine` | 入力の set / fire → advance → 状態遷移レポート（+任意でフレームキャプチャ）|
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
-| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
+| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ21種、`stagger`で時差出現）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
+| `riv_design_tokens` | **設計前にデザイントークンを生成**: OKLCH色空間で調和させたパレット（WCAGコントラスト比付き）、グラデーションペア、Material Motion準拠のduration/easingロール、余白・角丸・文字スケール。シード色+ムードから決定論的に生成 |
+| `riv_critique` | **ワンコールのレビューバンドル**: アニメ全域からサンプリングしたフレーム + 客観メトリクス（ベジェ/プリミティブ比・彩度フラグ・イージング分布・リグ/SM統計）+ lint結果 + 6軸採点チェックリスト。「レンダ→批評→修正」ループ用 |
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
 | `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
@@ -69,7 +71,13 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 
 ### デザイン品質のガイダンス
 
-`riv_create` はシーン仕様を雑に書くと、いかにも「AIが仮置きした」ような平坦な図形になりがちです。サーバーは `rive-design-guidelines` という MCP prompt を公開しており、複雑なシーンを設計する前にどの MCP クライアントからでも取得できます（色・グラデーション、ベジェ曲線による有機的な形状、イージングの意味論、物理ベイク、リギング、featherの既知の制約について）。MCP prompts に対応していないクライアント向けに、同内容を [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としてスキル形式でも同梱している。
+`riv_create` はシーン仕様を雑に書くと、いかにも「AIが仮置きした」ような平坦な図形になりがちです。品質を構造的に担保するため、複雑なシーンでは次のフローを推奨します:
+
+1. `riv_design_tokens` → 返ってきたパレット/グラデ/duration/easing**だけ**を使う（生の16進数や恣意的な時間を発明しない）
+2. `riv_create` — キーフレーム手打ちの代わりに、当てはまる箇所は全てモーション`presets`で表現
+3. `riv_critique` → フレームを見て6軸チェックリストで採点し、4未満を修正して再実行（最低2周）
+
+同じワークフロー+手打ち部分の作法（ベジェ曲線・イージングの意味論・リギング）は `rive-design-guidelines` MCP prompt として公開。MCP prompts 非対応クライアント向けに [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としても同梱している。
 
 ## キャラクターアニメーション
 
