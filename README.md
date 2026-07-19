@@ -54,6 +54,10 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Fetch instructions the human typed into the Studio UI |
 
+### Showcase: the full pipeline in one scene
+
+[`samples/launch-success/`](samples/launch-success/) is built end-to-end by the professional pipeline — `riv_design_tokens` (tech/dark palette), SVG-imported rocket & flame artwork (bezier paths + gradients), motion presets (`pop-in`, staggered `fade-in`, `rise-in`, `float`, fast `breathing` flame flicker), a TrimPath draw-on checkmark, spark particles, and an intro→idle state machine. No hand-picked hex colors, no hand-authored entrance keyframes. `node samples/launch-success/build-scene.mjs` rebuilds it.
+
 ### Design quality guidance
 
 `riv_create` output can look like flat "AI placeholder" shapes if a client just wings the scene spec. The server bakes quality in structurally — the recommended flow for any non-trivial scene is:

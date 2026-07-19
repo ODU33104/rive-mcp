@@ -122,11 +122,13 @@ export function lintMotion(objects: RivObject[], findings: LintFinding[]): void 
         const prev = keys[n - 1], cur = keys[n];
         const delta = Math.abs(cur.value - prev.value);
         const df = cur.frame - prev.frame;
+        // 区間 prev→cur の補間は prev(出発側キーフレーム)の interpolationType に格納される
+        const segInterp = prev.interp;
         if (TRANSFORM_PROPS.has(t.prop) && delta > minDelta && df > 0) {
-          if (cur.interp === 1) linearMoves++;
-          else if (cur.interp >= 2) easedMoves++;
+          if (segInterp === 1) linearMoves++;
+          else if (segInterp >= 2) easedMoves++;
           // 瞬間移動: アートボードの4割超を5フレーム(60fps換算~80ms)未満で移動
-          if ((t.prop === "x" || t.prop === "y") && delta > maxDim * 0.4 && df < a.fps * 0.09 && cur.interp !== 0) {
+          if ((t.prop === "x" || t.prop === "y") && delta > maxDim * 0.4 && df < a.fps * 0.09 && segInterp !== 0) {
             findings.push({
               severity: "warning",
               rule: "motion-teleport",
