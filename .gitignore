@@ -1,6 +1,6 @@
 node_modules/
 dist/
-assets/
+/assets/
 samples/test-frame.png
 samples/test-preview.gif
 samples/*.frame.png

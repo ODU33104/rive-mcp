@@ -21,7 +21,10 @@
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "build": "npm run vendor && tsc -p tsconfig.json",
-    "test:e2e": "node test/e2e.mjs"
+    "test:e2e": "node test/e2e.mjs",
+    "test:phase1": "node test/phase1.mjs",
+    "test:phase2": "node test/phase2.mjs",
+    "test:lottie": "node test/lottie.mjs"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {

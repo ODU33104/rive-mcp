@@ -1,6 +1,7 @@
 // HLAPI: 物理ベイク・パーティクル・プレハブ
 // コンパイル時に物理シミュレーションを実行し、Douglas-Peucker で疎なキーフレームに圧縮する
 import type { SceneSpec, ArtboardSpec, TrackSpec, KeyframeSpec, ShapeSpec, AnimationSpec, EasingName } from "./rivWriter.js";
+import { expandPresets } from "./motionPresets.js";
 
 // ---- 物理ベイク -----------------------------------------------------------
 export interface BakeSpec {
@@ -224,6 +225,10 @@ function prefabShape(prefab: ParticleSpec["prefab"], id: string, x: number, y: n
 export function expandHlapi(spec: SceneSpec & { particles?: ParticleSpec[] }): void {
   const abList: Array<ArtboardSpec & { particles?: ParticleSpec[] }> = spec.artboards ?? [spec as unknown as ArtboardSpec];
   for (const ab of abList) {
+    // モーションプリセット → キーフレーム展開(bake より先。プリセットはbakeを生成しない)
+    const abW = ab.width ?? spec.artboard?.width ?? 400;
+    const abH = ab.height ?? spec.artboard?.height ?? 300;
+    expandPresets(ab, abW, abH);
     const particles = (ab as { particles?: ParticleSpec[] }).particles;
     if (particles) {
       expandParticles(ab, particles);

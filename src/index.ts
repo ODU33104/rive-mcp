@@ -3,8 +3,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { readFileSync, writeFileSync, statSync, readdirSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, statSync, readdirSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
 import { resolve, join, basename, dirname, extname } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { RiveHost } from "./riveHost.js";
 import { PAGE_SCRIPT } from "./pageScript.js";
@@ -18,6 +19,11 @@ import { editRiv, type EditOp } from "./rivEdit.js";
 import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
+import { generateTokens, type Mood } from "./designTokens.js";
+import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
+import { importSvg } from "./svgImport.js";
+import { importLottie } from "./lottieImport.js";
+import { decompileRiv } from "./rivDecompile.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 
@@ -489,7 +495,7 @@ server.registerTool(
   {
     title: "Diagnose a .riv file for structural problems",
     description:
-      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, and keyframe easing silently discarded on a track's last keyframe. Complements riv_dump (which shows raw structure but doesn't judge it).",
+      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, keyframe easing silently discarded on a track's last keyframe, plus motion-quality rules (all-linear robotic movement, teleporting objects, missing stagger on simultaneous fade-ins, one-sided scale animation). Complements riv_dump (which shows raw structure but doesn't judge it).",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
     },
@@ -504,6 +510,271 @@ server.registerTool(
       findings,
     };
     return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
+  })
+);
+
+// ---- riv_design_tokens -------------------------------------------------
+server.registerTool(
+  "riv_design_tokens",
+  {
+    title: "Generate a design-token set (palette / motion / layout)",
+    description:
+      "Deterministically generate professional design tokens for a scene BEFORE calling riv_create: an OKLCH-harmonized palette (with WCAG contrast ratios), gradient pairs, Material-Motion-derived durations & easing roles, spacing/radius/stroke scales and a type scale. Call this first, then use ONLY the returned values in the scene spec — never invent raw hex colors or ad-hoc durations. Inputs: optional seed color, mood (calm|playful|elegant|tech|warm|natural), scheme (dark|light).",
+    inputSchema: {
+      seed: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe("Brand/seed color #RRGGBB (optional; mood default hue otherwise)"),
+      mood: z.enum(["calm", "playful", "elegant", "tech", "warm", "natural"]).optional(),
+      scheme: z.enum(["dark", "light"]).optional().describe("Default dark"),
+    },
+  },
+  wrap(async ({ seed, mood, scheme }: { seed?: string; mood?: Mood; scheme?: "dark" | "light" }) => {
+    const tokens = generateTokens({ seed, mood, scheme });
+    return { content: [{ type: "text", text: JSON.stringify(tokens, null, 1) }] };
+  })
+);
+
+// ---- riv_critique ------------------------------------------------------
+server.registerTool(
+  "riv_critique",
+  {
+    title: "Critique a .riv: filmstrip + onion skin + motion vectors + metrics + checklist",
+    description:
+      "One-call review bundle for the render→critique→revise loop. Returns (1) a FILMSTRIP image — N frames left→right across the duration, so motion is readable as a sequence, (2) an ONION-SKIN image — all frames ghost-overlaid so every mover leaves a visible trail (use it to check trajectories and travel direction vs the artwork's facing), (3) a MOTION REPORT — net displacement/rotation vector per animated object computed from the file data, (4) objective design metrics + lint findings, and (5) a fixed 7-axis scoring checklist (incl. spatial/directional coherence). LOOK at the images, score each axis 1-5, fix anything below 4 (riv_edit / regenerate), then re-run. Iterate at least twice before delivering any non-trivial scene.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      artboard: z.string().optional(),
+      animation: z.string().optional().describe("Animation to sample (default: first)"),
+      stateMachine: z.string().optional(),
+      frames: z.number().int().min(2).max(10).optional().describe("Frames to sample across the duration (default 6)"),
+      width: z.number().int().min(120).max(480).optional().describe("Width of each filmstrip cell (default 200 — keep small, it saves tokens)"),
+      individualFrames: z.boolean().optional().describe("Also return each sampled frame as a separate full-size image (default false)"),
+    },
+  },
+  wrap(
+    async (a: { path: string; artboard?: string; animation?: string; stateMachine?: string; frames?: number; width?: number; individualFrames?: boolean }) => {
+      const { bytes } = loadRiv(a.path);
+      const buf = Buffer.from(bytes);
+      const metrics = computeMetrics(bytes);
+      const info = await host.inspect(buf);
+      const ab = (a.artboard && info.artboards.find((x) => x.name === a.artboard)) || info.artboards[0];
+      const anim = a.animation ? ab?.animations.find((x) => x.name === a.animation) : ab?.animations[0];
+      const durationSec = anim?.durationSeconds ?? 2;
+      const n = a.frames ?? 6;
+      const fps = durationSec > 0 ? Math.max(0.2, (n - 1) / durationSec) : 1;
+      const r = await host.renderFrames(buf, {
+        artboard: a.artboard,
+        animation: a.stateMachine ? undefined : anim?.name,
+        stateMachine: a.stateMachine,
+        startTime: 0,
+        frameCount: n,
+        fps,
+        width: a.width ?? 200,
+        format: "rgba",
+      });
+      const rgbaFrames = r.frames.map((f) => new Uint8Array(Buffer.from(f, "base64")));
+      const strip = composeFilmstrip(rgbaFrames, r.width, r.height);
+      const onion = composeOnionSkin(rgbaFrames, r.width, r.height);
+      const stripPng = Buffer.from(encodePng(strip.rgba, strip.width, strip.height)).toString("base64");
+      const onionPng = Buffer.from(encodePng(onion.rgba, onion.width, onion.height)).toString("base64");
+      const times = Array.from({ length: n }, (_, i) => Math.round((i / fps) * 100) / 100);
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Sampled "${anim?.name ?? a.stateMachine ?? "?"}" at t=[${times.join(", ")}]s (cells ${r.width}x${r.height}). ` +
+              `Image 1 = filmstrip (time flows left→right), image 2 = onion skin (motion trails).\n` +
+              `${motionReport(bytes)}\n` +
+              `METRICS ${JSON.stringify(metrics, null, 1)}\n\n${CRITIQUE_CHECKLIST}`,
+          },
+          { type: "image" as const, data: stripPng, mimeType: "image/png" },
+          { type: "image" as const, data: onionPng, mimeType: "image/png" },
+          ...(a.individualFrames
+            ? rgbaFrames.map((f) => ({
+                type: "image" as const,
+                data: Buffer.from(encodePng(f, r.width, r.height)).toString("base64"),
+                mimeType: "image/png",
+              }))
+            : []),
+        ],
+      };
+    }
+  )
+);
+
+// ---- riv_import_svg ----------------------------------------------------
+// SVG→シーン断片。プレビュー用の一時rivも組んで画像を返す
+async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string) {
+  const res = importSvg(svgText, { idPrefix });
+  const specPath = resolve(outSpec);
+  writeFileSync(specPath, JSON.stringify({ sourceWidth: res.width, sourceHeight: res.height, shapes: res.shapes }, null, 0));
+  const previewScene: SceneSpec = {
+    artboard: { name: "SvgPreview", width: Math.max(64, res.width), height: Math.max(64, res.height) },
+    shapes: res.shapes,
+  };
+  const { bytes } = createRiv(previewScene);
+  const r = await host.renderFrames(Buffer.from(bytes), { frameCount: 1, width: Math.min(480, Math.max(160, Math.round(res.width))), format: "png" });
+  const totalPoints = res.shapes.reduce((n, s) => n + (s.subpaths?.reduce((m, sp) => m + sp.points.length, 0) ?? 0), 0);
+  return {
+    text:
+      `Imported ${res.shapes.length} shapes (${totalPoints} bezier vertices) from ${res.width}x${res.height} SVG -> ${specPath}\n` +
+      `shape ids: ${res.shapes.map((s) => s.id).join(", ")}\n` +
+      (res.warnings.length ? `warnings: ${res.warnings.join("; ")}\n` : "") +
+      `Use in riv_create via "imports":[{"spec":"${specPath}","x":...,"y":...,"scale":...}] — then animate the wrapper group or individual shape ids.`,
+    image: r.frames[0],
+  };
+}
+
+server.registerTool(
+  "riv_import_svg",
+  {
+    title: "Import an SVG as Rive vector shapes",
+    description:
+      "Convert an SVG file (Figma/Illustrator export, icon, illustration) into Rive bezier path shapes — the professional way to get high-quality artwork instead of drawing with primitives. Writes a scene-fragment JSON (shapes with full cubic vertices, gradients, strokes) and returns a rendered preview. Use the fragment in riv_create via \"imports\". Supports path/rect/circle/ellipse/polygon/polyline/line, nested transforms, style attrs, linear/radial gradients. Not imported: <text> (use texts[] with a font), <image>, filters, masks.",
+    inputSchema: {
+      svgPath: z.string().optional().describe("Path to the .svg file"),
+      svg: z.string().optional().describe("Inline SVG markup (alternative to svgPath)"),
+      outSpec: z.string().describe("Output scene-fragment JSON path (e.g. logo.scene.json)"),
+      idPrefix: z.string().optional().describe("Prefix for generated shape ids (avoid collisions)"),
+    },
+  },
+  wrap(async ({ svgPath, svg, outSpec, idPrefix }: { svgPath?: string; svg?: string; outSpec: string; idPrefix?: string }) => {
+    const text = svg ?? (svgPath ? readFileSync(resolve(svgPath), "utf8") : null);
+    if (!text) return err("Provide svgPath or svg");
+    const out = await svgToSpecFile(text, outSpec, idPrefix);
+    return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
+  })
+);
+
+// ---- riv_asset_search --------------------------------------------------
+server.registerTool(
+  "riv_asset_search",
+  {
+    title: "Search/fetch professional vector icons (Iconify)",
+    description:
+      "Search Iconify's ~200k professionally designed open-source icons and convert one directly into Rive shapes. Two modes: query-only returns matching icon names; icon+outSpec downloads the SVG and imports it (same output as riv_import_svg). Requires network access to api.iconify.design.",
+    inputSchema: {
+      query: z.string().optional().describe("Search terms, e.g. 'rocket launch'"),
+      limit: z.number().int().min(1).max(64).optional().describe("Max results (default 24)"),
+      icon: z.string().optional().describe("Icon to fetch, e.g. 'solar:rocket-bold' (from a previous search)"),
+      outSpec: z.string().optional().describe("Required with icon: output scene-fragment JSON path"),
+      idPrefix: z.string().optional(),
+    },
+  },
+  wrap(async ({ query, limit, icon, outSpec, idPrefix }: { query?: string; limit?: number; icon?: string; outSpec?: string; idPrefix?: string }) => {
+    const get = async (url: string): Promise<string> => {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) }).catch((e) => {
+        throw new Error(`Iconify API unreachable (${e.message}) — this tool needs network access to api.iconify.design`);
+      });
+      if (!res.ok) throw new Error(`Iconify API ${res.status} for ${url}`);
+      return res.text();
+    };
+    if (icon) {
+      if (!outSpec) return err("outSpec is required when fetching an icon");
+      const [prefix, name] = icon.split(":");
+      if (!prefix || !name) return err("icon must be 'prefix:name' (e.g. 'solar:rocket-bold')");
+      const svg = await get(`https://api.iconify.design/${prefix}/${name}.svg`);
+      if (!svg.includes("<svg")) return err(`Icon '${icon}' not found`);
+      const out = await svgToSpecFile(svg, outSpec, idPrefix ?? name.replace(/[^a-z0-9]/gi, "_") + "_");
+      return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
+    }
+    if (!query) return err("Provide query (search) or icon (fetch)");
+    const json = JSON.parse(await get(`https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=${limit ?? 24}`));
+    const icons: string[] = json.icons ?? [];
+    return {
+      content: [{
+        type: "text",
+        text: icons.length
+          ? `${icons.length} icons:\n${icons.join("\n")}\nFetch one with {icon:"<prefix:name>", outSpec:"..."}.`
+          : `No icons found for '${query}'`,
+      }],
+    };
+  })
+);
+
+// ---- riv_lottie_import ---------------------------------------------------
+// Lottie(bodymovin) JSON → シーン断片。groups/shapes/animations を全て持つ
+// (riv_import_svg のフラグメントより richer: LottieFilesの完成品はタイミング/振付/
+// イージングそのものが素材なので、静止形状だけでなくアニメも一緒に持ち出す)
+server.registerTool(
+  "riv_lottie_import",
+  {
+    title: "Import a Lottie/bodymovin JSON as a Rive scene fragment (art + timing + easing)",
+    description:
+      "Convert a Lottie (bodymovin, .json) animation — the format used by LottieFiles' huge library of free, professionally animated assets — into a riv_create scene fragment. Unlike riv_import_svg (shapes only), this carries over the professional's actual choreography: keyframed position/rotation/scale/opacity with their exact bezier easing curves (not approximated to a named preset), shape/null/precomp layer hierarchy, solid layers, gradient fills, stroke trim-path animation, and layer in/out visibility windows. Writes a scene-fragment JSON with {groups,shapes,animations} plus a rendered preview and a coverage/warnings summary. Since the fragment includes animations (which riv_create's \"imports\" mechanism does not merge), splice its groups/shapes/animations arrays directly into your riv_create scene spec instead of using \"imports\". Supported: shape layers (path/ellipse/rect/star/polygon/fill/stroke/gradient/trim/nested groups), null layers, solid layers, one level of precomp inlining, parented layers, hold and bezier easing. Not imported (counted in coverage.skipped, not silently dropped): text layers, masks, track mattes, repeaters, merge-paths, path/gradient-position keyframe morphing (frozen to first frame + warning), time-remapped precomps, expressions.",
+    inputSchema: {
+      path: z.string().optional().describe("Path to the Lottie .json file"),
+      json: z.string().optional().describe("Inline Lottie JSON text (alternative to path)"),
+      outSpec: z.string().describe("Output scene-fragment JSON path (e.g. anim.scene.json)"),
+      idPrefix: z.string().optional().describe("Prefix for generated group/shape ids (avoid collisions)"),
+    },
+  },
+  wrap(async ({ path, json, outSpec, idPrefix }: { path?: string; json?: string; outSpec: string; idPrefix?: string }) => {
+    const text = json ?? (path ? readFileSync(resolve(path), "utf8") : null);
+    if (!text) return err("Provide path or json");
+    const res = importLottie(text, { idPrefix });
+    const specPath = resolve(outSpec);
+    writeFileSync(
+      specPath,
+      JSON.stringify(
+        { sourceWidth: res.width, sourceHeight: res.height, fps: res.fps, durationFrames: res.durationFrames, groups: res.groups, shapes: res.shapes, animations: res.animations },
+        null,
+        0
+      )
+    );
+    const previewScene: SceneSpec = {
+      artboard: { name: "LottiePreview", width: Math.max(64, Math.round(res.width)), height: Math.max(64, Math.round(res.height)) },
+      groups: res.groups,
+      shapes: res.shapes,
+      animations: res.animations,
+    };
+    const { bytes } = createRiv(previewScene);
+    const animName = res.animations[0]?.name;
+    const previewSeconds = animName ? Math.min(0.4, (res.durationFrames / res.fps) * 0.4) : 0;
+    const r = await host.renderFrames(Buffer.from(bytes), {
+      animation: animName,
+      startTime: previewSeconds,
+      frameCount: 1,
+      width: Math.min(480, Math.max(160, Math.round(res.width))),
+      format: "png",
+    });
+    const keyframeCount = res.animations.reduce((n, a) => n + a.tracks.reduce((m, t) => m + t.keyframes.length, 0), 0);
+    const text2 =
+      `Imported ${res.groups.length} groups, ${res.shapes.length} shapes, ${keyframeCount} keyframes ` +
+      `(${res.fps}fps, ${res.durationFrames} frames) from Lottie -> ${specPath}\n` +
+      `coverage: decompiled=${res.coverage.decompiled} skipped=${JSON.stringify(res.coverage.skipped)}\n` +
+      (res.warnings.length ? `warnings (${res.warnings.length}): ${res.warnings.slice(0, 12).join("; ")}${res.warnings.length > 12 ? " …" : ""}\n` : "") +
+      `Splice into riv_create: scene.groups = [...scene.groups, ...fragment.groups], scene.shapes = [...scene.shapes, ...fragment.shapes], ` +
+      `scene.animations = [...scene.animations, ...fragment.animations] (fragment loaded from "${specPath}") — do NOT use "imports" for this fragment, it only merges shapes.`;
+    return { content: [{ type: "text", text: text2 }, { type: "image", data: r.frames[0], mimeType: "image/png" }] };
+  })
+);
+
+// ---- riv_decompile -----------------------------------------------------
+server.registerTool(
+  "riv_decompile",
+  {
+    title: "Decompile a .riv into an editable scene spec",
+    description:
+      "Reverse a .riv file into a riv_create scene spec (shapes with bezier vertices, solid/gradient fills incl. gradient opacity, blend modes, artboard background, groups/solos, trim paths, clipping, animations with named easings, loop modes). Paint objects are resolved by parentId, so editor-authored files (paints deferred to the stream tail) decompile correctly. Use it to study professional files as few-shot examples, or to remix them — art AND hand-tuned animation tracks — into new scenes (decompile → edit spec → riv_create; see samples/night-delivery). Object types outside the writer's coverage are counted in 'skipped', not silently dropped. Note: community/marketplace files are CC BY 4.0 — keep attribution.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      outSpec: z.string().optional().describe("Write the scene spec JSON here (default: return summary only)"),
+    },
+  },
+  wrap(async ({ path, outSpec }: { path: string; outSpec?: string }) => {
+    const { bytes } = loadRiv(path);
+    const { scene, coverage } = decompileRiv(bytes);
+    let text = `decompiled ${coverage.decompiled} objects; skipped: ${JSON.stringify(coverage.skipped)}`;
+    if (coverage.warnings.length) text += `\nwarnings: ${coverage.warnings.slice(0, 12).join("; ")}`;
+    if (outSpec) {
+      const p = resolve(outSpec);
+      writeFileSync(p, JSON.stringify(scene, null, 1));
+      text += `\nscene spec -> ${p}`;
+    } else {
+      const s = JSON.stringify(scene);
+      text += s.length > 6000 ? `\n(spec is ${s.length} chars — pass outSpec to write it to a file)` : `\n${s}`;
+    }
+    return { content: [{ type: "text", text }] };
   })
 );
 
@@ -548,7 +819,17 @@ Character animation (images/groups/mesh):
 - images[].pngPath: PNG file embedded into the .riv. mesh enables vertex deformation; vertices addressed as "<imageId>#v<row>_<col>" (row 0 = top), coordinates in the image's natural pixel space centered at origin. Mesh vertex tracks support x/y only.
 - groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
 - transitions support exitTimeMs (play source animation this long before transitioning).
-Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees.`,
+Motion presets — PREFER these over hand-authored keyframes (professionally tuned amplitudes/easings, ~10x fewer tokens):
+"animations":[{"name":"intro","duration":90,"presets":[
+  {"preset":"pop-in","target":"logo"},
+  {"preset":"rise-in","targets":["c1","c2","c3"],"at":12,"stagger":4},
+  {"preset":"float","target":"logo"}
+],"tracks":[]}]
+Available: fade-in rise-in drop-in slide-in pop-in bounce-in | fade-out sink-out slide-out pop-out | pulse heartbeat tada shake wobble | breathing float sway spin glow-pulse blink(for eyelid overlays). Options: at(start frame), stagger(frames between targets), intensity(0.25-3), direction(left|right|up|down), cycleSeconds. Ambient presets (breathing..blink) span the whole animation seamlessly. A preset and a manual track must not drive the same target+property.
+Pro features: stroke.trim {start,end,mode} + trimStart/trimEnd tracks (draw-on effect), shapes[].clipBy (mask via an invisible shape), groups[].solo+active + soloActive track with keyframes[].ref (pose/mouth switching), constraints [{type:"followPath",item,path}] + followDistance track 0-1 (motion along a path), open paths (closed:false), multi-contour shapes (subpaths), stroke cap/join.
+"imports":[{"spec":"logo.scene.json","x":200,"y":150,"scale":0.8}] places riv_import_svg / riv_asset_search fragments under a wrapper group (id = file basename) — animate the wrapper or individual shape ids. PREFER imported real vector art over drawing with primitives for anything illustrative.
+Recommended flow: riv_design_tokens → (riv_import_svg / riv_asset_search for artwork) → riv_create (token values + presets + imports) → riv_critique → fix → re-critique.
+Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
       scene: z.record(z.unknown()).describe("Scene spec (see tool description for schema)"),
@@ -557,7 +838,28 @@ Shape z-order: later in array = on top; images render above shapes. properties f
   },
   wrap(
     async ({ outPath, scene, previewTime }: { outPath: string; scene: Record<string, unknown>; previewTime?: number }) => {
-      const spec = scene as unknown as SceneSpec;
+      const spec = scene as unknown as SceneSpec & {
+        imports?: Array<{ spec: string; id?: string; parent?: string; x?: number; y?: number; scale?: number; z?: number }>;
+      };
+      // imports: riv_import_svg / riv_asset_search の scene断片をラッパーグループ付きでマージ
+      if (spec.imports?.length) {
+        spec.groups = spec.groups ?? [];
+        spec.shapes = spec.shapes ?? [];
+        for (const imp of spec.imports) {
+          const p = resolve(imp.spec);
+          if (!existsSync(p)) return err(`import spec not found: ${p}`);
+          const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> };
+          const gid = imp.id ?? basename(p).replace(/\.(scene\.)?json$/i, "");
+          spec.groups.push({
+            id: gid, x: imp.x ?? 0, y: imp.y ?? 0, parent: imp.parent,
+            ...(imp.scale !== undefined ? { scaleX: imp.scale, scaleY: imp.scale } : {}),
+          });
+          frag.shapes.forEach((s, i) => {
+            spec.shapes!.push({ ...s, parent: s.parent ?? gid, z: imp.z !== undefined ? imp.z + i * 0.001 : s.z });
+          });
+        }
+        delete spec.imports;
+      }
       // pngPath/フォントpath → bytes 解決（cwd 基準）
       const imageLists = [spec.images ?? [], ...(spec.artboards ?? []).map((a) => a.images ?? [])];
       for (const img of imageLists.flat()) {
@@ -632,7 +934,7 @@ server.registerTool(
             z.object({
               frame: z.number().int().min(0),
               value: z.number().optional(),
-              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap"]).optional(),
+              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap", "emphasized-decel", "emphasized-accel"]).optional(),
             })
           ).optional().describe("op=setKeyframes: keyframe list (value required unless mode=remove)"),
           mode: z.enum(["replace", "add", "remove"]).optional().describe("op=setKeyframes: default replace"),
@@ -1170,6 +1472,52 @@ server.registerTool(
   })
 );
 
+// ---- riv_setup -----------------------------------------------------------
+// 同梱スキルをクライアント環境へコピーする。MCPのツール許可プロンプトが
+// そのまま「確認だけされて任意」のUXになる（勝手には書き込まれない）。
+server.registerTool(
+  "riv_setup",
+  {
+    title: "Install the bundled rive-design-guidelines skill into this environment",
+    description:
+      "One-time setup: copies the bundled `rive-design-guidelines` skill (the mandatory tokens → pro-asset ingestion → presets → critique workflow, asset-source registry, icon-animation recipes and craft rules) into the client's skills directory so it auto-triggers on future Rive work — .claude/skills/ in the current project (scope=project, default) or ~/.claude/skills/ for all projects (scope=user). Idempotent: re-running updates the skill to this server version's copy. Recommended on first use of this server in a new environment; clients without skill support can read the same content via the rive-design-guidelines MCP prompt instead.",
+    inputSchema: {
+      scope: z.enum(["project", "user"]).optional().describe("project = <projectDir>/.claude/skills (default), user = ~/.claude/skills"),
+      projectDir: z.string().optional().describe("Project root for scope=project (default: current working directory)"),
+    },
+  },
+  wrap(async ({ scope, projectDir }: { scope?: "project" | "user"; projectDir?: string }) => {
+    const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "skills");
+    if (!existsSync(srcDir)) return err(`Bundled skills directory not found at ${srcDir}`);
+    const destBase =
+      (scope ?? "project") === "user"
+        ? join(homedir(), ".claude", "skills")
+        : join(resolve(projectDir ?? process.cwd()), ".claude", "skills");
+    const copied: string[] = [];
+    const copyDir = (from: string, to: string) => {
+      mkdirSync(to, { recursive: true });
+      for (const entry of readdirSync(from, { withFileTypes: true })) {
+        const f = join(from, entry.name);
+        const t = join(to, entry.name);
+        if (entry.isDirectory()) copyDir(f, t);
+        else {
+          copyFileSync(f, t);
+          copied.push(t);
+        }
+      }
+    };
+    copyDir(srcDir, destBase);
+    return {
+      content: [{
+        type: "text",
+        text:
+          `Installed ${copied.length} skill file(s) to ${destBase}:\n${copied.map((c) => `- ${c}`).join("\n")}\n` +
+          `The skill auto-triggers on future non-trivial Rive design work (it may require restarting the client session to be picked up).`,
+      }],
+    };
+  })
+);
+
 // ---- prompts -------------------------------------------------------------
 server.registerPrompt(
   "rive-design-guidelines",
@@ -1184,14 +1532,21 @@ server.registerPrompt(
         role: "user",
         content: {
           type: "text",
-          text: `When building a scene with riv_create, aim for the quality of a modern SaaS product or game UI, not flat placeholder shapes:
+          text: `When building a scene with riv_create, aim for the quality of a modern SaaS product or game UI, not flat placeholder shapes.
 
-- **Color**: avoid saturated primaries (#FF0000-style). Prefer restrained, modern tones (muted pastels, deep darks, earthy accents). Use \`fill.gradient\` (linear/radial) on primary shapes far more often than a flat \`fill.color\` — a subtle angled gradient reads as "designed" instead of "placeholder".
-- **Organic curves**: \`shapes[].type: "polygon"\` points support an optional \`cubic: { rotation, distance }\` (degrees + handle length) to turn a straight-line vertex into a bezier-handled one (CubicMirroredVertex/CubicAsymmetricVertex). Classic 4-point circle approximation: place points at 0/90/180/270°, each with \`cubic.rotation\` matching that tangent direction and \`distance ≈ radius * 0.5523\`. Use this for blobs, rounded organic shapes, and speech-bubble-like forms instead of chains of straight segments.
-- **Easing semantics (important, easy to misuse)**: a keyframe's \`easing\` describes the motion *arriving at that keyframe* (i.e. the transition from the previous keyframe to this one) — not what happens after it. Never leave every track on implicit \`linear\`; that reads as robotic. Match the easing to the physical intent: \`ease-out\`/\`ease-out-back\` for something settling or overshooting into place, \`ease-in\` for something building up speed (e.g. a drop), \`ease-in-out\` for a smooth back-and-forth, \`elastic-out\`/\`elastic-in\`/\`elastic-in-out\` (with optional \`amplitude\`/\`period\` on that keyframe) for a springy, bouncy pop-in — genuinely more lively than \`ease-out-back\` for UI elements appearing. Setting \`easing\` on a track's *first* keyframe has no visible effect (there is no incoming segment to apply it to) — put the easing on the keyframe(s) that follow instead.
-- **Physics bake**: prefer \`bake: { type: "pendulum"|"wind"|"spring"|"gravity", ... }\` over hand-authored keyframes for anything that should sway, drop, or bounce — it now carries proper per-segment easing automatically.
-- **Rigging**: chain \`bones\`/\`RootBone\` with \`mesh.bones\` skinning for anything that bends (limbs, tails, hair); add \`constraints: [{type:"ik"}]\` for reaching/pointing motions instead of animating raw bone rotations by hand.
-- **Known limitation**: \`fill.feather\`/\`stroke.feather\` (blur) writes correctly to the .riv but is NOT rendered by this server's preview pipeline (Canvas2D-based runtime) — only Rive's GPU renderer supports it. Don't rely on it for anything you need to see in riv_render_frame/gif/apng/studio previews.`,
+**Mandatory workflow for any non-trivial scene**:
+1. \`riv_design_tokens\` (seed/mood/scheme) → use ONLY the returned palette/gradients/durations/easings/spacing. Never invent raw hex colors or ad-hoc durations.
+2. **Ingest professional artwork — do NOT free-draw illustrative art.** Characters/objects/icons must come from a pro source: \`riv_asset_search\` (Iconify, needs network), \`riv_import_svg\` (Figma/Illustrator exports, or npm SVG sets when network is limited: \`npm pack @twemoji/svg\` CC-BY 4.0, \`@mdi/svg\`, \`@tabler/icons\`), or \`riv_decompile\` (remix pro-made .riv art + its hand-tuned animation tracks). Hand-drawn primitives are for backgrounds/panels/particles only. **Respect the asset's viewpoint**: state its facing direction & perspective (side/isometric/front) before animating — movers travel toward their own visual front, and the whole scene keeps ONE consistent perspective (isometric art never sits on a flat side-view ground).
+3. \`riv_create\` — express motion with \`presets\` (pop-in, rise-in+stagger, float, breathing, …) instead of hand-authored keyframes wherever a preset fits; hand-keyframe only what presets can't express. Icon micro-animation recipe: riv_asset_search icon → \`spin\` (loader) / \`pop-in\`·\`tada\` (success) / \`shake\` (error) / \`glow-pulse\` (notification) / stroke-trim draw-on.
+4. \`riv_critique\` — read the filmstrip (time left→right), onion skin (motion trails) and motion report (displacement vectors), check every mover's direction against its artwork's facing, score the 7-axis checklist, fix anything below 4 with riv_edit or a regenerate, and re-run. Iterate at least twice.
+
+Craft knowledge for the parts you author by hand:
+- **Color**: no saturated primaries (#FF0000-style). Use \`fill.gradient\` on hero shapes far more often than flat \`fill.color\`.
+- **Organic curves**: \`shapes[].points[].cubic: { rotation, distance }\` turns a vertex into a bezier handle. 4-point circle: points at 0/90/180/270°, \`cubic.rotation\` along the tangent, \`distance ≈ radius * 0.5523\`. Use for blobs and organic forms — never chains of straight segments.
+- **Easing semantics**: a keyframe's \`easing\` describes the motion *arriving at* that keyframe, so it goes on the later keyframe (first keyframe easing has no effect). Enters decelerate (\`emphasized-decel\`/\`ease-out\`), exits accelerate (\`emphasized-accel\`/\`ease-in\`), back-and-forth is \`ease-in-out\`, springy pop-ins are \`elastic-out\` (optional \`amplitude\`/\`period\`). Never leave transform tracks all-linear — riv_lint flags this as motion-robotic.
+- **Physics bake**: prefer \`bake: { type: "pendulum"|"wind"|"spring"|"gravity", ... }\` for anything that sways, drops, or bounces.
+- **Rigging**: chain \`bones\`/RootBone with \`mesh.bones\` skinning for anything that bends; add \`constraints: [{type:"ik"}]\` for reaching/pointing instead of hand-animating bone rotations.
+- **Known limitation**: \`fill.feather\`/\`stroke.feather\` writes correctly but is NOT rendered by this server's Canvas2D preview pipeline — only Rive's GPU renderer shows it.`,
         },
       },
     ],

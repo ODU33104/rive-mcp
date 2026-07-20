@@ -1,7 +1,7 @@
 // .riv の静的診断（壊れた/危険なファイルの検出）。riv_dump の上位互換。
 // アートボードローカルindexの算出式（globalIndex - artboardのglobal index）は
 // rivEdit.ts の delete 実装で検証済みのものと同一。
-import { readRiv, type RivObject } from "./rivBinary.js";
+import { readRiv, loadDefs, type RivObject } from "./rivBinary.js";
 
 export interface LintFinding {
   severity: "error" | "warning" | "info";
@@ -27,8 +27,169 @@ export function lintRiv(bytes: Uint8Array): LintFinding[] {
   lintReferences(objects, findings);
   lintHugeAssets(objects, findings);
   lintStateMachinesAndKeyframes(objects, findings);
+  lintMotion(objects, findings);
 
   return findings;
+}
+
+// ---- モーション品質リント --------------------------------------------------
+// 根拠: MoVer(SIGGRAPH 2025)系の知見 — モーション原則は散文ガイドではなく
+// 検証器として与えたときに品質が跳ねる。ここでは静的に検出できる代表則のみ。
+const TRANSFORM_PROPS = new Set(["x", "y", "rotation", "scaleX", "scaleY", "width", "height"]);
+
+let propKeyToName: Map<number, string> | null = null;
+function propName(key: number): string {
+  if (!propKeyToName) {
+    propKeyToName = new Map();
+    const defs = loadDefs();
+    if (defs) {
+      for (const t of Object.values(defs.types)) {
+        for (const [name, p] of Object.entries(t.properties)) {
+          if (typeof (p as { key?: number }).key === "number") propKeyToName.set((p as { key: number }).key, name);
+        }
+      }
+    }
+  }
+  return propKeyToName.get(key) ?? `prop${key}`;
+}
+
+interface MotionTrack {
+  objectId: number;
+  prop: string;
+  keys: Array<{ frame: number; value: number; interp: number }>;
+}
+interface MotionAnim {
+  name: string;
+  fps: number;
+  loop: number;
+  tracks: MotionTrack[];
+}
+
+export function lintMotion(objects: RivObject[], findings: LintFinding[]): void {
+  let abW = 400, abH = 300;
+  let anim: MotionAnim | null = null;
+  let objectId = -1;
+  let track: MotionTrack | null = null;
+  const anims: MotionAnim[] = [];
+
+  const closeTrack = () => {
+    if (track && anim && track.keys.length >= 2) anim.tracks.push(track);
+    track = null;
+  };
+  const closeAnim = () => {
+    closeTrack();
+    if (anim) anims.push(anim);
+    anim = null;
+  };
+
+  for (const o of objects) {
+    if (o.typeName === "Artboard") {
+      closeAnim();
+      abW = (o.properties.width as number) ?? abW;
+      abH = (o.properties.height as number) ?? abH;
+    } else if (o.typeName === "LinearAnimation") {
+      closeAnim();
+      anim = { name: (o.properties.name as string) ?? "?", fps: (o.properties.fps as number) ?? 60, loop: (o.properties.loopValue as number) ?? 1, tracks: [] };
+    } else if (o.typeName === "KeyedObject") {
+      closeTrack();
+      objectId = (o.properties.objectId as number) ?? -1;
+    } else if (o.typeName === "KeyedProperty") {
+      closeTrack();
+      if (anim) track = { objectId, prop: propName((o.properties.propertyKey as number) ?? -1), keys: [] };
+    } else if (o.typeName === "KeyFrameDouble" && track) {
+      track.keys.push({
+        frame: (o.properties.frame as number) ?? 0,
+        value: (o.properties.value as number) ?? 0,
+        interp: (o.properties.interpolationType as number) ?? 1, // 省略=linear
+      });
+    } else if (o.typeName === "StateMachine" || o.typeName === "Backboard") {
+      closeAnim();
+    }
+  }
+  closeAnim();
+
+  const maxDim = Math.max(abW, abH);
+  for (const a of anims) {
+    let linearMoves = 0;
+    let easedMoves = 0;
+    const opacityRises = new Map<number, number>(); // 初出現フレーム → 件数
+    const scaleTracks = new Map<number, Set<string>>();
+
+    for (const t of a.tracks) {
+      const keys = t.keys.slice().sort((p, q) => p.frame - q.frame);
+      const isScale = t.prop === "scaleX" || t.prop === "scaleY";
+      const minDelta = isScale ? 0.01 : 0.5;
+      // linear が正当なパターンは robotic 判定から除外する:
+      //  - 高頻度ジッター (全区間<10フレーム。プロ実ファイルの車体振動は3フレーム刻みのlinear)
+      //  - ループアニメの単調移動 (スクロール/スピン=等速が正解)
+      const segFrames = keys.slice(1).map((kf, n) => kf.frame - keys[n].frame).filter((d) => d > 0);
+      const isJitter = segFrames.length >= 3 && segFrames.every((d) => d < 10);
+      const monotonic = keys.length >= 2 && (
+        keys.every((kf, n) => n === 0 || kf.value >= keys[n - 1].value) ||
+        keys.every((kf, n) => n === 0 || kf.value <= keys[n - 1].value));
+      const isLoopScroll = a.loop !== 0 && monotonic && (t.prop === "x" || t.prop === "y" || t.prop === "rotation");
+      const exemptLinear = isJitter || isLoopScroll;
+      for (let n = 1; n < keys.length; n++) {
+        const prev = keys[n - 1], cur = keys[n];
+        const delta = Math.abs(cur.value - prev.value);
+        const df = cur.frame - prev.frame;
+        // 区間 prev→cur の補間は prev(出発側キーフレーム)の interpolationType に格納される
+        const segInterp = prev.interp;
+        if (TRANSFORM_PROPS.has(t.prop) && delta > minDelta && df > 0) {
+          if (segInterp === 1) { if (!exemptLinear) linearMoves++; }
+          else if (segInterp >= 2) easedMoves++;
+          // 瞬間移動: アートボードの4割超を5フレーム(60fps換算~80ms)未満で移動
+          if ((t.prop === "x" || t.prop === "y") && delta > maxDim * 0.4 && df < a.fps * 0.09 && segInterp !== 0) {
+            findings.push({
+              severity: "warning",
+              rule: "motion-teleport",
+              message: `animation "${a.name}": object#${t.objectId} の ${t.prop} が ${df}フレームで ${Math.round(delta)}px 移動します（速すぎて視認できません。時間を伸ばすかholdで切り替えてください）`,
+            });
+          }
+        }
+      }
+      if (t.prop === "opacity") {
+        const rise = keys.find((kf, n) => n > 0 && keys[0].value < 0.05 && kf.value > 0.5);
+        if (rise && keys[0].value < 0.05) {
+          opacityRises.set(keys[0].frame, (opacityRises.get(keys[0].frame) ?? 0) + 1);
+        }
+      }
+      if (isScale) {
+        const deltas = keys.length ? Math.abs(Math.max(...keys.map((kf) => kf.value)) - Math.min(...keys.map((kf) => kf.value))) : 0;
+        if (deltas > 0.05) {
+          if (!scaleTracks.has(t.objectId)) scaleTracks.set(t.objectId, new Set());
+          scaleTracks.get(t.objectId)!.add(t.prop);
+        }
+      }
+    }
+
+    if (linearMoves >= 4 && easedMoves === 0) {
+      findings.push({
+        severity: "warning",
+        rule: "motion-robotic",
+        message: `animation "${a.name}": トランスフォーム系の動き${linearMoves}区間が全てlinearです。機械的に見えます — 入場はemphasized-decel/ease-out、退場はemphasized-accel/ease-in、往復はease-in-outを使ってください`,
+      });
+    }
+    for (const [frame, count] of opacityRises) {
+      if (count >= 3) {
+        findings.push({
+          severity: "info",
+          rule: "motion-no-stagger",
+          message: `animation "${a.name}": ${count}個のオブジェクトがframe ${frame} から同時にフェードインします。1要素あたり${Math.max(2, Math.round(a.fps * 0.05))}フレーム程度ずらす(stagger)とプロらしくなります`,
+        });
+      }
+    }
+    for (const [oid, props] of scaleTracks) {
+      if (props.size === 1) {
+        const has = [...props][0];
+        findings.push({
+          severity: "info",
+          rule: "motion-lopsided-scale",
+          message: `animation "${a.name}": object#${oid} は ${has} のみアニメしています。等倍ポップなら scaleX/scaleY 両方、スカッシュ&ストレッチなら逆位相で両方動かすのが定石です`,
+        });
+      }
+    }
+  }
 }
 
 function lintReferences(objects: RivObject[], findings: LintFinding[]) {
