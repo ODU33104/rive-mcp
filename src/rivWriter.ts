@@ -295,7 +295,9 @@ export interface KeyframeSpec {
   value?: number;
   color?: string;
   ref?: string; // soloActive 専用: アクティブにする子要素の id
-  easing?: EasingName;
+  // 名前付きイージングに加え、[x1,y1,x2,y2] のカスタム3次ベジェも直接指定可能
+  // (Lottieインポート等、プロが調整した正確なカーブを名前近似で潰さないための拡張)
+  easing?: EasingName | [number, number, number, number];
   amplitude?: number; // elastic-* 専用。既定 1
   period?: number; // elastic-* 専用。既定 0.5（秒）
 }
@@ -462,6 +464,9 @@ export const ELASTIC_EASING_VALUE: Record<string, number> = {
 };
 function elasticKey(easing: string, amplitude: number, period: number): string {
   return `${easing}:${amplitude}:${period}`;
+}
+function customEasingKey(c: [number, number, number, number]): string {
+  return `custom:${c.join(",")}`;
 }
 
 const LOOP_VALUES = { oneShot: 0, loop: 1, pingPong: 2 } as const;
@@ -1044,12 +1049,15 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     // イージング用インターポレータ
     const interpolatorIds = new Map<string, number>();
     const neededEasings = new Set<string>();
+    const neededCustom = new Map<string, [number, number, number, number]>();
     const neededElastics = new Map<string, { easing: string; amplitude: number; period: number }>();
     for (const a of ab.animations ?? []) {
       for (const t of a.tracks) {
         for (const k of t.keyframes) {
           if (!k.easing) continue;
-          if (EASING_BEZIER[k.easing]) {
+          if (Array.isArray(k.easing)) {
+            neededCustom.set(customEasingKey(k.easing), k.easing);
+          } else if (EASING_BEZIER[k.easing]) {
             neededEasings.add(k.easing);
           } else if (k.easing in ELASTIC_EASING_VALUE) {
             const amplitude = k.amplitude ?? 1;
@@ -1062,6 +1070,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     for (const name of neededEasings) {
       const [x1, y1, x2, y2] = EASING_BEZIER[name]!;
       interpolatorIds.set(name, push({ type: "CubicEaseInterpolator", props: { x1, y1, x2, y2 } }));
+    }
+    for (const [key, [x1, y1, x2, y2]] of neededCustom) {
+      interpolatorIds.set(key, push({ type: "CubicEaseInterpolator", props: { x1, y1, x2, y2 } }));
     }
     for (const [key, p] of neededElastics) {
       interpolatorIds.set(
@@ -1155,8 +1166,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           const kfProps: Record<string, unknown> = { interpolationType };
           if (k.frame) kfProps.frame = k.frame;
           if (interpolationType === 2) {
-            const idKey =
-              easing in ELASTIC_EASING_VALUE
+            const idKey = Array.isArray(easing)
+              ? customEasingKey(easing)
+              : easing in ELASTIC_EASING_VALUE
                 ? elasticKey(easing, next!.amplitude ?? 1, next!.period ?? 0.5)
                 : easing;
             kfProps.interpolatorId = interpolatorIds.get(idKey);

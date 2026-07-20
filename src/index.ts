@@ -21,6 +21,7 @@ import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, type Mood } from "./designTokens.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
 import { importSvg } from "./svgImport.js";
+import { importLottie } from "./lottieImport.js";
 import { decompileRiv } from "./rivDecompile.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
@@ -686,6 +687,64 @@ server.registerTool(
           : `No icons found for '${query}'`,
       }],
     };
+  })
+);
+
+// ---- riv_lottie_import ---------------------------------------------------
+// Lottie(bodymovin) JSON → シーン断片。groups/shapes/animations を全て持つ
+// (riv_import_svg のフラグメントより richer: LottieFilesの完成品はタイミング/振付/
+// イージングそのものが素材なので、静止形状だけでなくアニメも一緒に持ち出す)
+server.registerTool(
+  "riv_lottie_import",
+  {
+    title: "Import a Lottie/bodymovin JSON as a Rive scene fragment (art + timing + easing)",
+    description:
+      "Convert a Lottie (bodymovin, .json) animation — the format used by LottieFiles' huge library of free, professionally animated assets — into a riv_create scene fragment. Unlike riv_import_svg (shapes only), this carries over the professional's actual choreography: keyframed position/rotation/scale/opacity with their exact bezier easing curves (not approximated to a named preset), shape/null/precomp layer hierarchy, solid layers, gradient fills, stroke trim-path animation, and layer in/out visibility windows. Writes a scene-fragment JSON with {groups,shapes,animations} plus a rendered preview and a coverage/warnings summary. Since the fragment includes animations (which riv_create's \"imports\" mechanism does not merge), splice its groups/shapes/animations arrays directly into your riv_create scene spec instead of using \"imports\". Supported: shape layers (path/ellipse/rect/star/polygon/fill/stroke/gradient/trim/nested groups), null layers, solid layers, one level of precomp inlining, parented layers, hold and bezier easing. Not imported (counted in coverage.skipped, not silently dropped): text layers, masks, track mattes, repeaters, merge-paths, path/gradient-position keyframe morphing (frozen to first frame + warning), time-remapped precomps, expressions.",
+    inputSchema: {
+      path: z.string().optional().describe("Path to the Lottie .json file"),
+      json: z.string().optional().describe("Inline Lottie JSON text (alternative to path)"),
+      outSpec: z.string().describe("Output scene-fragment JSON path (e.g. anim.scene.json)"),
+      idPrefix: z.string().optional().describe("Prefix for generated group/shape ids (avoid collisions)"),
+    },
+  },
+  wrap(async ({ path, json, outSpec, idPrefix }: { path?: string; json?: string; outSpec: string; idPrefix?: string }) => {
+    const text = json ?? (path ? readFileSync(resolve(path), "utf8") : null);
+    if (!text) return err("Provide path or json");
+    const res = importLottie(text, { idPrefix });
+    const specPath = resolve(outSpec);
+    writeFileSync(
+      specPath,
+      JSON.stringify(
+        { sourceWidth: res.width, sourceHeight: res.height, fps: res.fps, durationFrames: res.durationFrames, groups: res.groups, shapes: res.shapes, animations: res.animations },
+        null,
+        0
+      )
+    );
+    const previewScene: SceneSpec = {
+      artboard: { name: "LottiePreview", width: Math.max(64, Math.round(res.width)), height: Math.max(64, Math.round(res.height)) },
+      groups: res.groups,
+      shapes: res.shapes,
+      animations: res.animations,
+    };
+    const { bytes } = createRiv(previewScene);
+    const animName = res.animations[0]?.name;
+    const previewSeconds = animName ? Math.min(0.4, (res.durationFrames / res.fps) * 0.4) : 0;
+    const r = await host.renderFrames(Buffer.from(bytes), {
+      animation: animName,
+      startTime: previewSeconds,
+      frameCount: 1,
+      width: Math.min(480, Math.max(160, Math.round(res.width))),
+      format: "png",
+    });
+    const keyframeCount = res.animations.reduce((n, a) => n + a.tracks.reduce((m, t) => m + t.keyframes.length, 0), 0);
+    const text2 =
+      `Imported ${res.groups.length} groups, ${res.shapes.length} shapes, ${keyframeCount} keyframes ` +
+      `(${res.fps}fps, ${res.durationFrames} frames) from Lottie -> ${specPath}\n` +
+      `coverage: decompiled=${res.coverage.decompiled} skipped=${JSON.stringify(res.coverage.skipped)}\n` +
+      (res.warnings.length ? `warnings (${res.warnings.length}): ${res.warnings.slice(0, 12).join("; ")}${res.warnings.length > 12 ? " …" : ""}\n` : "") +
+      `Splice into riv_create: scene.groups = [...scene.groups, ...fragment.groups], scene.shapes = [...scene.shapes, ...fragment.shapes], ` +
+      `scene.animations = [...scene.animations, ...fragment.animations] (fragment loaded from "${specPath}") — do NOT use "imports" for this fragment, it only merges shapes.`;
+    return { content: [{ type: "text", text: text2 }, { type: "image", data: r.frames[0], mimeType: "image/png" }] };
   })
 );
 
