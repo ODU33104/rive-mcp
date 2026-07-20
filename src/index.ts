@@ -3,8 +3,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { readFileSync, writeFileSync, statSync, readdirSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, statSync, readdirSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
 import { resolve, join, basename, dirname, extname } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { RiveHost } from "./riveHost.js";
 import { PAGE_SCRIPT } from "./pageScript.js";
@@ -1466,6 +1467,52 @@ server.registerTool(
       content: [{
         type: "text",
         text: `Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically.`,
+      }],
+    };
+  })
+);
+
+// ---- riv_setup -----------------------------------------------------------
+// 同梱スキルをクライアント環境へコピーする。MCPのツール許可プロンプトが
+// そのまま「確認だけされて任意」のUXになる（勝手には書き込まれない）。
+server.registerTool(
+  "riv_setup",
+  {
+    title: "Install the bundled rive-design-guidelines skill into this environment",
+    description:
+      "One-time setup: copies the bundled `rive-design-guidelines` skill (the mandatory tokens → pro-asset ingestion → presets → critique workflow, asset-source registry, icon-animation recipes and craft rules) into the client's skills directory so it auto-triggers on future Rive work — .claude/skills/ in the current project (scope=project, default) or ~/.claude/skills/ for all projects (scope=user). Idempotent: re-running updates the skill to this server version's copy. Recommended on first use of this server in a new environment; clients without skill support can read the same content via the rive-design-guidelines MCP prompt instead.",
+    inputSchema: {
+      scope: z.enum(["project", "user"]).optional().describe("project = <projectDir>/.claude/skills (default), user = ~/.claude/skills"),
+      projectDir: z.string().optional().describe("Project root for scope=project (default: current working directory)"),
+    },
+  },
+  wrap(async ({ scope, projectDir }: { scope?: "project" | "user"; projectDir?: string }) => {
+    const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "skills");
+    if (!existsSync(srcDir)) return err(`Bundled skills directory not found at ${srcDir}`);
+    const destBase =
+      (scope ?? "project") === "user"
+        ? join(homedir(), ".claude", "skills")
+        : join(resolve(projectDir ?? process.cwd()), ".claude", "skills");
+    const copied: string[] = [];
+    const copyDir = (from: string, to: string) => {
+      mkdirSync(to, { recursive: true });
+      for (const entry of readdirSync(from, { withFileTypes: true })) {
+        const f = join(from, entry.name);
+        const t = join(to, entry.name);
+        if (entry.isDirectory()) copyDir(f, t);
+        else {
+          copyFileSync(f, t);
+          copied.push(t);
+        }
+      }
+    };
+    copyDir(srcDir, destBase);
+    return {
+      content: [{
+        type: "text",
+        text:
+          `Installed ${copied.length} skill file(s) to ${destBase}:\n${copied.map((c) => `- ${c}`).join("\n")}\n` +
+          `The skill auto-triggers on future non-trivial Rive design work (it may require restarting the client session to be picked up).`,
       }],
     };
   })

@@ -22,6 +22,18 @@ Aim for the quality of a modern SaaS product or game UI, not flat placeholder sh
 3. **`riv_create`** — express motion with `presets` (`pop-in`, `rise-in` + `stagger`, `float`, `breathing`, …) instead of hand-authored keyframes wherever a preset fits. Hand-keyframe only what presets can't express.
 4. **`riv_critique`** — it returns a **filmstrip** (time flows left→right), an **onion skin** (motion trails), and a **motion report** (net displacement vector per object). Read all three: check every trail/vector against the artwork's facing (checklist axis 7), then score the 7-axis checklist and fix anything below 4 (riv_edit or regenerate), re-run. Iterate at least twice.
 
+## Asset-source registry — pick by request type
+
+| Request looks like… | Source → tool | License notes |
+|---|---|---|
+| UI icon / loader / micro-interaction | Iconify search (`riv_asset_search`) | mostly open (check per-set) |
+| Emoji-style / friendly illustration | Twemoji, OpenMoji, Noto — via Iconify prefixes or `npm pack @twemoji/svg` → `riv_import_svg` | CC-BY 4.0 / OFL — credit the set |
+| Scene / business illustration | unDraw, Openclipart (CC0), SVG Repo — download the SVG → `riv_import_svg` | check per item; Openclipart is CC0 |
+| Finished professional ANIMATION (motion included) | LottieFiles free assets (.json) → `riv_lottie_import`; `.riv` files (Rive community CC-BY, official rive-app GitHub example repos) → `riv_decompile` | LottieFiles per-asset license; Rive community files CC-BY 4.0 |
+| User's own design | Figma/Illustrator SVG export → `riv_import_svg` | user-owned |
+
+No bulk API exists for the Rive Marketplace — the user downloads files manually; anything placed in the project converts via `riv_decompile`.
+
 ## Recipe: animated icons (loaders, button feedback, status)
 
 For any "animate an icon" request, this is the default path — no drawing at all:
