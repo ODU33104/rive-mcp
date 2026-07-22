@@ -6,7 +6,7 @@
 
 ![Studio スクリーンショット](docs/media/studio-ja.png)
 
-<p align="center"><img src="docs/media/showcase-orbit.apng" width="420" alt="riv_createだけで生成したアニメーション"></p>
+<p align="center"><img src="docs/media/showcase-weather.gif" width="380" alt="トークン→プロ素材→プリセット→critiqueパイプラインで生成した天気ウィジェット（アートワーク: Twemoji）"></p>
 <p align="center"><i>このアニメーションは <code>riv_create</code> だけで生成（Riveエディタ不使用）</i></p>
 
 Claude（や任意の MCP クライアント）から `.riv` アニメーションファイルの
@@ -94,6 +94,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 
 いずれも `node samples/<名前>/build-scene.mjs` で再現可能:
 
+- [`samples/weather-widget/`](samples/weather-widget/) — 冒頭のヒーローアニメ。晴れ→雨（稲妻つき）→晴れを1本のループタイムラインで演出するUI天気カード。Twemojiの太陽/雲/稲妻をSVG取り込み、配色はトークン、環境動作はプリセット、全要素をカードにクリップ
 - [`samples/cosmic-journey/`](samples/cosmic-journey/) — **アートワークが全てプロデザイン**（Twemojiのロケット/環付き惑星/月/星/彗星をnpm経由で取得し `riv_import_svg` で変換）。配色はトークン、動きはプリセット、構図はcritiqueループで修正
 - [`samples/night-delivery/`](samples/night-delivery/) — **プロ製.rivのリミックス**: Rive公式トラック（手打ちベジェ+調整済み車輪/車体アニメ）を `riv_decompile` で抽出し、Twemojiの月・スクロールする道路・`screen`合成のヘッドライトと合成
 - [`samples/launch-success/`](samples/launch-success/) — 自作SVG+トークン+プリセット+TrimPath描画演出+パーティクル+SM

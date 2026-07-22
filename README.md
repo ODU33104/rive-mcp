@@ -10,7 +10,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 
 ![Studio screenshot](docs/media/studio.png)
 
-<p align="center"><img src="docs/media/showcase-orbit.apng" width="420" alt="Animation generated entirely by riv_create"></p>
+<p align="center"><img src="docs/media/showcase-weather.gif" width="380" alt="Weather widget built by the tokens → pro-assets → presets → critique pipeline (artwork: Twemoji)"></p>
 <p align="center"><i>This animation was generated entirely by <code>riv_create</code> — no Rive editor involved.</i></p>
 
 ## Highlights
@@ -58,8 +58,9 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 
 ### Showcases: professional assets in, professional motion out
 
-Three sample scenes are built end-to-end by the pipeline, each rebuildable with `node samples/<name>/build-scene.mjs`:
+Four sample scenes are built end-to-end by the pipeline, each rebuildable with `node samples/<name>/build-scene.mjs`:
 
+- [`samples/weather-widget/`](samples/weather-widget/) — the hero animation above: a UI weather card that cycles sunny → rain (with a lightning flash) → sunny on one looping timeline. Twemoji sun/cloud/bolt imported as SVG, colors from `riv_design_tokens`, ambient motion from presets, everything clipped to the card.
 - [`samples/cosmic-journey/`](samples/cosmic-journey/) — **every piece of artwork is professionally designed** (Twemoji rocket, ringed planet, moon, stars, comet — fetched as SVG via npm and converted with `riv_import_svg`); colors from `riv_design_tokens`, motion from presets, composition fixed through the `riv_critique` loop.
 - [`samples/night-delivery/`](samples/night-delivery/) — **remixes a professional `.riv`**: Rive's official truck (hand-drawn bezier art *and* its hand-tuned wheel/body animation tracks) is extracted with `riv_decompile` and composed into a new night scene with a Twemoji moon, scrolling road and a `screen`-blended headlight beam.
 - [`samples/launch-success/`](samples/launch-success/) — hand-authored SVG + tokens + presets + TrimPath draw-on + particles + intro→idle state machine.
