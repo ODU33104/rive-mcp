@@ -80,7 +80,14 @@ The same workflow plus hand-authoring craft rules (bezier curves, easing semanti
 
 ## Quick start
 
-Install from npm:
+**Claude Code plugin (recommended)** — one install gets the MCP server, the design-guidelines skill, and the `rive-designer` agent:
+
+```
+/plugin marketplace add ODU33104/rive-mcp
+/plugin install rive-mcp@rive-tools
+```
+
+Or install from npm:
 
 ```bash
 npm install -g rive-mcp-server

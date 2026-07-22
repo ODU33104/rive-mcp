@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rive": {
+      "command": "npx",
+      "args": ["-y", "rive-mcp-server"]
+    }
+  }
+}

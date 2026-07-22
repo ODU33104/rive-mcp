@@ -1,0 +1,14 @@
+{
+  "name": "rive-tools",
+  "owner": {
+    "name": "ODU33104"
+  },
+  "description": "Editor-less Rive (.riv) animation tools: MCP server, design-guidelines skill, and a rive-designer agent",
+  "plugins": [
+    {
+      "name": "rive-mcp",
+      "source": "./plugin",
+      "description": "Create, edit, lint, render and preview Rive (.riv) animations without the Rive editor — 27 MCP tools plus the design workflow that makes generated motion look professional"
+    }
+  ]
+}
