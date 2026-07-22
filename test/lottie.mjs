@@ -349,6 +349,151 @@ try {
 }
 
 // ============================================================
+// 6. パスモーフィング（頂点キーフレーム）: 三角形→別形状
+//    頂点3つ・2キーフレーム。#p0_0(index0)は座標のみ動く、#p0_1(index1)は完全に静止、
+//    #p0_2(index2)は既存の非ゼロin接線が回転しつつout接線が0→非0へ出現する
+// ============================================================
+console.log("6. path morph (shape morph -> vertex keyframes)");
+const morphLottie = {
+  v: "5.9.0", fr: 30, ip: 0, op: 30, w: 200, h: 200, nm: "morph",
+  layers: [
+    {
+      ind: 1, ty: 4, nm: "tri", ip: 0, op: 30, st: 0,
+      ks: { p: { a: 0, k: [100, 100] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+      shapes: [
+        {
+          ty: "sh", ks: { a: 1, k: [
+            {
+              t: 0,
+              s: [{ c: true, v: [[0, -50], [50, 50], [-50, 50]], i: [[0, 0], [0, 0], [10, 0]], o: [[0, 0], [0, 0], [0, 0]] }],
+              o: { x: [0.3], y: [0.1] },
+            },
+            {
+              t: 30,
+              s: [{ c: true, v: [[20, -50], [50, 50], [-50, 50]], i: [[0, 0], [0, 0], [0, -10]], o: [[0, 0], [0, 0], [15, 0]] }],
+              i: { x: [0.6], y: [0.9] },
+            },
+          ] },
+        },
+        { ty: "fl", c: { a: 0, k: [0.1, 0.4, 0.9, 1] }, o: { a: 0, k: 100 } },
+      ],
+    },
+  ],
+};
+const morphRes = importLottie(morphLottie, {});
+
+check("morph produces a single polygon shape with 3 points, all cubic (detached)", () => {
+  assert.equal(morphRes.shapes.length, 1);
+  const s = morphRes.shapes[0];
+  assert.equal(s.type, "polygon");
+  assert.equal(s.subpaths[0].points.length, 3);
+  assert.ok(s.subpaths[0].points.every((p) => !!p.cubic), "every point should carry a cubic handle (CubicDetachedVertex)");
+});
+check("no path-morph fallback warning was emitted (successful morph)", () => {
+  assert.ok(!morphRes.warnings.some((w) => w.includes("shape morph")), JSON.stringify(morphRes.warnings));
+});
+check("moving vertex (#p0_0) has an x track", () => {
+  const shapeId = morphRes.shapes[0].id;
+  const track = morphRes.animations[0].tracks.find((t) => t.target === `${shapeId}#p0_0` && t.property === "x");
+  assert.ok(track, "expected an x track for point 0");
+  assert.equal(track.keyframes.length, 2);
+  assert.deepEqual(track.keyframes.map((k) => k.value), [0, 20]);
+});
+check("static vertex (#p0_1) has no tracks at all", () => {
+  const shapeId = morphRes.shapes[0].id;
+  const anyTrack = morphRes.animations[0].tracks.some((t) => t.target === `${shapeId}#p0_1`);
+  assert.ok(!anyTrack, "vertex 1 never changes and should not produce a track");
+});
+check("tangent-transition vertex (#p0_2): outDistance track exists (0 -> non-zero)", () => {
+  const shapeId = morphRes.shapes[0].id;
+  const track = morphRes.animations[0].tracks.find((t) => t.target === `${shapeId}#p0_2` && t.property === "outDistance");
+  assert.ok(track, "expected an outDistance track for point 2");
+  assert.equal(track.keyframes[0].value, 0);
+  assert.ok(Math.abs(track.keyframes[1].value - 15) < 1e-6);
+});
+check("angle track (inRotation) inherits the path keyframe's easing", () => {
+  const shapeId = morphRes.shapes[0].id;
+  const track = morphRes.animations[0].tracks.find((t) => t.target === `${shapeId}#p0_2` && t.property === "inRotation");
+  assert.ok(track, "expected an inRotation track for point 2 (its in-tangent rotates from 0deg to -90deg)");
+  assert.deepEqual(track.keyframes[1].easing, [0.3, 0.1, 0.6, 0.9]);
+});
+check("scene compiles via createRiv with no writer errors", () => {
+  const { warnings } = createRiv({
+    artboard: { name: "Morph", width: morphRes.width, height: morphRes.height },
+    groups: morphRes.groups, shapes: morphRes.shapes, animations: morphRes.animations,
+  });
+  assert.equal(warnings.length, 0, JSON.stringify(warnings));
+});
+
+console.log("6b. path morph: vertex count mismatch falls back to frozen first-keyframe shape");
+const mismatchLottie = {
+  v: "5.9.0", fr: 30, ip: 0, op: 30, w: 200, h: 200, nm: "mismatch",
+  layers: [
+    {
+      ind: 1, ty: 4, nm: "tri2", ip: 0, op: 30, st: 0,
+      ks: { p: { a: 0, k: [100, 100] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+      shapes: [
+        {
+          ty: "sh", ks: { a: 1, k: [
+            { t: 0, s: [{ c: true, v: [[0, -50], [50, 50], [-50, 50]], i: [[0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0]] }] },
+            { t: 30, s: [{ c: true, v: [[0, -50], [50, 50], [-50, 50], [0, 50]], i: [[0, 0], [0, 0], [0, 0], [0, 0]], o: [[0, 0], [0, 0], [0, 0], [0, 0]] }] },
+          ] },
+        },
+        { ty: "fl", c: { a: 0, k: [0.9, 0.1, 0.1, 1] }, o: { a: 0, k: 100 } },
+      ],
+    },
+  ],
+};
+const mismatchRes = importLottie(mismatchLottie, {});
+
+check("mismatched vertex counts across keyframes: frozen to first keyframe, no morph tracks", () => {
+  assert.equal(mismatchRes.shapes.length, 1);
+  const s = mismatchRes.shapes[0];
+  assert.equal(s.subpaths[0].points.length, 3, "should use the first keyframe's 3-point shape");
+  assert.ok(mismatchRes.warnings.some((w) => w.includes("shape morph") && w.includes("vertex count mismatch")));
+  assert.equal(mismatchRes.coverage.skipped["path-morph(vertex-count-mismatch)"], 1);
+  const hasMorphTrack = mismatchRes.animations.some((a) => a.tracks.some((t) => t.target.startsWith(`${s.id}#p`)));
+  assert.ok(!hasMorphTrack, "no vertex tracks should be produced when the morph is rejected");
+});
+check("scene compiles via createRiv with no writer errors", () => {
+  const { warnings } = createRiv({
+    artboard: { name: "Mismatch", width: mismatchRes.width, height: mismatchRes.height },
+    groups: mismatchRes.groups, shapes: mismatchRes.shapes, animations: mismatchRes.animations,
+  });
+  assert.equal(warnings.length, 0, JSON.stringify(warnings));
+});
+
+console.log("6c. path morph: official runtime renders different pixels at frame 0 vs the last frame");
+const morphHost = new RiveHost(PAGE_SCRIPT);
+try {
+  const scene = {
+    artboard: { name: "Morph", width: morphRes.width, height: morphRes.height },
+    backgroundColor: "#101010",
+    groups: morphRes.groups, shapes: morphRes.shapes, animations: morphRes.animations,
+  };
+  const { bytes } = createRiv(scene);
+  const info = await morphHost.inspect(Buffer.from(bytes));
+  check("runtime accepts the morph file and finds the animation", () => {
+    assert.equal(info.artboards.length, 1);
+    assert.ok(info.artboards[0].animations.some((a) => a.name === "morph"));
+  });
+  const first = await morphHost.renderFrames(Buffer.from(bytes), { animation: "morph", startTime: 0, frameCount: 1, width: 200, format: "png" });
+  const last = await morphHost.renderFrames(Buffer.from(bytes), { animation: "morph", startTime: 0.99, frameCount: 1, width: 200, format: "png" });
+  check("frame 0 and the last frame render to different pixels (morph is actually animating)", () => {
+    assert.ok(first.frames[0].length > 1000, `first frame too small: ${first.frames[0].length}`);
+    assert.ok(last.frames[0].length > 1000, `last frame too small: ${last.frames[0].length}`);
+    const a = Buffer.from(first.frames[0], "base64");
+    const b = Buffer.from(last.frames[0], "base64");
+    assert.ok(!a.equals(b), "frame 0 and last frame should differ if the morph is animating");
+  });
+} catch (e) {
+  failures++;
+  console.error("  FAIL morph runtime -", e.message);
+} finally {
+  await morphHost.close();
+}
+
+// ============================================================
 // bonus: npm pack lottie-web の実サンプルを通す（取得できなければスキップ）
 // ============================================================
 console.log("bonus: real-world lottie-web sample");

@@ -229,16 +229,10 @@ function processTransform(ksIn: any, id: string, ctx: Ctx): TransformResult {
 }
 
 // ---- ベジェパス変換 (sh) ----------------------------------------------------
+// Lottie の1形状スナップショット(v/i/o/c)を静的な points 配列に変換する共通ヘルパ。
+// 非アニメーションパス・モーフ不成立時の先頭キーフレームフォールバックの両方から使う
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function shToPoints(shProp: any, warnings: string[], label: string): { closed: boolean; points: NonNullable<ShapeSpec["points"]> } | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let pathData: any;
-  if (kIsKeyframed(shProp)) {
-    warnings.push(`${label}: animated path (shape morph) not supported — frozen to first keyframe`);
-    pathData = shProp.k[0]?.s?.[0];
-  } else {
-    pathData = shProp?.k;
-  }
+function pathDataToPoints(pathData: any): { closed: boolean; points: NonNullable<ShapeSpec["points"]> } | null {
   if (!pathData || !Array.isArray(pathData.v)) return null;
   const closed = !!pathData.c;
   const v: number[][] = pathData.v, i: number[][] = pathData.i ?? [], o: number[][] = pathData.o ?? [];
@@ -260,6 +254,156 @@ function shToPoints(shProp: any, warnings: string[], label: string): { closed: b
     };
   });
   return { closed, points: points as NonNullable<ShapeSpec["points"]> };
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function shToPoints(shProp: any, warnings: string[], label: string): { closed: boolean; points: NonNullable<ShapeSpec["points"]> } | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pathData: any;
+  if (kIsKeyframed(shProp)) {
+    warnings.push(`${label}: animated path (shape morph) not supported — frozen to first keyframe`);
+    pathData = shProp.k[0]?.s?.[0];
+  } else {
+    pathData = shProp?.k;
+  }
+  return pathDataToPoints(pathData);
+}
+
+// ---- animated sh (shape morph) → 頂点キーフレームトラック ------------------
+// buildPolygonShape の shape id 確定前に呼ばれるため、target は「サブパス内の
+// pointIndex」だけを持つ雛形として返し、id確定後に呼び出し側が `${id}#p<subpath>_<point>`
+// へ変換して ctx.tracks へ積む
+interface MorphPointTrack { pointIndex: number; property: TrackSpec["property"]; keyframes: KeyframeSpec[] }
+type MorphOutcome =
+  | { ok: true; closed: boolean; points: NonNullable<ShapeSpec["points"]>; trackTemplates: MorphPointTrack[] }
+  | { ok: false; reason: "insufficient-keyframes" | "vertex-count-mismatch" };
+
+// distance≈0のキーフレームでは atan2(0,0)=0 になり角度が無意味。直前の有効角度で埋める
+// （先頭なら直後の有効角度、全部無効なら0）。これをしないと角度が暴れて不要なトラックが
+// 生成されたり補間が破綻したりする
+function fillInvalidAngles(angles: number[]): void {
+  const firstValid = angles.findIndex((a) => !Number.isNaN(a));
+  if (firstValid === -1) {
+    angles.fill(0);
+    return;
+  }
+  for (let idx = 0; idx < firstValid; idx++) angles[idx] = angles[firstValid];
+  for (let idx = firstValid + 1; idx < angles.length; idx++) {
+    if (Number.isNaN(angles[idx])) angles[idx] = angles[idx - 1];
+  }
+}
+
+// 連続キーフレーム間の角度差が180度を超えたら±360補正して連続にする
+// （さもないと補間が逆回りする）
+function unwrapAngles(angles: number[]): void {
+  for (let idx = 1; idx < angles.length; idx++) {
+    while (angles[idx] - angles[idx - 1] > 180) angles[idx] -= 360;
+    while (angles[idx] - angles[idx - 1] < -180) angles[idx] += 360;
+  }
+}
+
+// 全キーフレームで値が一定(差<1e-4)なプロパティはファイル肥大防止のためトラックを作らない
+function pushIfVarying(
+  out: MorphPointTrack[],
+  pointIndex: number,
+  property: TrackSpec["property"],
+  values: number[],
+  frames: number[],
+  // 各キーフレームへ「向かう」easing。index 0 は常に undefined(buildTrackと同じ規約)
+  easings: Array<KeyframeSpec["easing"]>
+): void {
+  const first = values[0];
+  if (values.every((v) => Math.abs(v - first) < 1e-4)) return;
+  const keyframes: KeyframeSpec[] = values.map((v, idx) => {
+    const kf: KeyframeSpec = { frame: frames[idx], value: v };
+    if (easings[idx] !== undefined) kf.easing = easings[idx];
+    return kf;
+  });
+  out.push({ pointIndex, property, keyframes });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function shToMorphTracks(shProp: any, ctx: Ctx, label: string): MorphOutcome {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawKfs: any[] = shProp.k;
+  // 末尾キーフレームは s を持たないことがある。その場合はそこで打ち切る
+  // (その t 以降は最後の形状で保持される＝トラック上は単にキーフレームが無いだけで自然にそうなる)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const usable: Array<{ raw: any; pathData: any }> = [];
+  for (const kf of rawKfs) {
+    const pd = kf.s?.[0];
+    if (!pd || !Array.isArray(pd.v)) break;
+    usable.push({ raw: kf, pathData: pd });
+  }
+  if (usable.length < 2) return { ok: false, reason: "insufficient-keyframes" };
+
+  const first = usable[0].pathData;
+  const n = first.v.length;
+  const closed = !!first.c;
+  for (const u of usable) {
+    if (u.pathData.v.length !== n || !!u.pathData.c !== closed) {
+      return { ok: false, reason: "vertex-count-mismatch" };
+    }
+  }
+
+  // 形状は最初のキーフレームのパスデータを使い、全頂点を CubicDetachedVertex として出力する。
+  // アニメ中にタンジェントが0↔非0に変わる頂点があるため、タイプを揃えないとトラックが打てない。
+  // distance=0のcubicは直線と同一レンダリングになるので静的見た目は変わらない
+  const points: NonNullable<ShapeSpec["points"]> = first.v.map((pt: number[], idx: number) => {
+    const inD = first.i?.[idx] ?? [0, 0];
+    const outD = first.o?.[idx] ?? [0, 0];
+    return {
+      x: pt[0], y: pt[1],
+      cubic: {
+        rotation: (Math.atan2(outD[1] ?? 0, outD[0] ?? 0) * 180) / Math.PI,
+        inRotation: (Math.atan2(inD[1] ?? 0, inD[0] ?? 0) * 180) / Math.PI,
+        inDistance: Math.hypot(inD[0] ?? 0, inD[1] ?? 0),
+        outDistance: Math.hypot(outD[0] ?? 0, outD[1] ?? 0),
+      },
+    };
+  });
+
+  const frames = usable.map((u) => Math.max(0, Math.round(num(u.raw.t) + ctx.frameOffset)));
+  // パスキーフレームは形状全体で1つのeasingを持つ(既存buildTrackと同じ規則で導出し、
+  // 全頂点トラックの対応キーフレームへ共通適用する)
+  const easings: Array<KeyframeSpec["easing"]> = usable.map((u, idx) => {
+    if (idx === 0) return undefined;
+    const prevRaw = usable[idx - 1].raw;
+    if (prevRaw.h === 1) return "hold";
+    return bezierFromTangents(prevRaw.o, u.raw.i, 0);
+  });
+
+  const trackTemplates: MorphPointTrack[] = [];
+  for (let idx = 0; idx < n; idx++) {
+    const xs: number[] = [], ys: number[] = [];
+    const inRots: number[] = [], inDists: number[] = [];
+    const outRots: number[] = [], outDists: number[] = [];
+    for (const u of usable) {
+      const v = u.pathData.v[idx];
+      const iD = u.pathData.i?.[idx] ?? [0, 0];
+      const oD = u.pathData.o?.[idx] ?? [0, 0];
+      xs.push(v[0]);
+      ys.push(v[1]);
+      const inDist = Math.hypot(iD[0] ?? 0, iD[1] ?? 0);
+      const outDist = Math.hypot(oD[0] ?? 0, oD[1] ?? 0);
+      inDists.push(inDist);
+      outDists.push(outDist);
+      inRots.push(inDist < 1e-4 ? NaN : (Math.atan2(iD[1] ?? 0, iD[0] ?? 0) * 180) / Math.PI);
+      outRots.push(outDist < 1e-4 ? NaN : (Math.atan2(oD[1] ?? 0, oD[0] ?? 0) * 180) / Math.PI);
+    }
+    fillInvalidAngles(inRots);
+    fillInvalidAngles(outRots);
+    unwrapAngles(inRots);
+    unwrapAngles(outRots);
+
+    pushIfVarying(trackTemplates, idx, "x", xs, frames, easings);
+    pushIfVarying(trackTemplates, idx, "y", ys, frames, easings);
+    pushIfVarying(trackTemplates, idx, "inRotation", inRots, frames, easings);
+    pushIfVarying(trackTemplates, idx, "inDistance", inDists, frames, easings);
+    pushIfVarying(trackTemplates, idx, "outRotation", outRots, frames, easings);
+    pushIfVarying(trackTemplates, idx, "outDistance", outDists, frames, easings);
+  }
+
+  return { ok: true, closed, points, trackTemplates };
 }
 
 // ---- star/polygon (sr) → 静的polygon --------------------------------------
@@ -359,8 +503,29 @@ function buildRectShape(item: any, parentId: string, ctx: Ctx, label: string): S
 interface GeomItem { kind: "sh" | "el" | "rc" | "sr"; /* eslint-disable-next-line @typescript-eslint/no-explicit-any */ item: any }
 function buildPolygonShape(geomItems: GeomItem[], parentId: string, ctx: Ctx, label: string): ShapeSpec | null {
   const subpaths: Array<{ closed?: boolean; points: NonNullable<ShapeSpec["points"]> }> = [];
+  // id確定(このシェイプの最後)前は subpathIndex+pointIndex の雛形として保持する
+  const morphTrackTemplates: Array<{ subpathIndex: number; pointIndex: number; property: TrackSpec["property"]; keyframes: KeyframeSpec[] }> = [];
   for (const g of geomItems) {
     if (g.kind === "sh") {
+      if (kIsKeyframed(g.item.ks)) {
+        const morph = shToMorphTracks(g.item.ks, ctx, label);
+        // 頂点2未満はwriterが「>=2 per subpath」で弾くため、静的パスと同様に黙って捨てる
+        if (morph.ok && morph.points.length >= 2) {
+          const subpathIndex = subpaths.length;
+          subpaths.push({ closed: morph.closed, points: morph.points });
+          for (const t of morph.trackTemplates) {
+            morphTrackTemplates.push({ subpathIndex, pointIndex: t.pointIndex, property: t.property, keyframes: t.keyframes });
+          }
+        } else {
+          const reason = morph.ok ? undefined : morph.reason;
+          if (reason === "vertex-count-mismatch") ctx.skip("path-morph(vertex-count-mismatch)");
+          const reasonSuffix = reason === "vertex-count-mismatch" ? " (vertex count mismatch across keyframes)" : "";
+          ctx.warnings.push(`${label}: animated path (shape morph) not supported${reasonSuffix} — frozen to first keyframe`);
+          const r = pathDataToPoints(g.item.ks.k[0]?.s?.[0]);
+          if (r && r.points.length >= 2) subpaths.push(r);
+        }
+        continue;
+      }
       const r = shToPoints(g.item.ks, ctx.warnings, label);
       if (r && r.points.length >= 2) subpaths.push(r);
     } else if (g.kind === "sr") {
@@ -376,6 +541,10 @@ function buildPolygonShape(geomItems: GeomItem[], parentId: string, ctx: Ctx, la
   }
   if (!subpaths.length) return null;
   const id = newId(ctx, "p");
+  // shape id が確定したのでここで頂点トラックの target (`${id}#p<subpath>_<point>`) を確定させる
+  for (const t of morphTrackTemplates) {
+    ctx.tracks.push({ target: `${id}#p${t.subpathIndex}_${t.pointIndex}`, property: t.property, keyframes: t.keyframes });
+  }
   return { id, type: "polygon", x: 0, y: 0, parent: parentId, z: nextZ(ctx), subpaths };
 }
 

@@ -313,7 +313,9 @@ export interface TrackSpec {
     | "width" | "height" | "fillColor"
     | "trimStart" | "trimEnd" | "trimOffset" // stroke.trim を持つシェイプ対象。0-1
     | "followDistance" // followPath 制約を持つ item 対象。0-1
-    | "soloActive"; // solo グループ対象。keyframes[].ref に子id
+    | "soloActive" // solo グループ対象。keyframes[].ref に子id
+    // パス頂点(#p)/メッシュ頂点(#v)ターゲット専用。x/y は既存メンバーを頂点でも流用する
+    | "inRotation" | "inDistance" | "outRotation" | "outDistance" | "distance" | "radius";
   keyframes: KeyframeSpec[];
 }
 export interface AnimationSpec {
@@ -665,6 +667,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     const nestedIds = new Map<string, number>();
     const eventIds = new Map<string, number>();
     const vertexIds = new Map<string, number>();
+    // #p<subpathIndex>_<pointIndex> ターゲットの頂点実タイプ（rotation等のpropertyKey解決に必要。
+    // CubicMirroredVertex/CubicAsymmetricVertex/CubicDetachedVertex でキーが異なるため）
+    const vertexTypes = new Map<string, string>();
 
     const emitImage = (img: ImageSpec): void => {
       const imgProps: Record<string, unknown> = {
@@ -792,16 +797,20 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         const subpaths = s.subpaths ?? (s.points ? [{ closed: s.closed, points: s.points }] : []);
         if (!subpaths.length || subpaths.some((sp) => sp.points.length < 2))
           throw new Error(`polygon '${s.id}' needs points (>=2 per subpath)`);
-        for (const sp of subpaths) {
+        subpaths.forEach((sp, subpathIndex) => {
           const path = push({ type: "PointsPath", props: { parentId: shape, isClosed: sp.closed ?? s.closed ?? true } });
-          for (const p of sp.points) {
+          sp.points.forEach((p, pointIndex) => {
+            const vertexKey = `${s.id}#p${subpathIndex}_${pointIndex}`;
+            let vid: number;
+            let vtype: string;
             if (p.cubic) {
               const rotation = (p.cubic.rotation * Math.PI) / 180;
               const inDistance = p.cubic.inDistance ?? p.cubic.distance ?? 0;
               const outDistance = p.cubic.outDistance ?? p.cubic.distance ?? 0;
               if (p.cubic.inRotation !== undefined) {
-                push({
-                  type: "CubicDetachedVertex",
+                vtype = "CubicDetachedVertex";
+                vid = push({
+                  type: vtype,
                   props: {
                     parentId: path, x: p.x, y: p.y,
                     inRotation: (p.cubic.inRotation * Math.PI) / 180, inDistance,
@@ -809,24 +818,29 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
                   },
                 });
               } else if (inDistance === outDistance) {
-                push({
-                  type: "CubicMirroredVertex",
+                vtype = "CubicMirroredVertex";
+                vid = push({
+                  type: vtype,
                   props: { parentId: path, x: p.x, y: p.y, rotation, distance: inDistance },
                 });
               } else {
-                push({
-                  type: "CubicAsymmetricVertex",
+                vtype = "CubicAsymmetricVertex";
+                vid = push({
+                  type: vtype,
                   props: { parentId: path, x: p.x, y: p.y, rotation, inDistance, outDistance },
                 });
               }
             } else {
-              push({
-                type: "StraightVertex",
+              vtype = "StraightVertex";
+              vid = push({
+                type: vtype,
                 props: { parentId: path, x: p.x, y: p.y, ...(p.radius ? { radius: p.radius } : {}) },
               });
             }
-          }
-        }
+            vertexIds.set(vertexKey, vid);
+            vertexTypes.set(vertexKey, vtype);
+          });
+        });
       } else {
         const typeName = s.type === "rect" ? "Rectangle" : s.type === "ellipse" ? "Ellipse" : "Triangle";
         const props: Record<string, unknown> = {
@@ -1096,6 +1110,13 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       height: { type: "LayoutComponent", prop: "height" },
       fillColor: { type: "SolidColor", prop: "colorValue" },
     };
+    // 頂点タイプごとに許可するプロパティ（x/yは全タイプ共通で別途処理）
+    const VERTEX_TYPE_PROPS: Record<string, string[]> = {
+      StraightVertex: ["radius"],
+      CubicMirroredVertex: ["rotation", "distance"],
+      CubicAsymmetricVertex: ["rotation", "inDistance", "outDistance"],
+      CubicDetachedVertex: ["inRotation", "inDistance", "outRotation", "outDistance"],
+    };
     const animationNames: string[] = [];
     for (const a of ab.animations ?? []) {
       animationNames.push(a.name);
@@ -1111,6 +1132,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       for (const t of a.tracks) {
         const isColor = t.property === "fillColor";
         const isVertex = t.target.includes("#v");
+        const isPathVertex = t.target.includes("#p");
         const isSolo = t.property === "soloActive";
         let targetId: number | undefined;
         let propRef: { type: string; prop: string } | undefined;
@@ -1141,6 +1163,23 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             throw new Error(`Mesh vertices only support x/y tracks, got '${t.property}'`);
           }
           propRef = { type: "Vertex", prop: t.property };
+        } else if (isPathVertex) {
+          targetId = vertexIds.get(t.target);
+          if (targetId === undefined) {
+            throw new Error(`Path vertex '${t.target}' not found (format: <shapeId>#p<subpathIndex>_<pointIndex>)`);
+          }
+          const vType = vertexTypes.get(t.target)!;
+          if (t.property === "x" || t.property === "y") {
+            propRef = { type: "Vertex", prop: t.property };
+          } else {
+            const allowed = VERTEX_TYPE_PROPS[vType] ?? [];
+            if (!allowed.includes(t.property)) {
+              throw new Error(
+                `Path vertex '${t.target}' (${vType}) does not support property '${t.property}'. Allowed: x, y, ${allowed.join(", ")}`
+              );
+            }
+            propRef = { type: vType, prop: t.property };
+          }
         } else {
           targetId =
             shapeIds.get(t.target) ?? imageIds.get(t.target) ?? groupIds.get(t.target) ??
@@ -1183,7 +1222,10 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             push({ type: "KeyFrameId", props: { ...kfProps, interpolationType: 0, value: child } });
           } else {
             let v = k.value ?? 0;
-            if (t.property === "rotation") v = (v * Math.PI) / 180;
+            // rotation系は度で受けてラジアンに変換して書き込む（.riv内表現はラジアン）
+            if (t.property === "rotation" || t.property === "inRotation" || t.property === "outRotation") {
+              v = (v * Math.PI) / 180;
+            }
             push({ type: "KeyFrameDouble", props: { ...kfProps, value: v } });
           }
         });
