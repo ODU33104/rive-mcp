@@ -63,7 +63,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_render_sprites` | スプライトシート PNG + メタデータ JSON（ゲームエンジン向け） |
 | `riv_play_state_machine` | 入力の set / fire → advance → 状態遷移レポート（+任意でフレームキャプチャ）|
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
-| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ21種、`stagger`で時差出現）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
+| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ28種、`stagger`で時差出現）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
 | `riv_design_tokens` | **設計前にデザイントークンを生成**: OKLCH色空間で調和させたパレット（WCAGコントラスト比付き）、グラデーションペア、Material Motion準拠のduration/easingロール、余白・角丸・文字スケール。シード色+ムードから決定論的に生成 |
 | `riv_import_svg` | **SVG → Riveベジェシェイプ変換**（Figma/Illustrator書き出し・アイコン・イラスト）: cubic頂点・複合パス（穴あき）・グラデーション・ストローク・入れ子transformを完全変換。AIが「プリミティブで描く」代わりに「プロが描いたベクターを構成する」ための素材パイプライン。`riv_create` の `imports` で配置 |
 | `riv_asset_search` | **Iconifyの約20万個のプロ製アイコンを検索**し、そのままRiveシェイプとしてインポート（要ネットワーク） |
@@ -73,13 +73,14 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
 | `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
+| `riv_optimize` | **見た目を変えずに.rivを軽量化**: 過去の編集で残った未参照interpolator/event/空トラックの除去、全区間linearのトラックに限定した冗長キーフレーム間引き（Douglas-Peucker、easing安全 — cubic/holdの区間には一切触れない）。`dryRun` で書き込み前に削減プランだけ確認可能 |
 | `riv_extract_assets` | .riv 埋め込み画像/フォントの抽出 |
 | `riv_visual_diff` | 2つの .riv のピクセル差分（一致率 + 相違箇所を赤表示した差分画像） |
 | `riv_rig_character` | **キャラPNG1枚→完成リグをワンコール生成**: パーツ切り出し+2ボーン頭メッシュ+目パチ+idle/happyアニメ+SM |
 | `riv_diff` | 2つの.rivの構造差分（型数変化・オブジェクト単位のプロパティ差分） |
-| `riv_studio` | **ローカルWebスタジオ**（公式エディタ風ダークUI・日英対応）: 階層ツリー（アイコン付き）/ キャンバス選択・ドラッグ・四隅リサイズ / インスペクタ（ラベル横ドラッグで数値変更）/ タイムライン編集（キーフレームのドラッグ移動・ダブルクリック追加・削除）/ Undo/Redo / 矢印キー移動・Deleteキー削除 / オブジェクト追加ボタン / 再生速度切替 / **ワンクリック書き出し（PNG/APNG/GIF/WebM）** / ライブプレビュー+ホットリロード / SM入力コントロール。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
+| `riv_studio` | **ローカルWebスタジオ**（公式エディタ風ダークUI・日英対応）: 階層ツリー（アイコン付き）/ キャンバス選択・ドラッグ・四隅リサイズ / インスペクタ（ラベル横ドラッグで数値変更）/ タイムライン編集（キーフレームのドラッグ移動・ダブルクリック追加・削除）/ **ベジェカーブエディタ**（区間選択→制御点ドラッグ、hold/linear/cubic切替、10種のワンクリックイージングプリセット、riv-onlyモードでも編集可）/ **State Machineグラフビュー**（レイヤー/状態/遷移をノードグラフ表示、遷移条件をクリックで詳細表示、到達不能state・条件無し自己遷移をlint連動で色分け、実行中stateをライブハイライト）/ **オニオンスキン**（前後0-5フレームを距離に応じた濃さで重ね表示、再生中は自動オフ）/ Undo/Redo / 矢印キー移動・Deleteキー削除 / オブジェクト追加ボタン / 再生速度切替 / **ワンクリック書き出し（PNG/APNG/GIF/WebM）** / ライブプレビュー+ホットリロード / SM入力コントロール。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
 | `riv_setup` | **ワンコール環境セットアップ**: 同梱の `rive-design-guidelines` スキルを `.claude/skills/`（プロジェクト）または `~/.claude/skills/`（ユーザー共通）へコピー。ツール許可プロンプトがそのまま「確認だけされて任意」の同意UXになる |
-| `riv_studio_notes` | **スタジオUI→AIへの指示の受信**: UIの「AIへの指示」ボックスに人間が書いた修正依頼をAIが取得（取得するとUI側に通知）。「スタジオの指示を確認して」で呼ばれる |
+| `riv_studio_notes` | **スタジオUI→AIへの指示の受信**: UIの「AIへの指示」ボックスに人間が書いた修正依頼をAIが取得（取得するとUI側に通知）。選択中オブジェクト・アートボード・アニメーション・再生時刻のコンテキストが自動で添付される。「スタジオの指示を確認して」で呼ばれる |
 
 ### デザイン品質のガイダンス
 
@@ -103,7 +104,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 
 Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)）、トラックはRive公式サンプル由来。
 
-同じワークフロー+手打ち部分の作法（ベジェ曲線・イージングの意味論・リギング）は `rive-design-guidelines` MCP prompt として公開。MCP prompts 非対応クライアント向けに [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としても同梱している。
+同じワークフロー+手打ち部分の作法（ベジェ曲線・イージングの意味論・リギング）は `rive-design-guidelines` MCP prompt として公開。数値レシピ（余白・タイミングのトークン、構図・レイヤリングのルール、避けるべきアンチパターン）を扱う6セクションも追加済み。MCP prompts 非対応クライアント向けに [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としても同梱している。
 
 ## キャラクターアニメーション
 
@@ -145,8 +146,8 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 `riv_studio` で開くローカルWeb画面は、AIが作った .riv を人間がその場で確認・直接編集・修正指示するためのものです（日本語/英語切替対応・初回ガイド付き）:
 
 1. **AIに作らせる** — 「ボールが跳ねる riv を作って riv_studio で開いて」
-2. **直接さわる** — キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色/テキストを変更（即時反映）
-3. **AIに頼む** — 大きな変更は「AIへの指示」ボックスに書いて送信 → チャットで「スタジオの指示を確認して」
+2. **直接さわる** — キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色/テキストを変更（即時反映）。イージングはベジェカーブエディタで、State Machineの遷移はグラフビューで直接確認・編集できる。オニオンスキンをオンにすれば前後のフレームを重ねて動きを一目でチェックできる
+3. **AIに頼む** — 大きな変更は「AIへの指示」ボックスに書いて送信（選択中オブジェクト・アートボード・時刻などのコンテキストが自動添付される）→ チャットで「スタジオの指示を確認して」
 4. AIが `riv_edit` / `riv_create` で修正すると、ブラウザは自動で最新状態に更新される
 
 ## ワンクリック書き出し

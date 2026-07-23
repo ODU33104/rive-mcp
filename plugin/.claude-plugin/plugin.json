@@ -1,7 +1,7 @@
 {
   "name": "rive-mcp",
   "displayName": "Rive MCP",
-  "description": "Create, edit, lint, render and preview Rive (.riv) animations without the Rive editor. Bundles the rive-mcp MCP server (27 tools), the rive-design-guidelines skill, and a rive-designer agent.",
+  "description": "Create, edit, lint, render and preview Rive (.riv) animations without the Rive editor. Bundles the rive-mcp MCP server (28 tools), the rive-design-guidelines skill, and a rive-designer agent.",
   "author": {
     "name": "ODU33104"
   },

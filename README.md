@@ -16,15 +16,15 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 ## Highlights
 
 - **Generate `.riv` from JSON** — shapes, gradients, embedded PNGs, text, bones + skinning, IK, mesh deformation, keyframe animation with easing, multi-layer state machines, listeners, events, physics baking, particles
-- **Pro-quality by construction** — 21 semantic motion presets (`pop-in`, staggered `rise-in`, `breathing`, …) with professionally tuned amplitudes/easings, an OKLCH design-token generator (`riv_design_tokens`), motion-quality lint rules (robotic linear movement, teleports, missing stagger), and a one-call critique loop (`riv_critique`: frames + objective metrics + scoring checklist)
+- **Pro-quality by construction** — 28 semantic motion presets (`pop-in`, staggered `rise-in`, `breathing`, `stagger-in`, `parallax-drift`, `shimmer`, …) with professionally tuned amplitudes/easings, an OKLCH design-token generator (`riv_design_tokens`), motion-quality lint rules (robotic linear movement, teleports, missing stagger), and a one-call critique loop (`riv_critique`: frames + objective metrics + scoring checklist)
 - **Real vector art pipeline** — import SVG (Figma/Illustrator/Iconify, or npm SVG sets like `@twemoji/svg` when offline) as true bezier paths (`riv_import_svg`, `riv_asset_search`), decompile existing `.riv` files into editable specs **including gradients, blend modes and hand-tuned animation tracks** (`riv_decompile`), plus trim paths (draw-on), clipping masks, blend modes (`multiply` shadows, `screen` glows), follow-path motion, solos and detached bezier handles in the scene spec
 - **Losslessly edit existing `.riv`** — change any property, swap text, delete subtrees (references auto-remapped); round-trip verified pixel-perfect
-- **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live
-- **Human ⇄ AI loop** — an "Instructions for AI" box in the Studio: you type feedback, the AI picks it up via `riv_studio_notes` and fixes the file, your browser updates instantly
+- **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live. Also includes a **bezier curve editor** for hand-tuning keyframe easing (drag control points, hold/linear/cubic switching, 10 one-click presets), a **state machine graph view** (node graph of layers/states/transitions with lint findings and live-playback state highlighting), and an **onion skin** overlay (0-5 surrounding frames) for checking motion at a glance
+- **Human ⇄ AI loop** — an "Instructions for AI" box in the Studio: you type feedback, the AI picks it up via `riv_studio_notes` (now auto-attached with the current selection/artboard/animation/time context) and fixes the file, your browser updates instantly
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (27)
+## Tools (28)
 
 | Tool | What it does |
 |---|---|
@@ -46,14 +46,15 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_decompile` | **.riv → editable scene spec**: study or remix professional files (bezier paths, gradients, solos, trim paths, animations with named easings); unsupported types are counted, not silently dropped |
 | `riv_critique` | **One-call review bundle that makes motion visible to a VLM**: a filmstrip (frames left→right), an onion-skin overlay (motion trails), a motion report (net displacement vector per animated object), objective metrics (bezier ratio, palette flags, easing distribution) + lint findings + a fixed 7-axis scoring checklist incl. spatial/directional coherence (does each mover travel toward its artwork's front? is the perspective consistent?) |
 | `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
+| `riv_optimize` | Shrink a `.riv` without changing its visual output: remove unreferenced interpolators/events/empty tracks left over from prior edits, thin redundant keyframes on strictly-linear runs (Douglas-Peucker, easing-safe — cubic/hold segments are never touched), with a `dryRun` report of the plan |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
 | `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |
 | `riv_dump` | Low-level binary structure dump (typeKeys / properties / hierarchy) |
 | `riv_slice_image` | Cut character parts out of a PNG by polygon (for cutout rigging) |
 | `riv_rig_character` | **Character PNG → fully rigged `.riv` in one call** |
 | `riv_diff` | Structural diff between two `.riv` files |
-| `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
-| `riv_studio_notes` | Fetch instructions the human typed into the Studio UI |
+| `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, **bezier curve editor** (drag control points, hold/linear/cubic, 10 easing presets), **state machine graph view** (node graph, transition details, lint-highlighted states, live playback highlighting), **onion skin** overlay, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
+| `riv_studio_notes` | Fetch instructions the human typed into the Studio UI, with auto-attached context (current selection, artboard, animation, playback time) |
 | `riv_setup` | **One-call environment setup**: installs the bundled `rive-design-guidelines` skill into `.claude/skills/` (project) or `~/.claude/skills/` (user) so the pro workflow auto-triggers — confirmation happens via the normal tool-permission prompt |
 
 ### Showcases: professional assets in, professional motion out
@@ -77,7 +78,7 @@ Twemoji artwork © Twitter/X and contributors, [CC-BY 4.0](https://creativecommo
 2. `riv_create` with motion `presets` instead of hand-authored keyframes wherever one fits
 3. `riv_critique` → look at the frames, score the 6-axis checklist, fix anything below 4, re-run (at least twice)
 
-The same workflow plus hand-authoring craft rules (bezier curves, easing semantics, rigging) is exposed as the `rive-design-guidelines` MCP prompt. For clients without MCP prompts support, it ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
+The same workflow plus hand-authoring craft rules (bezier curves, easing semantics, rigging) is exposed as the `rive-design-guidelines` MCP prompt. It also carries numeric recipes (spacing/timing tokens, composition & layering rules, anti-patterns to avoid) across 6 dedicated sections. For clients without MCP prompts support, it ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
 
 ## Quick start
 
@@ -152,7 +153,7 @@ Turn a single character PNG into a naturally moving `.riv`:
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 18 tools over JSON-RPC (48 checks)
+npm run test:e2e   # spawns the real server, exercises all 28 tools over JSON-RPC
 ```
 
 `docs/riv-format.md` documents the reverse-engineered knowledge of the `.riv` binary format used by the writer (typeKeys/propertyKeys resolved from the official `rive-runtime` type definitions vendored in `vendor/rive-defs/defs.json`).
