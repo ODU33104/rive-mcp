@@ -10,12 +10,14 @@ import type { ArtboardSpec, AnimationSpec, TrackSpec, KeyframeSpec, EasingName }
 export type PresetName =
   // 入場
   | "fade-in" | "rise-in" | "drop-in" | "slide-in" | "pop-in" | "bounce-in"
+  | "stagger-in" | "swoop-in" | "pop-cascade"
   // 退場
   | "fade-out" | "sink-out" | "slide-out" | "pop-out"
   // 強調(ワンショット)
-  | "pulse" | "heartbeat" | "tada" | "shake" | "wobble"
+  | "pulse" | "heartbeat" | "tada" | "shake" | "wobble" | "attention"
   // 常時ループ(アニメ全長にシームレス展開)
-  | "breathing" | "float" | "sway" | "spin" | "glow-pulse" | "blink";
+  | "breathing" | "float" | "sway" | "spin" | "glow-pulse" | "blink"
+  | "parallax-drift" | "float-idle" | "shimmer";
 
 export interface PresetSpec {
   preset: PresetName;
@@ -30,13 +32,16 @@ export interface PresetSpec {
 
 export const AMBIENT_PRESETS: Set<string> = new Set([
   "breathing", "float", "sway", "spin", "glow-pulse", "blink",
+  "parallax-drift", "float-idle", "shimmer",
 ]);
 
 export const PRESET_NAMES: PresetName[] = [
   "fade-in", "rise-in", "drop-in", "slide-in", "pop-in", "bounce-in",
+  "stagger-in", "swoop-in", "pop-cascade",
   "fade-out", "sink-out", "slide-out", "pop-out",
-  "pulse", "heartbeat", "tada", "shake", "wobble",
+  "pulse", "heartbeat", "tada", "shake", "wobble", "attention",
   "breathing", "float", "sway", "spin", "glow-pulse", "blink",
+  "parallax-drift", "float-idle", "shimmer",
 ];
 
 // 対象要素の基準値(絶対値キーフレームを作るために必要)
@@ -127,6 +132,66 @@ function buildPresetTracks(
         tr("scaleX", [k(at, S, "hold"), k(at + sec(0.35), S, "hold"), k(at + sec(0.41), 1.12 * S, "ease-out"), k(at + sec(0.55), S, "smooth")]),
         tr("opacity", [k(at, 0, "hold"), k(at + sec(0.12), base.opacity, "smooth")]),
       ];
+    case "stagger-in": {
+      // リスト/カード群の時差登場向け。本動作(上昇)の12%を逆方向(さらに沈む)へ
+      // anticipationさせてから ease-out-back でわずかにオーバーシュートして着地する。
+      // targets+stagger(40-80ms目安)と組み合わせて使う。
+      fit(at + sec(0.56));
+      const antic = dy * 0.12 * i;
+      return [
+        tr("y", [
+          k(at, base.y + dy, "hold"),
+          k(at + sec(0.08), base.y + dy + antic, "ease-out"), // anticipation: 逆方向へ一瞬沈む
+          k(at + sec(0.44), base.y - dy * 0.08, "ease-out-back"), // overshoot
+          k(at + sec(0.56), base.y, "ease-out"),
+        ]),
+        tr("scaleY", [k(at, 0.96 * S, "hold"), k(at + sec(0.08), 0.9 * S, "ease-out"), k(at + sec(0.44), 1.04 * S, "ease-out-back"), k(at + sec(0.56), S, "smooth")]),
+        tr("scaleX", [k(at, 1.02 * S, "hold"), k(at + sec(0.08), 1.06 * S, "ease-out"), k(at + sec(0.44), 0.98 * S, "ease-out-back"), k(at + sec(0.56), S, "smooth")]),
+        tr("rotation", [k(at, base.rotation + 2.5 * i, "hold"), k(at + sec(0.44), base.rotation - 1 * i, "ease-out-back"), k(at + sec(0.56), base.rotation, "smooth")]),
+        tr("opacity", [k(at, 0, "hold"), k(at + sec(0.18), base.opacity, "smooth")]),
+      ];
+    }
+    case "swoop-in": {
+      // 直線移動ではなく弧を描く入場(アークの原則)。x/yのタイミングをずらして
+      // 合成軌道を弓なりにし、rotationで旋回方向へ軽くバンクさせる。
+      fit(at + sec(0.6));
+      const sx = dx * 1.4;
+      const bank = (sx > 0 ? -1 : 1) * 6 * i;
+      return [
+        tr("x", [k(at, base.x + sx, "hold"), k(at + sec(0.5), base.x, "ease-out")]),
+        tr("y", [
+          k(at, base.y + dy * 0.5, "hold"),
+          k(at + sec(0.28), base.y - dy * 1.1, "ease-out"), // 弧の頂点(逆方向へ一旦振る)
+          k(at + sec(0.6), base.y, "ease-out-back"),
+        ]),
+        tr("rotation", [
+          k(at, base.rotation + bank, "hold"),
+          k(at + sec(0.5), base.rotation, "ease-out-back"),
+        ]),
+        tr("opacity", [k(at, 0, "hold"), k(at + sec(0.2), base.opacity, "smooth")]),
+      ];
+    }
+    case "pop-cascade": {
+      // pop-inを連鎖前提でリッチ化: 予備収縮(anticipation)→大きめelasticオーバーシュート
+      // →軽い二次バウンド(follow-through)。targets+staggerで連鎖ポップに。
+      fit(at + sec(0.62));
+      return [
+        tr("scaleY", [
+          k(at, S, "hold"),
+          k(at + sec(0.08), 0.82 * S, "ease-in"), // anticipation: しゃがみ込む
+          k(at + sec(0.36), (1 + 0.14 * i) * S, "elastic-out", { amplitude: 1.1, period: 0.4 }),
+          k(at + sec(0.62), S, "smooth"),
+        ]),
+        tr("scaleX", [
+          k(at, S, "hold"),
+          k(at + sec(0.08), 1.16 * S, "ease-in"),
+          k(at + sec(0.36), (1 + 0.14 * i) * S, "elastic-out", { amplitude: 1.1, period: 0.4 }),
+          k(at + sec(0.62), S, "smooth"),
+        ]),
+        tr("rotation", [k(at, base.rotation, "hold"), k(at + sec(0.36), base.rotation + 4 * i, "elastic-out", { amplitude: 0.8, period: 0.4 }), k(at + sec(0.62), base.rotation, "smooth")]),
+        tr("opacity", [k(at, 0, "hold"), k(at + sec(0.14), base.opacity, "smooth")]),
+      ];
+    }
     // ---- 退場 ----
     case "fade-out":
       fit(at + sec(0.25));
@@ -198,6 +263,23 @@ function buildPresetTracks(
       keys.push(k(at + sec(0.9), base.rotation, "ease-out"));
       return [tr("rotation", keys)];
     }
+    case "attention": {
+      // 通知バッジ/新着アイコン向け複合ワンショット。pop-inの勢いをtadaより速く・
+      // shakeより短く仕立てる: 予備収縮→elasticポップ→小さな回転の余韻(follow-through)。
+      fit(at + sec(0.46));
+      const amp = 6 * i;
+      return [
+        tr("scaleX", [k(at, S, "hold"), k(at + sec(0.06), 0.88 * S, "ease-in"), k(at + sec(0.22), (1 + 0.18 * i) * S, "elastic-out", { amplitude: 1, period: 0.3 }), k(at + sec(0.46), S, "smooth")]),
+        tr("scaleY", [k(at, S, "hold"), k(at + sec(0.06), 1.1 * S, "ease-in"), k(at + sec(0.22), (1 + 0.18 * i) * S, "elastic-out", { amplitude: 1, period: 0.3 }), k(at + sec(0.46), S, "smooth")]),
+        tr("rotation", [
+          k(at, base.rotation, "hold"),
+          k(at + sec(0.26), base.rotation + amp, "ease-in-out"),
+          k(at + sec(0.34), base.rotation - amp * 0.6, "ease-in-out"),
+          k(at + sec(0.42), base.rotation + amp * 0.3, "ease-in-out"),
+          k(at + sec(0.46), base.rotation, "ease-out"),
+        ]),
+      ];
+    }
     // ---- 常時ループ(全長シームレス。at無視) ----
     case "breathing":
       return cycleTracks(duration, fps, p.cycleSeconds ?? 3.6, (t0, t1) => [
@@ -231,6 +313,37 @@ function buildPresetTracks(
       keys.push(k(duration, 0));
       return [tr("opacity", keys)];
     }
+    case "parallax-drift":
+      // 多層背景のパララックス用。direction で軸を選び、intensity を「奥行き」として
+      // レイヤーごとに変える(遠景=小さいintensity・長いcycleSeconds / 近景=大きいintensity・短いcycleSeconds)
+      return cycleTracks(duration, fps, p.cycleSeconds ?? 6, (t0, t1) => {
+        const axis: "x" | "y" = p.direction === "up" || p.direction === "down" ? "y" : "x";
+        const amp = (axis === "x" ? Math.max(20, abW * 0.05) : Math.max(12, abH * 0.05)) * i;
+        const baseVal = axis === "x" ? base.x : base.y;
+        return [tr(axis, [k(t0, baseVal - amp / 2), k((t0 + t1) / 2, baseVal + amp / 2, "ease-in-out"), k(t1, baseVal - amp / 2, "ease-in-out")])];
+      });
+    case "float-idle":
+      // アイドル呼吸+浮遊+微回転を位相をずらして合成する「生きた」ループ。
+      // 全プロパティが同位相で揺れると機械的に見えるため、ピーク位置を30/50/70%にずらす。
+      return cycleTracks(duration, fps, p.cycleSeconds ?? 4, (t0, t1) => {
+        const span = t1 - t0;
+        return [
+          tr("y", [k(t0, base.y), k(t0 + span * 0.5, base.y - 8 * i, "ease-in-out"), k(t1, base.y, "ease-in-out")]),
+          tr("rotation", [
+            k(t0, base.rotation - 1.5 * i),
+            k(t0 + span * 0.3, base.rotation + 1.5 * i, "ease-in-out"),
+            k(t0 + span * 0.75, base.rotation - 1 * i, "ease-in-out"),
+            k(t1, base.rotation - 1.5 * i, "ease-in-out"),
+          ]),
+          tr("scaleY", [k(t0, S), k(t0 + span * 0.7, (1 + 0.012 * i) * S, "ease-in-out"), k(t1, S, "ease-in-out")]),
+        ];
+      });
+    case "shimmer":
+      // stroke.trim{start,end} で幅を決めた「光の帯」を trimOffset で滑らせる定番ハイライト演出。
+      // 対象シェイプに stroke.trim を設定しておくこと(例: {start:0, end:0.18})。
+      return cycleTracks(duration, fps, p.cycleSeconds ?? 2.2, (t0, t1) => [
+        tr("trimOffset", [k(t0, 0, "linear"), k(t1, 1, "linear")]),
+      ]);
   }
 }
 

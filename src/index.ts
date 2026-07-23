@@ -16,6 +16,7 @@ import { readRiv } from "./rivBinary.js";
 import { lintRiv } from "./rivLint.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
+import { optimizeRiv } from "./rivOptimize.js";
 import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
@@ -957,6 +958,49 @@ server.registerTool(
   })
 );
 
+// ---- riv_optimize --------------------------------------------------------
+server.registerTool(
+  "riv_optimize",
+  {
+    title: "Optimize a .riv file (lossless)",
+    description:
+      "Shrink a .riv without changing its visual output: remove unreferenced objects (dangling easing interpolators, fired-events nothing points to, empty keyframe tracks left over from prior edits) and thin redundant keyframes on strictly-linear-interpolation runs within a tolerance. Only runs where every segment is linear are touched — any run touching hold/cubic easing is left alone, so no easing gets shifted (see keyed_property.cpp semantics: a KeyFrame's interpolationType applies to the segment going INTO the next frame). Colors and id-keyframes (soloActive) are never thinned, only numeric (KeyFrameDouble) tracks. All steps are opt-in booleans (default: all on) and idempotent/safe to run repeatedly. Use dryRun=true to see the removal/thinning plan without writing anything. Run riv_lint afterwards if in doubt.",
+    inputSchema: {
+      path: z.string().describe("Source .riv path"),
+      outPath: z.string().optional().describe("Output path (default: overwrite source)"),
+      removeUnreferenced: z.boolean().optional().describe("Remove unreferenced interpolators/events/empty tracks (default true)"),
+      thinKeyframes: z.boolean().optional().describe("Douglas-Peucker thin redundant keyframes on linear-only runs (default true)"),
+      tolerance: z.number().min(0).max(1).optional().describe("Thinning tolerance as a ratio of each track's own value range (default 0.01 = 1%, conservative)"),
+      dryRun: z.boolean().optional().describe("Report the plan only; don't write anything (default false)"),
+    },
+  },
+  wrap(
+    async ({ path, outPath, removeUnreferenced, thinKeyframes, tolerance, dryRun }: {
+      path: string;
+      outPath?: string;
+      removeUnreferenced?: boolean;
+      thinKeyframes?: boolean;
+      tolerance?: number;
+      dryRun?: boolean;
+    }) => {
+      const { bytes, abs } = loadRiv(path);
+      const { bytes: outBytes, report } = optimizeRiv(bytes, { removeUnreferenced, thinKeyframes, tolerance, dryRun });
+      if (dryRun) {
+        return { content: [{ type: "text", text: JSON.stringify(report, null, 1) }] };
+      }
+      const out = resolve(outPath ?? abs);
+      writeFileSync(out, outBytes);
+      const r = await host.renderFrames(Buffer.from(outBytes), { frameCount: 1, format: "png" });
+      return {
+        content: [
+          { type: "text", text: `Optimized -> ${out}\n${JSON.stringify(report, null, 1)}` },
+          { type: "image", data: r.frames[0], mimeType: "image/png" },
+        ],
+      };
+    }
+  )
+);
+
 // ---- riv_slice_image ---------------------------------------------------
 server.registerTool(
   "riv_slice_image",
@@ -1448,7 +1492,7 @@ server.registerTool(
   },
   wrap(async ({ port, peek }: { port?: number; peek?: boolean }) => {
     const p = port ?? 8787;
-    let data: { notes: Array<{ text: string; time: string }> };
+    let data: { notes: Array<{ text: string; time: string; context?: { selection?: string | null; artboard?: string | null; animation?: string | null; timeSec?: number | null } }> };
     try {
       const res = await fetch(`http://localhost:${p}/notes${peek ? "" : "?consume=1"}`);
       data = (await res.json()) as typeof data;
@@ -1462,7 +1506,18 @@ server.registerTool(
     if (!data.notes.length) {
       return { content: [{ type: "text", text: "No pending instructions from the Studio UI." }] };
     }
-    const lines = data.notes.map((n, i) => `${i + 1}. [${n.time.slice(11, 19)}] ${n.text}`);
+    const lines = data.notes.map((n, i) => {
+      const c = n.context;
+      const ctx = c
+        ? [
+            c.selection ? `selection=${c.selection}` : "",
+            c.artboard ? `artboard=${c.artboard}` : "",
+            c.animation ? `animation=${c.animation}` : "",
+            typeof c.timeSec === "number" ? `t=${c.timeSec.toFixed(2)}s` : "",
+          ].filter(Boolean).join(" ")
+        : "";
+      return `${i + 1}. [${n.time.slice(11, 19)}]${ctx ? ` (${ctx})` : ""} ${n.text}`;
+    });
     return {
       content: [{
         type: "text",

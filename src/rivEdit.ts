@@ -130,7 +130,7 @@ function artboardBoundsForPosition(objects: RivObject[], pos: number): { abStart
 
 // removePositions（アートボード内の配列position集合）を除去し、残存オブジェクトのローカル参照値を再マップする。
 // KeyedObject/KeyedProperty/KeyFrame* は他オブジェクトから参照されないため、除去自体に参照の巻き添えは無い。
-function removeAtPositions(
+export function removeAtPositions(
   objects: RivObject[],
   abStartPos: number,
   abEndPos: number,

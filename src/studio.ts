@@ -29,9 +29,17 @@ export interface StudioHandle {
   close: () => void;
 }
 
+export interface StudioNoteContext {
+  selection?: string | null; // 選択中オブジェクトの名前/id
+  artboard?: string | null;
+  animation?: string | null;
+  timeSec?: number | null; // タイムライン上の現在時刻（秒）
+}
+
 export interface StudioNote {
   text: string;
   time: string; // ISO
+  context?: StudioNoteContext; // 任意付加情報（後方互換: 既存フィールドはそのまま）
 }
 
 // シーンJSON内の pngPath / fonts[].path を bytes に解決（シーンファイルの場所基準）
@@ -245,9 +253,11 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         if (req.method === "POST") {
           readBody((body) => {
             try {
-              const { text } = JSON.parse(body) as { text?: string };
+              const { text, context } = JSON.parse(body) as { text?: string; context?: StudioNoteContext };
               if (typeof text === "string" && text.trim()) {
-                notes.push({ text: text.trim(), time: new Date().toISOString() });
+                const note: StudioNote = { text: text.trim(), time: new Date().toISOString() };
+                if (context && typeof context === "object") note.context = context;
+                notes.push(note);
               }
               send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true, pending: notes.length }));
             } catch (e) {
@@ -375,6 +385,8 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   #stage { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; background:
     repeating-conic-gradient(#17171c 0 25%, #101014 0 50%) 0 0/32px 32px; position:relative; overflow:hidden; }
   canvas { max-width:92%; max-height:92%; min-width:0; min-height:0; box-shadow:0 8px 24px rgba(0,0,0,.4); border-radius:4px; background:transparent; }
+  #onionCv { position:absolute; max-width:none; max-height:none; pointer-events:none; border-radius:4px; box-shadow:none; }
+  button.toggled { border-color:var(--accent); background:rgba(91,167,255,.18); color:#fff; }
   /* ---- 選択枠 ---- */
   #selBox { position:absolute; border:1px solid var(--accent); border-radius:2px; pointer-events:none; display:none; }
   #selBox.dragging { border-style:dashed; }
@@ -557,7 +569,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 </div>
 <div class="gutter" id="gutterL"></div>
 <div id="center">
-  <div id="stage"><canvas id="cv" width="800" height="600"></canvas><div id="selBox">
+  <div id="stage"><canvas id="cv" width="800" height="600"></canvas><canvas id="onionCv"></canvas><div id="selBox">
     <div class="rzHandle nw" data-corner="nw"></div>
     <div class="rzHandle ne" data-corner="ne"></div>
     <div class="rzHandle sw" data-corner="sw"></div>
@@ -579,6 +591,10 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <input type="range" id="zoom" min="0.25" max="3" step="0.05" value="1" style="max-width:110px">
     <button id="zoomReset" class="mini">1:1</button>
     <span class="toolbarSep"></span>
+    <button id="onionToggle" class="mini" data-i18n="onionBtn" data-i18n-title="onionBtnT"></button>
+    <input type="range" id="onionRange" min="0" max="5" step="1" value="2" style="max-width:70px" data-i18n-aria="onionRangeL">
+    <span id="onionRangeVal" class="badge">2</span>
+    <span class="toolbarSep"></span>
     <span class="hint" data-i18n="expL"></span>
     <button id="snap" class="mini" data-i18n="expPng" data-i18n-title="expPngT"></button>
     <button id="expApng" class="mini">APNG</button>
@@ -591,6 +607,10 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   <h2 data-i18n="hInspector"></h2>
   <div id="inspector"><div class="hint" data-i18n="noSel"></div></div>
   <h2><span data-i18n="hAI"></span> <span class="badge" id="notesBadge">0</span></h2>
+  <div class="row">
+    <input type="checkbox" id="aiCtxCheck" data-i18n-aria="aiCtxCheckA">
+    <span class="badge" id="aiCtxChip" style="flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-i18n-title="aiCtxChipT"></span>
+  </div>
   <textarea id="aiText" data-i18n-ph="aiPlaceholder"></textarea>
   <div class="row">
     <button id="aiSend" class="primary" data-i18n="aiSend"></button>
@@ -688,6 +708,9 @@ const I18N = {
     expNoAnim: 'エクスポートできるアニメーションがありません',
     kfEasingHint: 'easingは「このキーフレームへ向かう動き」を表します（前のキーフレームからの区間に適用）。elastic系はバネのように弾む動きになります。',
     kfFirstKeyHint: 'これはこのトラックの最初のキーフレームです。手前に区間が無いため、ここで設定したeasingは見た目に反映されません。',
+    onionBtn: 'オニオンスキン', onionBtnT: '前後フレームを半透明表示（再生中は自動オフ）', onionRangeL: 'オニオンスキンの範囲（前後フレーム数）',
+    aiCtxCheckA: '選択/時刻/アートボードを添付', aiCtxChipT: 'クリックで送信への添付をオン/オフ',
+    ctxSelPrefix: '選択: ', ctxNone: '(コンテキストなし)',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -738,6 +761,9 @@ const I18N = {
     expNoAnim: 'No animation to export',
     kfEasingHint: 'Easing describes the motion arriving at this keyframe (applied to the segment from the previous one). The elastic- options give a springy overshoot.',
     kfFirstKeyHint: 'This is the first keyframe on this track. There is no incoming segment, so any easing set here has no visible effect.',
+    onionBtn: 'Onion skin', onionBtnT: 'Ghost neighboring frames (auto-off while playing)', onionRangeL: 'Onion skin range (frames before/after)',
+    aiCtxCheckA: 'Attach selection / time / artboard', aiCtxChipT: 'Click to toggle attaching context to the sent note',
+    ctxSelPrefix: 'sel: ', ctxNone: '(no context)',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -868,11 +894,12 @@ function animLoopStep(ts) {
   animLastTs = ts;
   animCurT += dt;
   if (scrubDur > 0 && animCurT > scrubDur) animCurT = animCurT % scrubDur;
-  seekTo(animCurT);
+  seekTo(animCurT, { fromPlayback: true });
   animRafId = requestAnimationFrame(animLoopStep);
 }
 function startAnimLoopIfNeeded() {
   if (mode === 'anim' && !paused && animRafId == null) {
+    clearOnionCanvas(); // 再生中はオニオンスキンを自動オフ
     animLastTs = null;
     animRafId = requestAnimationFrame(animLoopStep);
   }
@@ -884,6 +911,7 @@ function boot(artboard, smName, animName) {
   if (r) { try { r.cleanup(); } catch {} r = null; }
   const myBoot = ++bootSeq;
   stopAnimLoop();
+  clearOnionCanvas(); // アートボード/SM/アニメ切替のたびにオニオンスキンの残像を消す
   paused = false; $('pauseBtn').textContent = '⏸';
   const opts = {
     src: '/file.riv?' + Date.now(),
@@ -894,6 +922,7 @@ function boot(artboard, smName, animName) {
       if (myBoot !== bootSeq) return;
       r.resizeDrawingSurfaceToCanvas();
       populate();
+      updateAiContextChip();
       const defaultSM = $('smSel').value;
       if (mode === 'sm' && !smName && defaultSM && defaultSM !== '-') {
         boot(artboard ?? r.activeArtboard, defaultSM);
@@ -1041,7 +1070,21 @@ function stageMap() {
     rect, stageRect,
   };
 }
+function positionOnionCanvas() {
+  const oc = $('onionCv');
+  if (!oc) return;
+  const rect = cv.getBoundingClientRect();
+  const stageRect = $('stage').getBoundingClientRect();
+  oc.style.left = (rect.left - stageRect.left) + 'px';
+  oc.style.top = (rect.top - stageRect.top) + 'px';
+  oc.style.width = rect.width + 'px';
+  oc.style.height = rect.height + 'px';
+  // 内部解像度が変わった場合のみ更新（キャンバスの内容がクリアされるため頻繁には触らない）
+  if (oc.width !== cv.width) oc.width = cv.width;
+  if (oc.height !== cv.height) oc.height = cv.height;
+}
 function drawSelBox() {
+  positionOnionCanvas();
   const box = $('selBox');
   if (!sel || sel.src !== 'scene') { box.style.display = 'none'; return; }
   const ab = abSpec();
@@ -1273,6 +1316,7 @@ function selectField(options, get, set) {
 }
 
 function renderInspector() {
+  updateAiContextChip();
   const box = $('inspector');
   box.textContent = '';
   if (keySel) {
@@ -1761,14 +1805,85 @@ window.addEventListener('pointerup', () => {
   }
   kfDrag = null;
 });
-function seekTo(tsec) {
+let curTimeSec = 0;
+function seekTo(tsec, opts) {
   tsec = Math.max(0, Math.min(scrubDur, tsec));
   try { r.scrub(scrubAnim, tsec); } catch {}
+  curTimeSec = tsec;
   $('scrub').value = scrubDur ? tsec / scrubDur : 0;
   $('time').textContent = tsec.toFixed(2) + 's';
   const pct = (100 * tsec / scrubDur) + '%';
   document.querySelectorAll('.tcur, .phead').forEach(c => { c.style.left = pct; });
+  updateAiContextChip();
+  if (!(opts && opts.fromPlayback)) scheduleOnionRender(tsec);
 }
+
+// ---- オニオンスキン（前後Nフレームを半透明重ね描画。既存の seek→描画パスを多重化） ------------
+let onionOn = localStorage.getItem('rive-mcp-onion-on') === '1';
+let onionN = Math.max(0, Math.min(5, Number(localStorage.getItem('rive-mcp-onion-n') ?? '2') || 0));
+const ONION_ALPHA = [0, 0.30, 0.15, 0.08, 0.04, 0.02]; // index = フレーム距離
+let onionBusy = false;
+let onionTimer = null;
+function clearOnionCanvas() {
+  const oc = $('onionCv');
+  if (!oc) return;
+  oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
+}
+function onionEligible() {
+  return onionOn && onionN > 0 && mode === 'anim' && !!sceneSpec && !!r;
+}
+function scheduleOnionRender(centerT) {
+  if (!onionEligible()) { clearOnionCanvas(); return; }
+  if (onionTimer) clearTimeout(onionTimer);
+  onionTimer = setTimeout(() => renderOnionSkin(centerT), 60);
+}
+async function renderOnionSkin(centerT) {
+  if (onionBusy || !onionEligible()) { if (!onionEligible()) clearOnionCanvas(); return; }
+  const anim = (abSpec()?.animations ?? []).find(a => a.name === scrubAnim);
+  if (!anim) { clearOnionCanvas(); return; }
+  onionBusy = true;
+  const oc = $('onionCv');
+  const octx = oc.getContext('2d');
+  octx.clearRect(0, 0, oc.width, oc.height);
+  const frameT = 1 / (anim.fps || 60);
+  try {
+    // 遠いフレームから描画し、近いフレームほど手前(不透明寄り)に重なるようにする
+    for (let d = onionN; d >= 1; d--) {
+      for (const dir of [-1, 1]) {
+        if (!onionEligible()) break;
+        const tt = centerT + dir * d * frameT;
+        if (tt < 0 || tt > scrubDur) continue;
+        try { r.scrub(scrubAnim, tt); } catch {}
+        await raf2();
+        octx.globalAlpha = ONION_ALPHA[Math.min(d, ONION_ALPHA.length - 1)];
+        octx.drawImage(cv, 0, 0, oc.width, oc.height);
+        octx.globalAlpha = 1;
+      }
+    }
+  } finally {
+    try { r.scrub(scrubAnim, centerT); } catch {}
+    await raf2();
+    onionBusy = false;
+  }
+}
+function syncOnionUI() {
+  $('onionToggle').classList.toggle('toggled', onionOn);
+  $('onionRange').value = onionN;
+  $('onionRangeVal').textContent = onionN;
+}
+$('onionToggle').onclick = () => {
+  onionOn = !onionOn;
+  localStorage.setItem('rive-mcp-onion-on', onionOn ? '1' : '0');
+  syncOnionUI();
+  if (onionOn) scheduleOnionRender(curTimeSec); else clearOnionCanvas();
+};
+$('onionRange').oninput = () => {
+  onionN = Number($('onionRange').value);
+  $('onionRangeVal').textContent = onionN;
+  localStorage.setItem('rive-mcp-onion-n', String(onionN));
+  if (onionOn) scheduleOnionRender(curTimeSec); else clearOnionCanvas();
+};
+syncOnionUI();
 
 // ---- 操作 ----------------------------------------------------------------------
 $('tabTree').onclick = () => { $('tabTree').classList.add('on'); $('tabPlay').classList.remove('on'); $('treeWrap').style.display = 'block'; $('playPane').style.display = 'none'; };
@@ -1969,11 +2084,46 @@ $('apply').onclick = async () => {
   else { log(t('rebuildNg') + res.error, 'error'); toast(t('rebuildNg') + res.error, 'err'); $('status').textContent = 'error'; }
 };
 
-// ---- AIへの指示 -----------------------------------------------------------------
+// ---- AIへの指示（現在の選択/時刻/アートボードを自動添付） --------------------------------
+function buildAiContext() {
+  let selection = null;
+  if (sel) {
+    if (sel.src === 'scene') selection = sel.obj.id ?? sel.obj.name ?? sel.kind;
+    else if (sel.src === 'riv') selection = sel.node.name ?? sel.node.type;
+  }
+  return {
+    selection,
+    artboard: ($('artboardSel').value || null),
+    animation: mode === 'anim' ? scrubAnim : null,
+    timeSec: mode === 'anim' ? Math.round(curTimeSec * 1000) / 1000 : null,
+  };
+}
+let aiAttachContext = localStorage.getItem('rive-mcp-ai-attach-ctx') !== '0';
+function updateAiContextChip() {
+  const chip = $('aiCtxChip');
+  const check = $('aiCtxCheck');
+  if (!chip || !check) return;
+  check.checked = aiAttachContext;
+  const ctx = buildAiContext();
+  const parts = [];
+  if (ctx.selection) parts.push(t('ctxSelPrefix') + ctx.selection);
+  if (ctx.artboard) parts.push(ctx.artboard);
+  if (ctx.animation) parts.push(ctx.animation + (ctx.timeSec != null ? ' @' + ctx.timeSec.toFixed(2) + 's' : ''));
+  chip.textContent = parts.length ? parts.join(' · ') : t('ctxNone');
+  chip.style.opacity = aiAttachContext ? '1' : '.45';
+}
+$('aiCtxCheck').onchange = () => {
+  aiAttachContext = $('aiCtxCheck').checked;
+  localStorage.setItem('rive-mcp-ai-attach-ctx', aiAttachContext ? '1' : '0');
+  updateAiContextChip();
+};
+updateAiContextChip();
 $('aiSend').onclick = async () => {
   const text = $('aiText').value.trim();
   if (!text) return;
-  const res = await (await fetch('/notes', { method: 'POST', body: JSON.stringify({ text }) })).json();
+  const payload = { text };
+  if (aiAttachContext) payload.context = buildAiContext();
+  const res = await (await fetch('/notes', { method: 'POST', body: JSON.stringify(payload) })).json();
   if (res.ok) {
     $('aiText').value = '';
     updateNotesBadge(res.pending);

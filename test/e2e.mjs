@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const RIV = join(root, "samples", "vehicles.riv");
@@ -78,7 +78,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 27 tools", names.length === 27, names.join(","));
+  check("tools/list has 28 tools", names.length === 28, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -519,6 +519,91 @@ try {
     "riv_edit setKeyframes mode=remove removes a keyframe (official runtime still loads it)",
     !kfRemoveMode.isError && textOf(kfRemoveMode).includes("setKeyframes remove"),
     textOf(kfRemoveMode).slice(0, 300)
+  );
+
+  // riv_optimize: vehicles.riv (実ファイル) を最適化 -> 同等以下のサイズ・パース可能・新規lint問題なし
+  const vehiclesBeforeSize = statSync(RIV).size;
+  const vehiclesLintBefore = await callTool("riv_lint", { path: RIV });
+  const vehiclesLintBeforeParsed = JSON.parse(textOf(vehiclesLintBefore));
+
+  const vehiclesOptOut = join(root, "samples", "e2e-optimize-vehicles.riv");
+  const vehiclesOpt = await callTool("riv_optimize", { path: RIV, outPath: vehiclesOptOut });
+  check("riv_optimize succeeds on vehicles.riv", !vehiclesOpt.isError, textOf(vehiclesOpt).slice(0, 300));
+  check(
+    "riv_optimize output is not larger than the source",
+    existsSync(vehiclesOptOut) && statSync(vehiclesOptOut).size <= vehiclesBeforeSize,
+    `before=${vehiclesBeforeSize} after=${existsSync(vehiclesOptOut) ? statSync(vehiclesOptOut).size : "missing"}`
+  );
+
+  const vehiclesDumpAfter = await callTool("riv_dump", { path: vehiclesOptOut });
+  const vehiclesDumpAfterParsed = JSON.parse(textOf(vehiclesDumpAfter));
+  check(
+    "riv_optimize output on vehicles.riv still parses cleanly with the official reader",
+    !vehiclesDumpAfter.isError && vehiclesDumpAfterParsed.parseError === null,
+    JSON.stringify(vehiclesDumpAfterParsed.parseError)
+  );
+
+  const vehiclesLintAfter = await callTool("riv_lint", { path: vehiclesOptOut });
+  const vehiclesLintAfterParsed = JSON.parse(textOf(vehiclesLintAfter));
+  check(
+    "riv_optimize introduces no new errors/warnings on vehicles.riv",
+    !vehiclesLintAfter.isError &&
+      vehiclesLintAfterParsed.errorCount === vehiclesLintBeforeParsed.errorCount &&
+      vehiclesLintAfterParsed.warningCount === vehiclesLintBeforeParsed.warningCount,
+    `before err=${vehiclesLintBeforeParsed.errorCount}/warn=${vehiclesLintBeforeParsed.warningCount} ` +
+      `after err=${vehiclesLintAfterParsed.errorCount}/warn=${vehiclesLintAfterParsed.warningCount}`
+  );
+
+  // riv_optimize: rivWriter.createRiv を直接importして生成した「冗長キーフレーム入り」ファイルの間引き検証
+  // (Windows の ESM import は file:// 絶対パス必須 -> pathToFileURL 経由。CLAUDE.md 落とし穴7 参照)
+  const { createRiv } = await import(pathToFileURL(join(root, "dist", "rivWriter.js")).href);
+  const redundantKeyframes = [];
+  for (let f = 0; f <= 100; f += 5) redundantKeyframes.push({ frame: f, value: f * 2 }); // 完全な直線 y=2x -> 中間点は全て冗長
+  const redundantScene = createRiv({
+    artboard: { name: "OptTest", width: 200, height: 200 },
+    shapes: [{ id: "box", type: "rect", x: 50, y: 50, width: 20, height: 20, fill: { color: "#e94560" } }],
+    animations: [
+      { name: "move", duration: 100, loop: "loop", tracks: [{ target: "box", property: "x", keyframes: redundantKeyframes }] },
+    ],
+  });
+  const redundantPath = join(root, "samples", "e2e-optimize-redundant.riv");
+  const fsMod = await import("node:fs");
+  fsMod.writeFileSync(redundantPath, redundantScene.bytes);
+  const redundantBeforeSize = statSync(redundantPath).size;
+
+  // dryRun: 計画のみ返し、ファイルは書き換えない
+  const optDry = await callTool("riv_optimize", { path: redundantPath, dryRun: true });
+  const optDryParsed = JSON.parse(textOf(optDry));
+  check(
+    "riv_optimize dryRun reports a thinning plan for the redundant track",
+    !optDry.isError && optDryParsed.dryRun === true && optDryParsed.thinned.length >= 1 && optDryParsed.after.keyframeCount < optDryParsed.before.keyframeCount,
+    textOf(optDry).slice(0, 400)
+  );
+  check(
+    "riv_optimize dryRun does not modify the source file",
+    statSync(redundantPath).size === redundantBeforeSize,
+    `before=${redundantBeforeSize} after=${statSync(redundantPath).size}`
+  );
+
+  // 実行: 21キーフレームの完全な直線 -> 始点・終点のみ(2キーフレーム)に間引かれるはず
+  const redundantOptOut = join(root, "samples", "e2e-optimize-redundant-out.riv");
+  const optRun = await callTool("riv_optimize", { path: redundantPath, outPath: redundantOptOut });
+  check("riv_optimize thins the redundant track", !optRun.isError && textOf(optRun).includes("Optimized ->"), textOf(optRun).slice(0, 300));
+
+  const redundantDumpAfter = await callTool("riv_dump", { path: redundantOptOut, full: true });
+  const redundantDumpAfterParsed = JSON.parse(textOf(redundantDumpAfter));
+  const kfAfterCount = (redundantDumpAfterParsed.objects || []).filter((o) => o.typeName === "KeyFrameDouble").length;
+  check(
+    "riv_optimize collapses the fully-linear track to its 2 endpoints",
+    !redundantDumpAfter.isError && redundantDumpAfterParsed.parseError === null && kfAfterCount === 2,
+    `kfAfterCount=${kfAfterCount}`
+  );
+
+  const redundantLintAfter = await callTool("riv_lint", { path: redundantOptOut });
+  check(
+    "riv_optimize output for the redundant-keyframe file has no lint errors",
+    !redundantLintAfter.isError && JSON.parse(textOf(redundantLintAfter)).errorCount === 0,
+    textOf(redundantLintAfter).slice(0, 300)
   );
 
   // riv_visual_diff: 同一ファイル同士 -> 一致率100% / 編集後ファイルとの比較 -> 100%未満
