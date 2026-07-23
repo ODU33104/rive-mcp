@@ -809,6 +809,55 @@ try {
     JSON.stringify(kfFrame30Restored)
   );
 
+  // /sm: SMグラフビュー用のノードグラフJSON（genPathの"Flow": entry->idle, idle->moving(active条件)）
+  const smRes = await fetch("http://localhost:8797/sm").then((r2) => r2.json()).catch(() => null);
+  const genAb = smRes?.artboards?.find((a) => a.name === "Gen");
+  const flowSm = genAb?.stateMachines?.find((s) => s.name === "Flow");
+  check("/sm finds the artboard and state machine", !!flowSm, JSON.stringify(smRes)?.slice(0, 200));
+  check(
+    "/sm reports the declared input",
+    flowSm?.inputs?.length === 1 && flowSm.inputs[0].name === "active" && flowSm.inputs[0].type === "bool",
+    JSON.stringify(flowSm?.inputs)
+  );
+  const flowLayer = flowSm?.layers?.[0];
+  check("/sm defaults the layer name to 'Layer 1'", flowLayer?.name === "Layer 1", JSON.stringify(flowLayer?.name));
+  const idleState = flowLayer?.states?.find((s) => s.name === "still");
+  const movingState = flowLayer?.states?.find((s) => s.name === "wobble");
+  check(
+    "/sm resolves AnimationState node names to their animation name (idle->still, moving->wobble)",
+    idleState?.kind === "AnimationState" && movingState?.kind === "AnimationState",
+    JSON.stringify(flowLayer?.states)
+  );
+  check("/sm: reachable states are not flagged unreachable", idleState?.unreachable !== true && movingState?.unreachable !== true);
+  const entryToIdle = flowLayer?.transitions?.find((t) => t.source === 0 && t.target === idleState?.id);
+  const idleToMoving = flowLayer?.transitions?.find((t) => t.source === idleState?.id && t.target === movingState?.id);
+  check("/sm: entry->idle transition has no conditions", !!entryToIdle && entryToIdle.conditions.length === 0, JSON.stringify(entryToIdle));
+  check(
+    "/sm: idle->moving transition carries the bool condition on 'active' with op '=='",
+    idleToMoving?.conditions?.[0]?.inputName === "active" && idleToMoving.conditions[0].opLabel === "==",
+    JSON.stringify(idleToMoving)
+  );
+  check("/sm: no false-positive selfLoopRisk on a well-formed SM", !flowSm.layers.some((l) => l.transitions.some((t) => t.selfLoopRisk)));
+
+  // /sm: 到達不能state・条件なし自己遷移のハイライト用フラグ(rivLintの findings と同じファイルで再検証)
+  const brokenStudio = await callTool("riv_studio", { path: lintBrokenPath, port: 8798 });
+  check("riv_studio (broken SM fixture) starts", !brokenStudio.isError);
+  const smBrokenRes = await fetch("http://localhost:8798/sm").then((r2) => r2.json()).catch(() => null);
+  const brokenSm = smBrokenRes?.artboards?.[0]?.stateMachines?.find((s) => s.name === "Broken");
+  const brokenLayer = brokenSm?.layers?.[0];
+  check(
+    "/sm flags the unreachable 'orphan' state (matches riv_lint's state#4 finding)",
+    brokenLayer?.states?.some((s) => s.name === "still" && s.unreachable === true && s.id === 4),
+    JSON.stringify(brokenLayer?.states)
+  );
+  check(
+    "/sm flags the unconditional self-transition (matches riv_lint's infinite-loop-risk finding)",
+    brokenLayer?.transitions?.some((t) => t.source === t.target && t.selfLoopRisk === true),
+    JSON.stringify(brokenLayer?.transitions)
+  );
+  const brokenStopped = await callTool("riv_studio", { path: lintBrokenPath, stop: true });
+  check("riv_studio (broken SM fixture) stops", !brokenStopped.isError && textOf(brokenStopped).includes("stopped"));
+
   const stopped = await callTool("riv_studio", { path: genPath, stop: true });
   check("riv_studio stops", !stopped.isError && textOf(stopped).includes("stopped"));
 

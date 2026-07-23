@@ -209,6 +209,177 @@ function buildAnimJson(bytes: Uint8Array, artboardName: string, animationName: s
   };
 }
 
+// /sm: 全アートボード×ステートマシンをノードグラフ用JSONへ変換（SMグラフビュー用）
+// state id 採番: Entry=0/Any=1/Exit=2固定、以降はAnimationState/BlendState1DInputの出現順(3~)。
+// source=直前に書いたstate、target=stateToId。rivLint.ts の lintStateMachinesAndKeyframes と同一の
+// トラバース規約（docs/riv-format.md の参照semantics表で検証済み）。
+// リント連動: 到達不能state(unreachable)・条件/exitTime無しの自己遷移(selfLoopRisk)はここで判定して埋め込む。
+const CONDITION_OP_LABELS = ["==", "!=", "<=", ">=", "<", ">"];
+function conditionOpLabel(op: unknown): string {
+  return typeof op === "number" && CONDITION_OP_LABELS[op] !== undefined ? CONDITION_OP_LABELS[op] : "?";
+}
+
+export function buildSmJson(bytes: Uint8Array): unknown {
+  const dump = readRiv(bytes, { tolerant: true });
+  const artboards: Array<Record<string, unknown>> = [];
+
+  let abName = "";
+  let abStateMachines: Array<Record<string, unknown>> = [];
+  let inAb = false;
+  let animNames: string[] = [];
+
+  let smName = "";
+  let smInputs: Array<{ name: string; type: string }> = [];
+  let smLayers: Array<Record<string, unknown>> = [];
+  let inSm = false;
+  let declaringInputs = false;
+
+  let layerName = "";
+  let layerCounter = 0;
+  let inLayer = false;
+  let stateCounter = 3;
+  let states: Array<Record<string, unknown>> = [];
+  let currentStateIdx: number | null = null;
+  let incoming = new Map<number, number>();
+  let transitions: Array<Record<string, unknown>> = [];
+  let lastTransition: Record<string, unknown> | null = null;
+
+  const finalizeLayer = () => {
+    if (!inLayer) return;
+    for (const s of states) {
+      const id = s.id as number;
+      if (id >= 3) s.unreachable = (incoming.get(id) ?? 0) === 0;
+    }
+    for (const tr of transitions) {
+      const conds = tr.conditions as unknown[];
+      tr.selfLoopRisk = tr.source === tr.target && conds.length === 0 && !tr.hasExitTime;
+    }
+    smLayers.push({ name: layerName, states, transitions });
+    inLayer = false;
+  };
+  const finalizeSm = () => {
+    finalizeLayer();
+    if (inSm) abStateMachines.push({ name: smName, inputs: smInputs, layers: smLayers });
+    inSm = false;
+    declaringInputs = false;
+  };
+  const finalizeAb = () => {
+    finalizeSm();
+    if (inAb) artboards.push({ name: abName, stateMachines: abStateMachines });
+    inAb = false;
+  };
+
+  for (const o of dump.objects) {
+    if (o.typeName === "Artboard") {
+      finalizeAb();
+      abName = (o.properties.name as string) ?? `Artboard ${artboards.length}`;
+      abStateMachines = [];
+      animNames = [];
+      inAb = true;
+      continue;
+    }
+    if (!inAb) continue;
+    if (o.typeName === "LinearAnimation") {
+      animNames.push((o.properties.name as string) ?? `animation${animNames.length}`);
+      continue;
+    }
+    if (o.typeName === "StateMachine") {
+      finalizeSm();
+      smName = (o.properties.name as string) ?? "StateMachine";
+      smInputs = [];
+      smLayers = [];
+      layerCounter = 0;
+      inSm = true;
+      declaringInputs = true;
+      continue;
+    }
+    if (!inSm) continue;
+    if (declaringInputs && ["StateMachineBool", "StateMachineNumber", "StateMachineTrigger"].includes(o.typeName)) {
+      smInputs.push({
+        name: (o.properties.name as string) ?? `input${smInputs.length}`,
+        type: o.typeName.replace("StateMachine", "").toLowerCase(),
+      });
+      continue;
+    }
+    if (o.typeName === "StateMachineLayer") {
+      finalizeLayer();
+      declaringInputs = false;
+      layerCounter++;
+      layerName = (o.properties.name as string) ?? `Layer ${layerCounter}`;
+      inLayer = true;
+      stateCounter = 3;
+      states = [
+        { id: 0, kind: "Entry", name: "Entry" },
+        { id: 1, kind: "Any", name: "Any" },
+        { id: 2, kind: "Exit", name: "Exit" },
+      ];
+      currentStateIdx = null;
+      incoming = new Map();
+      transitions = [];
+      lastTransition = null;
+      continue;
+    }
+    if (!inLayer) continue;
+    if (o.typeName === "EntryState") {
+      currentStateIdx = 0;
+      continue;
+    }
+    if (o.typeName === "AnyState") {
+      currentStateIdx = 1;
+      continue;
+    }
+    if (o.typeName === "ExitState") {
+      currentStateIdx = 2;
+      continue;
+    }
+    if (o.typeName === "AnimationState" || o.typeName === "BlendState1DInput") {
+      currentStateIdx = stateCounter;
+      let name = `state#${currentStateIdx}`;
+      let animationName: string | null = null;
+      if (o.typeName === "AnimationState" && typeof o.properties.animationId === "number") {
+        animationName = animNames[o.properties.animationId as number] ?? null;
+        if (animationName) name = animationName;
+      } else if (o.typeName === "BlendState1DInput") {
+        name = `blend#${currentStateIdx}`;
+      }
+      states.push({ id: currentStateIdx, kind: o.typeName, name, animationName, objectIndex: o.index });
+      stateCounter++;
+      continue;
+    }
+    if (o.typeName === "StateTransition" && currentStateIdx !== null) {
+      const target = o.properties.stateToId as number;
+      incoming.set(target, (incoming.get(target) ?? 0) + 1);
+      const tr = {
+        source: currentStateIdx,
+        target,
+        duration: (o.properties.duration as number) ?? 0,
+        exitTime: (o.properties.exitTime as number | undefined) ?? null,
+        hasExitTime: o.properties.exitTime !== undefined,
+        conditions: [] as unknown[],
+        selfLoopRisk: false,
+        objectIndex: o.index,
+      };
+      transitions.push(tr);
+      lastTransition = tr;
+      continue;
+    }
+    if (/^Transition(Bool|Number|Trigger)Condition$/.test(o.typeName) && lastTransition) {
+      const inputId = o.properties.inputId as number | undefined;
+      const input = typeof inputId === "number" ? smInputs[inputId] : undefined;
+      (lastTransition.conditions as unknown[]).push({
+        inputName: input?.name ?? (typeof inputId === "number" ? `input#${inputId}` : "?"),
+        inputType: input?.type ?? "?",
+        op: (o.properties.opValue as number | undefined) ?? null,
+        opLabel: conditionOpLabel(o.properties.opValue),
+        value: o.properties.value ?? null,
+      });
+      continue;
+    }
+  }
+  finalizeAb();
+  return { artboards };
+}
+
 let current: {
   server: Server;
   watchers: FSWatcher[];
@@ -338,6 +509,11 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         const data = buildAnimJson(new Uint8Array(readFileSync(rivPath)), artboard, animation);
         if (!data) return send(404, "application/json; charset=utf-8", JSON.stringify({ error: "artboard/animation not found" }));
         return send(200, "application/json; charset=utf-8", JSON.stringify(data));
+      }
+      // /sm: SMグラフビュー用の全アートボード×ステートマシン構造
+      if (url.pathname === "/sm") {
+        if (!existsSync(rivPath)) return send(404, "application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
+        return send(200, "application/json; charset=utf-8", JSON.stringify(buildSmJson(new Uint8Array(readFileSync(rivPath)))));
       }
       if (url.pathname === "/events") {
         res.writeHead(200, {
@@ -614,6 +790,32 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     margin:0; padding:0 4px; font-size:11.5px; color:var(--text-dim); }
   #leftTabs button.on { background:var(--panel-2); color:var(--text); }
   #playPane { display:none; padding:12px; overflow-y:auto; flex:1; }
+  #graphPane { display:none; padding:12px; overflow-y:auto; flex:1; }
+  .legendRow { display:flex; align-items:center; gap:6px; margin:4px 0; font-size:11.5px; color:var(--text-dim); }
+  .legendSwatch { width:12px; height:12px; border-radius:3px; flex-shrink:0; border:1.5px solid var(--border); }
+  .findRow { padding:5px 6px; border-radius:var(--radius-s); font-size:11.5px; cursor:pointer; margin:2px 0; border-left:3px solid transparent; }
+  .findRow:hover { background:var(--panel-2); }
+  .findRow.err { border-left-color:var(--accent-2); color:var(--accent-2); }
+  .findRow.warn { border-left-color:var(--warn); color:var(--warn); }
+  #graphDetails .gdTitle { font-weight:600; color:var(--accent); margin-bottom:4px; }
+  #graphDetails .gdRow { display:flex; justify-content:space-between; gap:8px; padding:2px 0; color:var(--text-dim); }
+  #graphDetails .gdCond { background:var(--panel-2); border-radius:var(--radius-s); padding:4px 6px; margin:3px 0; font-family:var(--mono); font-size:11px; }
+  /* ---- SM グラフ (ステージ上のSVGオーバーレイ) ---- */
+  #smGraphSvg { position:absolute; inset:0; width:100%; height:100%; display:none; touch-action:none; background:var(--bg); }
+  .smNode rect { fill:var(--panel-2); stroke:var(--border); stroke-width:1.5; }
+  .smNode.entry rect, .smNode.exit rect, .smNode.any rect { stroke:var(--text-dim); stroke-dasharray:3,2; }
+  .smNode text { fill:var(--text); font:11.5px/1 var(--font); }
+  .smNode .smBadge { fill:var(--text-dim); font:9.5px var(--mono); }
+  .smNode.unreachable rect { stroke:var(--accent-2); stroke-width:2; }
+  .smNode.active rect { stroke:var(--ok); stroke-width:2.5; }
+  .smNode.selected rect { stroke:var(--accent); stroke-width:2.5; }
+  .smNode { cursor:grab; }
+  .smNode:active { cursor:grabbing; }
+  .smEdge path { fill:none; stroke:var(--text-faint); stroke-width:1.4; cursor:pointer; }
+  .smEdge:hover path { stroke:var(--accent); }
+  .smEdge.selfLoopRisk path { stroke:var(--warn); stroke-width:2; }
+  .smEdge.selected path { stroke:var(--accent); stroke-width:2.5; }
+  .smLayerLabel { fill:var(--text-dim); font:11px var(--font); text-transform:uppercase; letter-spacing:.06em; }
   /* ---- 初回ガイド（右下カード） ---- */
   #guide { position:fixed; right:16px; bottom:16px; z-index:8; width:300px; background:var(--panel);
     border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:12px;
@@ -688,6 +890,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   <div id="leftTabs">
     <button id="tabTree" class="on" data-i18n="tabTree"></button>
     <button id="tabPlay" data-i18n="tabPlay"></button>
+    <button id="tabGraph" data-i18n="tabGraph"></button>
   </div>
   <div id="treeWrap"></div>
   <div id="playPane">
@@ -704,6 +907,19 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
       <button id="backSM" data-i18n="backSM"></button>
     </div>
   </div>
+  <div id="graphPane">
+    <h2 data-i18n="hGraph"></h2>
+    <div class="hint" data-i18n="graphHint"></div>
+    <div class="row"><button id="graphResetLayout" class="mini" data-i18n="graphReset"></button></div>
+    <div class="legendRow"><span class="legendSwatch" style="border-style:dashed"></span><span data-i18n="graphLegendFixed"></span></div>
+    <div class="legendRow"><span class="legendSwatch" style="border-color:var(--accent-2)"></span><span data-i18n="graphLegendUnreachable"></span></div>
+    <div class="legendRow"><span class="legendSwatch" style="border-color:var(--warn)"></span><span data-i18n="graphLegendSelfLoop"></span></div>
+    <div class="legendRow"><span class="legendSwatch" style="border-color:var(--ok)"></span><span data-i18n="graphLegendActive"></span></div>
+    <h2 data-i18n="hGraphFindings"></h2>
+    <div id="graphFindings"><span class="hint">-</span></div>
+    <h2 data-i18n="hGraphDetails"></h2>
+    <div id="graphDetails"><div class="hint" data-i18n="graphNoSel"></div></div>
+  </div>
 </div>
 <div class="gutter" id="gutterL"></div>
 <div id="center">
@@ -712,7 +928,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <div class="rzHandle ne" data-corner="ne"></div>
     <div class="rzHandle sw" data-corner="sw"></div>
     <div class="rzHandle se" data-corner="se"></div>
-  </div></div>
+  </div><svg id="smGraphSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
   <div id="timeline"></div>
   <div id="toolbar">
     <button id="pauseBtn" class="mini icon" data-i18n-aria="pauseA">⏸</button>
@@ -803,7 +1019,17 @@ const I18N = {
     guide2: 'キャンバスのオブジェクトをクリック/ドラッグ、右のインスペクタで数値・色を微調整',
     guide3: '大きな修正は右の「AIへの指示」に書いて送信 → Claude に「スタジオの指示を見て」',
     close: '閉じる', clear: 'クリア',
-    tabTree: '階層', tabPlay: '再生 / SM',
+    tabTree: '階層', tabPlay: '再生 / SM', tabGraph: 'SMグラフ',
+    hGraph: 'SM グラフ', graphHint: 'ノードをドラッグして配置（自動保存）。エッジ/ノードをクリックすると下に詳細が出ます。',
+    graphReset: 'レイアウトをリセット',
+    graphLegendFixed: 'Entry / Any / Exit（固定ノード）', graphLegendUnreachable: '到達不能 state',
+    graphLegendSelfLoop: '条件/exitTimeなしの自己遷移', graphLegendActive: '再生中のアクティブ state',
+    hGraphFindings: 'リント結果', hGraphDetails: '詳細',
+    graphNoSel: 'ノード/エッジ未選択 — グラフ上でクリックすると詳細が出ます',
+    graphNoSm: 'このアートボードにステートマシンがありません',
+    graphUnreachable: '到達不能', graphSelfLoopRisk: '無限ループの恐れ（条件・exitTimeなしの自己遷移）',
+    graphNoFindings: '問題なし', graphTransition: '遷移 (Transition)',
+    graphDuration: 'duration', graphExitTime: 'exitTime', graphNoCondition: '条件なし（無条件で遷移）',
     hArtboard: 'アートボード / ステートマシン', hInputs: 'SM 入力',
     hAnim: 'アニメーション（単体再生）', hAI: 'AIへの指示', hLog: 'イベントログ',
     hScene: 'シーンJSON（上級者向け）', hInspector: 'インスペクタ',
@@ -860,7 +1086,17 @@ const I18N = {
     guide2: 'Click / drag objects on the canvas, fine-tune numbers & colors in the Inspector',
     guide3: 'For bigger changes, write into "Instructions for AI" and tell Claude "check the studio notes"',
     close: 'Close', clear: 'Clear',
-    tabTree: 'Hierarchy', tabPlay: 'Play / SM',
+    tabTree: 'Hierarchy', tabPlay: 'Play / SM', tabGraph: 'SM Graph',
+    hGraph: 'SM Graph', graphHint: 'Drag nodes to arrange them (auto-saved). Click a node/edge for details below.',
+    graphReset: 'Reset layout',
+    graphLegendFixed: 'Entry / Any / Exit (fixed nodes)', graphLegendUnreachable: 'Unreachable state',
+    graphLegendSelfLoop: 'Self-transition with no condition/exitTime', graphLegendActive: 'Currently active state',
+    hGraphFindings: 'Lint findings', hGraphDetails: 'Details',
+    graphNoSel: 'Nothing selected — click a node or edge in the graph for details',
+    graphNoSm: 'This artboard has no state machine',
+    graphUnreachable: 'Unreachable', graphSelfLoopRisk: 'Infinite-loop risk (self-transition, no condition/exitTime)',
+    graphNoFindings: 'No issues', graphTransition: 'Transition',
+    graphDuration: 'duration', graphExitTime: 'exitTime', graphNoCondition: 'No condition (unconditional transition)',
     hArtboard: 'Artboard / State Machine', hInputs: 'SM Inputs',
     hAnim: 'Animation (solo play)', hAI: 'Instructions for AI', hLog: 'Event Log',
     hScene: 'Scene JSON (advanced)', hInspector: 'Inspector',
@@ -926,6 +1162,8 @@ document.getElementById('langBtn').onclick = () => {
   lang = lang === 'ja' ? 'en' : 'ja';
   localStorage.setItem('rive-mcp-lang', lang);
   applyLang(); renderInputs(); buildTree(); renderInspector();
+  renderGraphFindings(); renderGraphDetails();
+  if (graphMode) renderSmGraph();
 };
 
 // ---- 基本状態 ----------------------------------------------------------------
@@ -962,6 +1200,10 @@ let r = null, mode = 'sm', scrubAnim = null, scrubDur = 1, paused = false;
 let sceneSpec = null;       // シーンJSONモード時の spec（編集の正本）
 let imageSizes = {};        // 画像id → natural size
 let gTree = null;           // rivのみモードの構造（/tree）
+let gSm = null;             // SMグラフ用の全アートボード×ステートマシン構造（/sm。scene/rivのみ両モード共通）
+let graphMode = false;      // 左タブ「SMグラフ」がアクティブか（ステージのcanvasに代わりSVGを表示）
+let graphSel = null;        // {kind:'state', layerName, id, s} | {kind:'transition', layerName, tr}
+let graphActiveNames = [];  // SM実行中: StateChangeイベントで報告された現在アクティブなstate名（ハイライト用）
 let sel = null;             // {src:'scene', kind, obj} | {src:'riv', node}
 let keySel = null;          // {tr, k, riv?} 選択中のキーフレーム/区間（タイムライン）。riv:true = rivのみモード
 let rivAnimData = null;     // rivのみモード: /anim のレスポンス（現在のアートボード/アニメーション）
@@ -1070,6 +1312,7 @@ async function loadState() {
   if (!sceneSpec) {
     try { gTree = await (await fetch('/tree')).json(); } catch { gTree = null; }
   }
+  try { gSm = await (await fetch('/sm')).json(); } catch { gSm = null; }
   return st;
 }
 function updateNotesBadge(n) {
@@ -1111,6 +1354,7 @@ function boot(artboard, smName, animName) {
   if (r) { try { r.cleanup(); } catch {} r = null; }
   const myBoot = ++bootSeq;
   rivAnimData = null; // アートボード/SM/アニメ切替・再読込のたびに /anim キャッシュを破棄
+  graphActiveNames = []; // 切替のたびにSMグラフのアクティブstateハイライトをリセット
   stopAnimLoop();
   clearOnionCanvas(); // アートボード/SM/アニメ切替のたびにオニオンスキンの残像を消す
   paused = false; $('pauseBtn').textContent = '⏸';
@@ -1148,7 +1392,11 @@ function boot(artboard, smName, animName) {
   else if (animName) { opts.animations = animName; }
   r = new rive.Rive(opts);
   r.on(rive.EventType.RiveEvent, (e) => log('event: ' + JSON.stringify(e.data), 'event'));
-  r.on(rive.EventType.StateChange, (e) => log('state: ' + JSON.stringify(e.data), 'state'));
+  r.on(rive.EventType.StateChange, (e) => {
+    log('state: ' + JSON.stringify(e.data), 'state');
+    graphActiveNames = Array.isArray(e.data) ? e.data : [];
+    if (graphMode) updateGraphActiveHighlight();
+  });
 }
 
 function setOptions(sel_, names, selected) {
@@ -1169,6 +1417,8 @@ function populate() {
   setOptions($('animSel'), ab?.animations ?? []);
   renderInputs();
   buildTree();
+  renderGraphFindings();
+  if (graphMode) renderSmGraph();
 }
 
 function renderInputs() {
@@ -2421,9 +2671,378 @@ $('onionRange').oninput = () => {
 };
 syncOnionUI();
 
+// ---- SM グラフ（ステートマシンのノードグラフビュー。公式エディタ相当の差別化機能） -------------
+// レイアウト: Entry(id0)/Any(id1)を起点にBFSした深さを列とする簡易階層レイアウト（外部ライブラリ不使用）。
+// ノード位置はドラッグで上書き可能で、rivファイル名+アートボード+SM+レイヤー+state id単位でlocalStorageへ保存する。
+const GRAPH_NODE_W = 148, GRAPH_NODE_H = 44;
+function svgEl(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) for (const k in attrs) el.setAttribute(k, String(attrs[k]));
+  return el;
+}
+function ensureSmGraphDefs() {
+  const svg = $('smGraphSvg');
+  if (svg.querySelector('defs')) return;
+  const defs = svgEl('defs', {});
+  const marker = svgEl('marker', { id: 'smArrow', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' });
+  const path = svgEl('path', { d: 'M0,0 L8,4 L0,8 z' });
+  path.style.fill = 'var(--text-faint)';
+  marker.appendChild(path);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+}
+function graphPosKey(smName, layerName, stateId) {
+  return 'rive-mcp-graph-pos:' + rivName + ':' + ($('artboardSel').value || '') + ':' + smName + ':' + layerName + ':' + stateId;
+}
+function loadGraphPos(smName, layerName, stateId) {
+  try {
+    const raw = localStorage.getItem(graphPosKey(smName, layerName, stateId));
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (typeof p.x === 'number' && typeof p.y === 'number') return p;
+  } catch {}
+  return null;
+}
+function saveGraphPos(smName, layerName, stateId, x, y) {
+  try { localStorage.setItem(graphPosKey(smName, layerName, stateId), JSON.stringify({ x: x, y: y })); } catch {}
+}
+function currentSmEntry() {
+  if (!gSm || !gSm.artboards || !gSm.artboards.length) return { ab: null, sm: null };
+  const ab = gSm.artboards.find((a) => a.name === $('artboardSel').value) || gSm.artboards[0];
+  if (!ab || !ab.stateMachines || !ab.stateMachines.length) return { ab: ab || null, sm: null };
+  const smv = $('smSel').value;
+  const sm = ab.stateMachines.find((s) => s.name === smv) || ab.stateMachines[0];
+  return { ab, sm };
+}
+// Entry/Anyを深さ0として遷移先へBFS。到達できなかったstateは末尾列にまとめる（unreachableと視覚的に符合）
+function layoutLayer(layer) {
+  const outEdges = new Map();
+  for (const s of layer.states) outEdges.set(s.id, []);
+  for (const tr of layer.transitions) {
+    if (outEdges.has(tr.source) && tr.source !== tr.target) outEdges.get(tr.source).push(tr.target);
+  }
+  const depth = new Map();
+  const queue = [];
+  for (const rootId of [0, 1]) {
+    if (layer.states.some((s) => s.id === rootId)) { depth.set(rootId, 0); queue.push(rootId); }
+  }
+  while (queue.length) {
+    const cur = queue.shift();
+    const d = depth.get(cur);
+    for (const next of (outEdges.get(cur) || [])) {
+      if (!depth.has(next)) { depth.set(next, d + 1); queue.push(next); }
+    }
+  }
+  let maxDepth = 0;
+  for (const d of depth.values()) maxDepth = Math.max(maxDepth, d);
+  const cols = new Map();
+  for (const s of layer.states) {
+    const d = depth.has(s.id) ? depth.get(s.id) : maxDepth + 1;
+    if (!cols.has(d)) cols.set(d, []);
+    cols.get(d).push(s.id);
+  }
+  const sortedCols = Array.from(cols.keys()).sort((a, b) => a - b);
+  const colGap = 76, rowGap = 24, pad = 20;
+  const positions = new Map();
+  let maxRows = 1;
+  sortedCols.forEach((d, ci) => {
+    const ids = cols.get(d);
+    maxRows = Math.max(maxRows, ids.length);
+    ids.forEach((id, ri) => {
+      positions.set(id, { x: pad + ci * (GRAPH_NODE_W + colGap), y: pad + ri * (GRAPH_NODE_H + rowGap) });
+    });
+  });
+  const width = pad * 2 + sortedCols.length * GRAPH_NODE_W + Math.max(0, sortedCols.length - 1) * colGap;
+  const height = pad * 2 + maxRows * GRAPH_NODE_H + Math.max(0, maxRows - 1) * rowGap;
+  return { positions: positions, width: width, height: height };
+}
+function stateBadge(kind) { return kind === 'BlendState1DInput' ? 'BLEND' : ''; }
+function truncateLabel(s, n) {
+  s = String(s == null ? '' : s);
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+function anchorPoint(pos, towardX, towardY) {
+  const cx = pos.x + GRAPH_NODE_W / 2, cy = pos.y + GRAPH_NODE_H / 2;
+  const dx = towardX - cx, dy = towardY - cy;
+  if (Math.abs(dx) > Math.abs(dy)) return { x: cx + (dx >= 0 ? 1 : -1) * GRAPH_NODE_W / 2, y: cy };
+  return { x: cx, y: cy + (dy >= 0 ? 1 : -1) * GRAPH_NODE_H / 2 };
+}
+function bindGraphNodeDrag(g, smName, layerName, stateId) {
+  let dragging = null;
+  const toSvgPoint = (e) => {
+    const svg = $('smGraphSvg');
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    return ctm ? pt.matrixTransform(ctm.inverse()) : null;
+  };
+  g.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    const loc = toSvgPoint(e);
+    if (!loc) return;
+    const m = g.transform.baseVal.getItem(0).matrix;
+    dragging = { startX: loc.x, startY: loc.y, origX: m.e, origY: m.f };
+    g.setPointerCapture(e.pointerId);
+  });
+  g.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const loc = toSvgPoint(e);
+    if (!loc) return;
+    const nx = dragging.origX + (loc.x - dragging.startX);
+    const ny = dragging.origY + (loc.y - dragging.startY);
+    g.setAttribute('transform', 'translate(' + nx + ',' + ny + ')');
+  });
+  const finish = (e) => {
+    if (!dragging) return;
+    const loc = toSvgPoint(e);
+    const nx = loc ? dragging.origX + (loc.x - dragging.startX) : dragging.origX;
+    const ny = loc ? dragging.origY + (loc.y - dragging.startY) : dragging.origY;
+    dragging = null;
+    saveGraphPos(smName, layerName, stateId, Math.round(nx), Math.round(ny));
+    renderSmGraph();
+  };
+  g.addEventListener('pointerup', finish);
+  g.addEventListener('pointercancel', finish);
+}
+function renderSmNode(smName, layer, s, layout) {
+  const pos = layout.positions.get(s.id) || { x: 20, y: 20 };
+  const cls = ['smNode'];
+  if (s.kind === 'Entry') cls.push('entry'); else if (s.kind === 'Any') cls.push('any'); else if (s.kind === 'Exit') cls.push('exit');
+  if (s.unreachable) cls.push('unreachable');
+  const g = svgEl('g', { class: cls.join(' '), transform: 'translate(' + pos.x + ',' + pos.y + ')' });
+  g.dataset.stateId = String(s.id);
+  g.dataset.layer = layer.name;
+  g.dataset.name = s.animationName || s.name;
+  g.appendChild(svgEl('rect', { x: 0, y: 0, width: GRAPH_NODE_W, height: GRAPH_NODE_H, rx: 8 }));
+  const badge = stateBadge(s.kind);
+  const label = svgEl('text', { x: 10, y: badge ? 20 : (GRAPH_NODE_H / 2 + 4) });
+  label.textContent = truncateLabel(s.name, 17);
+  g.appendChild(label);
+  if (badge) {
+    const bt = svgEl('text', { x: 10, y: 34, class: 'smBadge' });
+    bt.textContent = badge;
+    g.appendChild(bt);
+  }
+  if (s.unreachable) {
+    const warn = svgEl('text', { x: GRAPH_NODE_W - 14, y: 16, class: 'smBadge' });
+    warn.setAttribute('fill', 'var(--accent-2)');
+    warn.textContent = '!';
+    g.appendChild(warn);
+  }
+  bindGraphNodeDrag(g, smName, layer.name, s.id);
+  g.addEventListener('click', (e) => { e.stopPropagation(); selectGraphState(smName, layer, s); });
+  return g;
+}
+function renderSmEdge(smName, layer, tr, layout) {
+  const srcPos = layout.positions.get(tr.source);
+  const dstPos = layout.positions.get(tr.target);
+  if (!srcPos || !dstPos) return null;
+  const cls = ['smEdge'];
+  if (tr.selfLoopRisk) cls.push('selfLoopRisk');
+  const g = svgEl('g', { class: cls.join(' ') });
+  g.dataset.layer = layer.name;
+  g.dataset.trIndex = String(tr.objectIndex);
+  let d;
+  if (tr.source === tr.target) {
+    const cx = srcPos.x + GRAPH_NODE_W, cy = srcPos.y + GRAPH_NODE_H / 2;
+    d = 'M ' + cx + ' ' + (cy - 10) + ' C ' + (cx + 30) + ' ' + (cy - 26) + ' ' + (cx + 30) + ' ' + (cy + 26) + ' ' + cx + ' ' + (cy + 10);
+  } else {
+    const srcC = { x: srcPos.x + GRAPH_NODE_W / 2, y: srcPos.y + GRAPH_NODE_H / 2 };
+    const dstC = { x: dstPos.x + GRAPH_NODE_W / 2, y: dstPos.y + GRAPH_NODE_H / 2 };
+    const p0 = anchorPoint(srcPos, dstC.x, dstC.y);
+    const p1 = anchorPoint(dstPos, srcC.x, srcC.y);
+    const mx = (p0.x + p1.x) / 2;
+    d = 'M ' + p0.x + ' ' + p0.y + ' C ' + mx + ' ' + p0.y + ' ' + mx + ' ' + p1.y + ' ' + p1.x + ' ' + p1.y;
+  }
+  const path = svgEl('path', { d: d, 'marker-end': 'url(#smArrow)' });
+  g.appendChild(path);
+  g.addEventListener('click', (e) => { e.stopPropagation(); selectGraphTransition(smName, layer, tr); });
+  return g;
+}
+function renderSmGraph() {
+  const svg = $('smGraphSvg');
+  svg.textContent = '';
+  ensureSmGraphDefs();
+  const { sm } = currentSmEntry();
+  if (!sm || !sm.layers || !sm.layers.length) {
+    const msg = svgEl('text', { x: 16, y: 26 });
+    msg.setAttribute('fill', 'var(--text-dim)');
+    msg.textContent = t('graphNoSm');
+    svg.appendChild(msg);
+    svg.setAttribute('viewBox', '0 0 400 60');
+    renderGraphFindings();
+    return;
+  }
+  let offsetY = 0;
+  let totalW = 0;
+  const layerBoxes = [];
+  for (const layer of sm.layers) {
+    const layout = layoutLayer(layer);
+    for (const s of layer.states) {
+      const saved = loadGraphPos(sm.name, layer.name, s.id);
+      if (saved) layout.positions.set(s.id, saved);
+    }
+    layerBoxes.push({ layer: layer, layout: layout, y0: offsetY });
+    offsetY += layout.height + 32;
+    totalW = Math.max(totalW, layout.width);
+  }
+  svg.setAttribute('viewBox', '0 0 ' + Math.max(360, totalW) + ' ' + offsetY);
+  for (const box of layerBoxes) {
+    const layer = box.layer, layout = box.layout, y0 = box.y0;
+    const label = svgEl('text', { x: 4, y: y0 + 12, class: 'smLayerLabel' });
+    label.textContent = layer.name;
+    svg.appendChild(label);
+    const g = svgEl('g', { transform: 'translate(0,' + (y0 + 22) + ')' });
+    svg.appendChild(g);
+    for (const tr of layer.transitions) {
+      const gEdge = renderSmEdge(sm.name, layer, tr, layout);
+      if (gEdge) g.appendChild(gEdge);
+    }
+    for (const s of layer.states) g.appendChild(renderSmNode(sm.name, layer, s, layout));
+  }
+  updateGraphActiveHighlight();
+  updateGraphSelectionHighlight();
+  renderGraphFindings();
+}
+function updateGraphActiveHighlight() {
+  const svg = $('smGraphSvg');
+  svg.querySelectorAll('.smNode').forEach((el) => el.classList.remove('active'));
+  if (!graphActiveNames || !graphActiveNames.length) return;
+  svg.querySelectorAll('.smNode').forEach((el) => {
+    if (el.dataset.name && graphActiveNames.indexOf(el.dataset.name) !== -1) el.classList.add('active');
+  });
+}
+function updateGraphSelectionHighlight() {
+  const svg = $('smGraphSvg');
+  svg.querySelectorAll('.smNode').forEach((el) => el.classList.remove('selected'));
+  svg.querySelectorAll('.smEdge').forEach((el) => el.classList.remove('selected'));
+  if (!graphSel) return;
+  if (graphSel.kind === 'state') {
+    svg.querySelectorAll('.smNode').forEach((el) => {
+      if (el.dataset.layer === graphSel.layerName && Number(el.dataset.stateId) === graphSel.id) el.classList.add('selected');
+    });
+  } else if (graphSel.kind === 'transition') {
+    svg.querySelectorAll('.smEdge').forEach((el) => {
+      if (el.dataset.layer === graphSel.layerName && Number(el.dataset.trIndex) === graphSel.tr.objectIndex) el.classList.add('selected');
+    });
+  }
+}
+function selectGraphState(smName, layer, s) {
+  graphSel = { kind: 'state', layerName: layer.name, id: s.id, s: s };
+  updateGraphSelectionHighlight();
+  renderGraphDetails();
+}
+function selectGraphTransition(smName, layer, tr) {
+  graphSel = { kind: 'transition', layerName: layer.name, tr: tr };
+  updateGraphSelectionHighlight();
+  renderGraphDetails();
+}
+function renderGraphDetails() {
+  const box = $('graphDetails');
+  if (!box) return;
+  box.textContent = '';
+  if (!graphSel) {
+    const h = document.createElement('div'); h.className = 'hint'; h.textContent = t('graphNoSel');
+    box.appendChild(h);
+    return;
+  }
+  if (graphSel.kind === 'state') {
+    const s = graphSel.s;
+    const title = document.createElement('div'); title.className = 'gdTitle'; title.textContent = s.name + ' (' + s.kind + ')';
+    box.appendChild(title);
+    if (s.unreachable) {
+      const w = document.createElement('div'); w.className = 'findRow err'; w.textContent = t('graphUnreachable');
+      box.appendChild(w);
+    }
+  } else {
+    const tr = graphSel.tr;
+    const title = document.createElement('div'); title.className = 'gdTitle'; title.textContent = t('graphTransition');
+    box.appendChild(title);
+    const row = (label, val) => {
+      const r = document.createElement('div'); r.className = 'gdRow';
+      const l = document.createElement('span'); l.textContent = label;
+      const v = document.createElement('span'); v.textContent = val;
+      r.appendChild(l); r.appendChild(v);
+      box.appendChild(r);
+    };
+    row(t('graphDuration'), tr.duration + 'ms');
+    row(t('graphExitTime'), tr.hasExitTime ? tr.exitTime + 'ms' : '-');
+    if (tr.selfLoopRisk) {
+      const w = document.createElement('div'); w.className = 'findRow warn'; w.textContent = t('graphSelfLoopRisk');
+      box.appendChild(w);
+    }
+    if (!tr.conditions.length) {
+      const c = document.createElement('div'); c.className = 'hint'; c.textContent = t('graphNoCondition');
+      box.appendChild(c);
+    } else {
+      for (const c of tr.conditions) {
+        const cd = document.createElement('div'); cd.className = 'gdCond';
+        cd.textContent = c.inputName + ' ' + c.opLabel + (c.value != null ? ' ' + c.value : '') + '  [' + c.inputType + ']';
+        box.appendChild(cd);
+      }
+    }
+  }
+}
+function renderGraphFindings() {
+  const box = $('graphFindings');
+  if (!box) return;
+  box.textContent = '';
+  const sm = currentSmEntry().sm;
+  if (!sm) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = '-'; box.appendChild(h); return; }
+  let any = false;
+  for (const layer of sm.layers) {
+    for (const s of layer.states) {
+      if (s.unreachable) {
+        any = true;
+        const row = document.createElement('div'); row.className = 'findRow err';
+        row.textContent = t('graphUnreachable') + ': ' + s.name;
+        row.onclick = () => selectGraphState(sm.name, layer, s);
+        box.appendChild(row);
+      }
+    }
+    for (const tr of layer.transitions) {
+      if (tr.selfLoopRisk) {
+        any = true;
+        const srcState = layer.states.find((s) => s.id === tr.source);
+        const row = document.createElement('div'); row.className = 'findRow warn';
+        row.textContent = t('graphSelfLoopRisk') + ': ' + (srcState ? srcState.name : tr.source);
+        row.onclick = () => selectGraphTransition(sm.name, layer, tr);
+        box.appendChild(row);
+      }
+    }
+  }
+  if (!any) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = t('graphNoFindings'); box.appendChild(h); }
+}
+$('graphResetLayout').onclick = () => {
+  const sm = currentSmEntry().sm;
+  if (!sm) return;
+  const prefix = 'rive-mcp-graph-pos:' + rivName + ':' + ($('artboardSel').value || '') + ':' + sm.name + ':';
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf(prefix) === 0) toRemove.push(k);
+  }
+  toRemove.forEach((k) => localStorage.removeItem(k));
+  graphSel = null;
+  renderSmGraph();
+  renderGraphDetails();
+};
+
 // ---- 操作 ----------------------------------------------------------------------
-$('tabTree').onclick = () => { $('tabTree').classList.add('on'); $('tabPlay').classList.remove('on'); $('treeWrap').style.display = 'block'; $('playPane').style.display = 'none'; };
-$('tabPlay').onclick = () => { $('tabPlay').classList.add('on'); $('tabTree').classList.remove('on'); $('treeWrap').style.display = 'none'; $('playPane').style.display = 'block'; };
+function showLeftPane(which) {
+  $('tabTree').classList.toggle('on', which === 'tree');
+  $('tabPlay').classList.toggle('on', which === 'play');
+  $('tabGraph').classList.toggle('on', which === 'graph');
+  $('treeWrap').style.display = which === 'tree' ? 'block' : 'none';
+  $('playPane').style.display = which === 'play' ? 'block' : 'none';
+  $('graphPane').style.display = which === 'graph' ? 'block' : 'none';
+  graphMode = which === 'graph';
+  $('smGraphSvg').style.display = graphMode ? 'block' : 'none';
+  if (graphMode) renderSmGraph();
+}
+$('tabTree').onclick = () => showLeftPane('tree');
+$('tabPlay').onclick = () => showLeftPane('play');
+$('tabGraph').onclick = () => showLeftPane('graph');
 $('artboardSel').onchange = () => { mode = 'sm'; sel = null; boot($('artboardSel').value); renderTimeline(); };
 $('smSel').onchange = () => { mode = 'sm'; const v = $('smSel').value; boot($('artboardSel').value, v && v !== '-' ? v : undefined); };
 $('playAnim').onclick = () => {
@@ -2726,6 +3345,8 @@ sse.onmessage = (e) => {
       if (!sceneSpec && mode === 'anim' && scrubAnim) await loadRivAnim();
       restoreKeySelId(wasKeySel);
       buildTree(); renderInspector(); drawSelBox(); renderTimeline();
+      renderGraphFindings();
+      if (graphMode) renderSmGraph();
     });
   } else if (e.data === 'notes-taken') {
     updateNotesBadge(0);
