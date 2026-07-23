@@ -8,7 +8,7 @@ rive-mcp is a free MCP (Model Context Protocol) server that gives Claude (or any
 
 Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) inside headless Chromium, so what you see is exactly what ships.
 
-![Studio screenshot](docs/media/studio.png)
+![Studio screenshot](docs/media/studio-overview-en.png)
 
 <p align="center"><img src="docs/media/showcase-weather.gif" width="380" alt="Weather widget built by the tokens → pro-assets → presets → critique pipeline (artwork: Twemoji)"></p>
 <p align="center"><i>This animation was generated entirely by <code>riv_create</code> — no Rive editor involved.</i></p>
@@ -127,11 +127,43 @@ Requires Node.js 20+.
 
 Works without a scene JSON too: any `.riv` can be edited property-by-property through the hierarchy + inspector.
 
+![Studio in motion — state machine graph, curve editor, onion skin](docs/media/studio-v04.gif)
+
+### Feature tour
+
+**Timeline / dope sheet** — per-track keyframes with seek, zoom and playback-speed control.
+
+![Timeline](docs/media/studio-timeline-en.png)
+
+**Bezier curve editor** — pick a keyframe span, drag the control points, or apply one of 10 easing presets. Switch any span between hold / linear / cubic.
+
+![Curve editor](docs/media/studio-curve-en.png)
+
+**State machine graph view** — layers, states and transitions as a node graph; click a transition to see its duration / exitTime / conditions. Lint-integrated: unreachable states are red, unconditional self-transitions yellow, and the active state glows during playback.
+
+![State machine graph](docs/media/studio-smgraph-en.png)
+
+**State machine playground** — flip bool inputs and fire triggers from the browser to watch transitions happen.
+
+![State machine inputs](docs/media/studio-sm-inputs-en.png)
+
+**Onion skinning** — ghost the surrounding 0–5 frames with distance-based opacity to check motion arcs at a glance.
+
+![Onion skin](docs/media/studio-onion-en.png)
+
+**Direct editing** — select in the hierarchy or on the canvas, then edit position / rotation / scale / colors / text in the inspector with undo/redo.
+
+![Inspector editing](docs/media/studio-edit-en.png)
+
+**Instructions for AI** — type a change request and it ships with your current selection, artboard, animation and playhead time auto-attached; the AI picks it up via `riv_studio_notes`.
+
+![Instructions for AI](docs/media/studio-notes-en.png)
+
 ## One-click export
 
 Click PNG / APNG / GIF / WebM in the Studio toolbar to render the current animation on the spot — no MCP round-trip needed for a quick preview export.
 
-![Export panel](docs/media/studio-export.png)
+![Export panel](docs/media/studio-export-en.png)
 
 ## Character animation
 

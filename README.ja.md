@@ -4,7 +4,7 @@
 
 エディタ不要・完全無料・ローカル完結の Rive (`.riv`) MCP サーバー。
 
-![Studio スクリーンショット](docs/media/studio-ja.png)
+![Studio スクリーンショット](docs/media/studio-overview.png)
 
 <p align="center"><img src="docs/media/showcase-weather.gif" width="380" alt="トークン→プロ素材→プリセット→critiqueパイプラインで生成した天気ウィジェット（アートワーク: Twemoji）"></p>
 <p align="center"><i>このアニメーションは <code>riv_create</code> だけで生成（Riveエディタ不使用）</i></p>
@@ -149,6 +149,38 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 2. **直接さわる** — キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色/テキストを変更（即時反映）。イージングはベジェカーブエディタで、State Machineの遷移はグラフビューで直接確認・編集できる。オニオンスキンをオンにすれば前後のフレームを重ねて動きを一目でチェックできる
 3. **AIに頼む** — 大きな変更は「AIへの指示」ボックスに書いて送信（選択中オブジェクト・アートボード・時刻などのコンテキストが自動添付される）→ チャットで「スタジオの指示を確認して」
 4. AIが `riv_edit` / `riv_create` で修正すると、ブラウザは自動で最新状態に更新される
+
+![Studio の新機能 — SMグラフ・カーブエディタ・オニオンスキン](docs/media/studio-v04-ja.gif)
+
+### 機能ツアー
+
+**タイムライン / ドープシート** — トラックごとのキーフレームを一覧・シーク。ズームと再生速度切替付き。
+
+![タイムライン](docs/media/studio-timeline.png)
+
+**ベジェカーブエディタ** — キーフレーム区間を選んで制御点をドラッグ。hold / linear / cubic 切替と定番プリセット10種。
+
+![カーブエディタ](docs/media/studio-curve.png)
+
+**State Machine グラフビュー** — レイヤー・状態・遷移をノードグラフで表示。遷移クリックで duration / exitTime / 条件を確認。リント連動で到達不能 state は赤、条件なし自己遷移は黄、再生中のアクティブ state は緑にハイライト。
+
+![SMグラフビュー](docs/media/studio-smgraph.png)
+
+**State Machine 実行パネル** — bool の ON/OFF・trigger の発火をブラウザから操作して遷移を確認。
+
+![SM実行パネル](docs/media/studio-sm-inputs.png)
+
+**オニオンスキン** — 前後 0〜5 フレームを距離に応じた濃さで重ね表示。動きの軌跡が一目で分かる。
+
+![オニオンスキン](docs/media/studio-onion.png)
+
+**直接編集** — 階層ツリーやキャンバスで選択し、インスペクタで位置・回転・スケール・色・テキストを即時変更（undo/redo 対応）。
+
+![インスペクタ編集](docs/media/studio-edit.png)
+
+**AIへの指示** — 修正依頼を書いて送ると、選択中オブジェクト・アートボード・アニメーション・再生時刻が自動で添付され、AI 側が `riv_studio_notes` で受け取る。
+
+![AIへの指示](docs/media/studio-notes.png)
 
 ## ワンクリック書き出し
 
