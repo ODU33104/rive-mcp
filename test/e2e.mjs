@@ -646,6 +646,89 @@ try {
   });
   check("riv_rig_character generates rig", !rig.isError && textOf(rig).includes("idle"), textOf(rig).slice(0, 250));
 
+  // カーブエディタ (rivEdit.setKeyframeCurve): 直接importして無損失編集の核ロジックを検証
+  // (Windows の ESM import は file:// 絶対パス必須 -> pathToFileURL 経由。CLAUDE.md 落とし穴7 参照)
+  const { setKeyframeCurve } = await import(pathToFileURL(join(root, "dist", "rivEdit.js")).href);
+  const { readRiv: readRivDirect } = await import(pathToFileURL(join(root, "dist", "rivBinary.js")).href);
+  // a/x と b/x の両方に同名イージング(ease-in-out)を使わせ、rivWriterに同一interpolatorを共有させる
+  const curveScene = createRiv({
+    artboard: { name: "CurveTest", width: 200, height: 200 },
+    shapes: [
+      { id: "a", type: "rect", x: 50, y: 50, width: 20, height: 20, fill: { color: "#e94560" } },
+      { id: "b", type: "rect", x: 100, y: 50, width: 20, height: 20, fill: { color: "#45e960" } },
+    ],
+    animations: [
+      {
+        name: "anim", duration: 10, loop: "loop",
+        tracks: [
+          { target: "a", property: "x", keyframes: [{ frame: 0, value: 0 }, { frame: 10, value: 100, easing: "ease-in-out" }] },
+          { target: "b", property: "x", keyframes: [{ frame: 0, value: 0 }, { frame: 10, value: 50, easing: "ease-in-out" }] },
+        ],
+      },
+    ],
+  });
+  // 挿入(クローン)が起きるとオブジェクトの.indexは総入れ替わりになるため、以降は常に
+  // 「frame===undefinedのKeyFrameDouble」を出現順(=a, b)で引き直す。stale indexを使い回さない。
+  const findShiftedKfs = (dump) => dump.objects.filter((o) => o.typeName === "KeyFrameDouble" && o.properties.frame === undefined);
+  const interpOf = (dump, kfObj) => dump.objects[dump.objects.findIndex((o) => o.typeName === "Artboard") + kfObj.properties.interpolatorId];
+
+  const dumpBefore = readRivDirect(curveScene.bytes);
+  const kfObjsBefore = findShiftedKfs(dumpBefore);
+  check("curve test fixture has 2 shifted keyframes sharing one interpolator", kfObjsBefore.length === 2);
+  check(
+    "fixture: both tracks reference the same interpolator (dedup by rivWriter)",
+    kfObjsBefore[0].properties.interpolatorId === kfObjsBefore[1].properties.interpolatorId,
+    `${kfObjsBefore[0].properties.interpolatorId} vs ${kfObjsBefore[1].properties.interpolatorId}`
+  );
+
+  const afterCubicEdit = setKeyframeCurve(curveScene.bytes, { keyframeIndex: kfObjsBefore[0].index, type: "cubic", cubic: [0.1, 0.2, 0.3, 0.4] });
+  const dumpAfterCubic = readRivDirect(afterCubicEdit.bytes);
+  const [aObjAfter, bObjAfter] = findShiftedKfs(dumpAfterCubic);
+  const aInterpAfter = interpOf(dumpAfterCubic, aObjAfter);
+  const bInterpAfter = interpOf(dumpAfterCubic, bObjAfter);
+  check(
+    "setKeyframeCurve(cubic) clones the interpolator instead of mutating a shared one",
+    aObjAfter.properties.interpolatorId !== bObjAfter.properties.interpolatorId,
+    `a->${aObjAfter.properties.interpolatorId} b->${bObjAfter.properties.interpolatorId}`
+  );
+  check(
+    "setKeyframeCurve(cubic) writes the new control points on the cloned interpolator",
+    Math.abs(aInterpAfter.properties.x1 - 0.1) < 1e-4 && Math.abs(aInterpAfter.properties.y2 - 0.4) < 1e-4,
+    JSON.stringify(aInterpAfter.properties)
+  );
+  check(
+    "the other track's shared interpolator is untouched (no cross-segment corruption)",
+    Math.abs(bInterpAfter.properties.x1 - 0.42) < 1e-4 && Math.abs(bInterpAfter.properties.y2 - 1) < 1e-4,
+    JSON.stringify(bInterpAfter.properties)
+  );
+
+  // 同じ(今は排他的な)interpolatorへの2回目以降の編集はin-placeで再利用される（クローンが増殖しない）
+  const afterSecondCubicEdit = setKeyframeCurve(afterCubicEdit.bytes, { keyframeIndex: aObjAfter.index, type: "cubic", cubic: [0.5, 0.6, 0.7, 0.8] });
+  const dumpAfterSecond = readRivDirect(afterSecondCubicEdit.bytes);
+  const [aObjSecond] = findShiftedKfs(dumpAfterSecond);
+  check(
+    "a subsequent cubic edit on an already-exclusive interpolator reuses it in place (no growth)",
+    dumpAfterSecond.objects.filter((o) => o.typeName === "CubicEaseInterpolator").length ===
+      dumpAfterCubic.objects.filter((o) => o.typeName === "CubicEaseInterpolator").length,
+    `${dumpAfterSecond.objects.filter((o) => o.typeName === "CubicEaseInterpolator").length} vs ${dumpAfterCubic.objects.filter((o) => o.typeName === "CubicEaseInterpolator").length}`
+  );
+  const aInterpSecond = interpOf(dumpAfterSecond, aObjSecond);
+  check(
+    "the reused interpolator's control points reflect the second edit",
+    Math.abs(aInterpSecond.properties.x1 - 0.5) < 1e-4,
+    JSON.stringify(aInterpSecond.properties)
+  );
+
+  const afterLinearEdit = setKeyframeCurve(afterSecondCubicEdit.bytes, { keyframeIndex: aObjSecond.index, type: "linear" });
+  const dumpAfterLinear = readRivDirect(afterLinearEdit.bytes);
+  const [aObjLinear] = findShiftedKfs(dumpAfterLinear);
+  check("setKeyframeCurve(linear) sets interpolationType=1", aObjLinear.properties.interpolationType === 1);
+
+  const afterHoldEdit = setKeyframeCurve(afterLinearEdit.bytes, { keyframeIndex: aObjLinear.index, type: "hold" });
+  const dumpAfterHold = readRivDirect(afterHoldEdit.bytes);
+  const [aObjHold] = findShiftedKfs(dumpAfterHold);
+  check("setKeyframeCurve(hold) sets interpolationType=0", aObjHold.properties.interpolationType === 0);
+
   // riv_studio: 起動→/state→停止
   const studio = await callTool("riv_studio", { path: genPath, port: 8797 });
   check("riv_studio starts", !studio.isError && textOf(studio).includes("http://localhost:8797/"));
@@ -659,6 +742,73 @@ try {
   check("riv_studio_notes fetches instructions", !notesRes.isError && textOf(notesRes).includes("テスト指示"), textOf(notesRes).slice(0, 150));
   const notesEmpty = await callTool("riv_studio_notes", { port: 8797 });
   check("riv_studio_notes consumes queue", !notesEmpty.isError && textOf(notesEmpty).includes("No pending"), textOf(notesEmpty).slice(0, 100));
+
+  // /anim + /curve: カーブエディタのHTTP面（genPathの"wobble"アニメには dot/scaleX に
+  // 実際の ease-in-out CubicEaseInterpolator が入っている = riv_create 時にシフト書き込み済み）
+  const genBytesBefore = fsMod.readFileSync(genPath);
+  const animRes = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json()).catch(() => null);
+  check("/anim serves tracks for the riv-only timeline", !!animRes?.tracks?.length, JSON.stringify(animRes)?.slice(0, 150));
+  const scaleTrack = animRes?.tracks?.find((tr) => tr.propertyName === "scaleX");
+  check("/anim resolves target name and property name", scaleTrack?.targetName === "dot", JSON.stringify(scaleTrack)?.slice(0, 200));
+  const kfSegFrame0 = scaleTrack?.keyframes?.find((k) => k.frame === 0);
+  const kfFrame30 = scaleTrack?.keyframes?.find((k) => k.frame === 30);
+  check("/anim: first keyframe has no incoming segment (editTargetIndex=null)", kfSegFrame0 && kfSegFrame0.editTargetIndex === null);
+  check(
+    "/anim: segment arriving at frame30 resolves the existing ease-in-out cubic interpolator",
+    kfFrame30?.segment?.interpolator?.kind === "cubic" &&
+      Math.abs(kfFrame30.segment.interpolator.x1 - 0.42) < 1e-3 &&
+      Math.abs(kfFrame30.segment.interpolator.y2 - 1) < 1e-3,
+    JSON.stringify(kfFrame30)
+  );
+  check("/anim: editTargetIndex for frame30's segment is a real object index (the shifted keyframe)", typeof kfFrame30?.editTargetIndex === "number");
+
+  const curveRes = await fetch("http://localhost:8797/curve", {
+    method: "POST",
+    body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "cubic", cubic: [0.1, 0.1, 0.9, 0.9] }),
+  }).then((r2) => r2.json());
+  check("/curve applies a cubic edit", curveRes.ok === true, JSON.stringify(curveRes));
+
+  const animAfter = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const scaleTrackAfter = animAfter.tracks.find((tr) => tr.propertyName === "scaleX");
+  const kfFrame30After = scaleTrackAfter.keyframes.find((k) => k.frame === 30);
+  const kfFrame60After = scaleTrackAfter.keyframes.find((k) => k.frame === 60);
+  check(
+    "/curve edit is reflected by /anim (control points updated)",
+    Math.abs(kfFrame30After.segment.interpolator.x1 - 0.1) < 1e-3 && Math.abs(kfFrame30After.segment.interpolator.y2 - 0.9) < 1e-3,
+    JSON.stringify(kfFrame30After)
+  );
+  check(
+    "the adjacent segment (frame30->60) is untouched by the frame0->30 edit",
+    kfFrame60After.segment.interpolationType === 1,
+    JSON.stringify(kfFrame60After)
+  );
+  const rotationTrackAfter = animAfter.tracks.find((tr) => tr.propertyName === "rotation");
+  check("an unrelated track (sq/rotation) is unaffected by the curve edit", !!rotationTrackAfter, JSON.stringify(rotationTrackAfter)?.slice(0, 150));
+
+  // /curve: hold/linear への切替
+  const curveHoldRes = await fetch("http://localhost:8797/curve", {
+    method: "POST",
+    body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "hold" }),
+  }).then((r2) => r2.json());
+  check("/curve applies a hold edit", curveHoldRes.ok === true, JSON.stringify(curveHoldRes));
+  const animAfterHold = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const kfFrame30Hold = animAfterHold.tracks.find((tr) => tr.propertyName === "scaleX").keyframes.find((k) => k.frame === 30);
+  check("/anim reflects the hold interpolationType", kfFrame30Hold.segment.interpolationType === 0, JSON.stringify(kfFrame30Hold));
+
+  // /riv-restore: Undo相当（rivのみモードのUndo/Redoが依拠するエンドポイント）でファイルを丸ごと差し戻す
+  const restoreRes = await fetch("http://localhost:8797/riv-restore", {
+    method: "POST",
+    body: JSON.stringify({ bytesBase64: genBytesBefore.toString("base64") }),
+  }).then((r2) => r2.json());
+  check("/riv-restore accepts a snapshot", restoreRes.ok === true, JSON.stringify(restoreRes));
+  const animAfterRestore = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const kfFrame30Restored = animAfterRestore.tracks.find((tr) => tr.propertyName === "scaleX").keyframes.find((k) => k.frame === 30);
+  check(
+    "/riv-restore reverts the file to the pre-edit snapshot",
+    Math.abs(kfFrame30Restored.segment.interpolator.x1 - 0.42) < 1e-3 && Math.abs(kfFrame30Restored.segment.interpolator.y2 - 1) < 1e-3,
+    JSON.stringify(kfFrame30Restored)
+  );
+
   const stopped = await callTool("riv_studio", { path: genPath, stop: true });
   check("riv_studio stops", !stopped.isError && textOf(stopped).includes("stopped"));
 

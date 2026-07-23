@@ -10,8 +10,8 @@ import { readFileSync, writeFileSync, existsSync, watch, type FSWatcher } from "
 import { join, dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRiv, pngSize, type SceneSpec } from "./rivWriter.js";
-import { readRiv, propInfo } from "./rivBinary.js";
-import { editRiv, type EditOp } from "./rivEdit.js";
+import { readRiv, propInfo, type RivObject } from "./rivBinary.js";
+import { editRiv, setKeyframeCurve, type EditOp } from "./rivEdit.js";
 import { encodeApng } from "./apng.js";
 import { encodeGif } from "./gif.js";
 
@@ -114,6 +114,99 @@ function buildTreeJson(bytes: Uint8Array): unknown {
     });
   }
   return { artboards };
+}
+
+// /anim: 指定アートボード/アニメーションのトラック+キーフレーム+補間器をJSON化（rivのみモードのカーブエディタ用）
+// KeyFrame の interpolationType/interpolatorId は「そのフレームから次フレームへの区間」に適用される
+// (CLAUDE.md 落とし穴6) ため、UI上「キーフレームkへ向かう区間」として提示する値は
+// 直前キーフレームの生プロパティから読む（editTargetIndex = 直前キーフレームのグローバルindex）。
+// 先頭キーフレームには入ってくる区間が無いため editTargetIndex は null。
+const KEYFRAME_LIKE = new Set(["KeyFrameDouble", "KeyFrameColor", "KeyFrameId", "KeyFrameBool", "KeyFrameString", "KeyFrameUint"]);
+function buildAnimJson(bytes: Uint8Array, artboardName: string, animationName: string): unknown | null {
+  const dump = readRiv(bytes, { tolerant: true });
+  const objs = dump.objects; // 配列position === .index（readRivは欠番なく逐次採番）
+  const abPos = objs.findIndex((o) => o.typeName === "Artboard" && (o.properties.name ?? "") === artboardName);
+  if (abPos === -1) return null;
+  let abEnd = objs.length;
+  for (let i = abPos + 1; i < objs.length; i++) {
+    if (objs[i].typeName === "Artboard") { abEnd = i; break; }
+  }
+  let animPos = -1;
+  for (let i = abPos + 1; i < abEnd; i++) {
+    if (objs[i].typeName === "LinearAnimation" && objs[i].properties.name === animationName) { animPos = i; break; }
+  }
+  if (animPos === -1) return null;
+  let blockEnd = abEnd;
+  for (let i = animPos + 1; i < abEnd; i++) {
+    if (objs[i].typeName === "LinearAnimation" || objs[i].typeName === "StateMachine") { blockEnd = i; break; }
+  }
+  const anim = objs[animPos];
+  const interpKeyName = (o: RivObject) => {
+    if (o.typeName === "CubicEaseInterpolator" || o.typeName === "CubicInterpolator" || o.typeName === "CubicInterpolatorComponent") {
+      return { kind: "cubic", index: o.index, x1: o.properties.x1, y1: o.properties.y1, x2: o.properties.x2, y2: o.properties.y2 };
+    }
+    if (o.typeName === "ElasticInterpolator") {
+      return { kind: "elastic", index: o.index, amplitude: o.properties.amplitude, period: o.properties.period, easingValue: o.properties.easingValue };
+    }
+    return { kind: "unknown", index: o.index, type: o.typeName };
+  };
+  const tracks: unknown[] = [];
+  let i = animPos + 1;
+  while (i < blockEnd) {
+    if (objs[i].typeName !== "KeyedObject") { i++; continue; }
+    const ko = objs[i];
+    const kp = objs[i + 1];
+    if (!kp || kp.typeName !== "KeyedProperty") { i++; continue; }
+    const objectIdLocal = ko.properties.objectId as number | undefined;
+    const targetObj = objectIdLocal !== undefined ? objs[abPos + objectIdLocal] : undefined;
+    const propertyKey = kp.properties.propertyKey as number | undefined;
+    const propInfoRes = propertyKey !== undefined ? propInfo(propertyKey) : null;
+    let j = i + 2;
+    const kfPositions: number[] = [];
+    while (j < blockEnd && KEYFRAME_LIKE.has(objs[j].typeName)) { kfPositions.push(j); j++; }
+    kfPositions.sort((a, b) => ((objs[a].properties.frame as number) ?? 0) - ((objs[b].properties.frame as number) ?? 0));
+    const keyframes = kfPositions.map((pos, idx) => {
+      const o = objs[pos];
+      const prevPos = idx > 0 ? kfPositions[idx - 1] : null;
+      let editTargetIndex: number | null = null;
+      let segment: unknown = null;
+      if (prevPos !== null) {
+        const prevObj = objs[prevPos];
+        editTargetIndex = prevObj.index;
+        const it = (prevObj.properties.interpolationType as number | undefined) ?? 1;
+        let interpolator: unknown = null;
+        if (it === 2) {
+          const localId = prevObj.properties.interpolatorId as number | undefined;
+          const interpObj = localId !== undefined ? objs[abPos + localId] : undefined;
+          if (interpObj) interpolator = interpKeyName(interpObj);
+        }
+        segment = { interpolationType: it, interpolator };
+      }
+      return {
+        index: o.index,
+        frame: (o.properties.frame as number) ?? 0,
+        kind: o.typeName,
+        value: o.properties.value ?? null,
+        editTargetIndex,
+        segment,
+      };
+    });
+    tracks.push({
+      targetIndex: targetObj?.index ?? null,
+      targetName: (targetObj?.properties?.name as string | undefined) ?? null,
+      targetType: targetObj?.typeName ?? null,
+      propertyKey: propertyKey ?? null,
+      propertyName: propInfoRes?.name ?? (propertyKey !== undefined ? `prop#${propertyKey}` : "?"),
+      keyframes,
+    });
+    i = j;
+  }
+  return {
+    fps: anim.properties.fps ?? 60,
+    duration: anim.properties.duration ?? 60,
+    loop: anim.properties.loopValue ?? 1,
+    tracks,
+  };
 }
 
 let current: {
@@ -237,6 +330,15 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         if (!existsSync(rivPath)) return send(404, "application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
         return send(200, "application/json; charset=utf-8", JSON.stringify(buildTreeJson(new Uint8Array(readFileSync(rivPath)))));
       }
+      // /anim: カーブエディタ用のトラック+キーフレーム+補間器情報（rivのみモード）
+      if (url.pathname === "/anim") {
+        if (!existsSync(rivPath)) return send(404, "application/json; charset=utf-8", JSON.stringify({ error: "riv not found" }));
+        const artboard = url.searchParams.get("artboard") ?? "";
+        const animation = url.searchParams.get("animation") ?? "";
+        const data = buildAnimJson(new Uint8Array(readFileSync(rivPath)), artboard, animation);
+        if (!data) return send(404, "application/json; charset=utf-8", JSON.stringify({ error: "artboard/animation not found" }));
+        return send(200, "application/json; charset=utf-8", JSON.stringify(data));
+      }
       if (url.pathname === "/events") {
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
@@ -280,6 +382,42 @@ export function startStudio(opts: StudioOptions): StudioHandle {
             suppressWatch = Date.now() + 400;
             writeFileSync(rivPath, bytes);
             send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true, log }));
+            notify();
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
+      // カーブエディタ: 既存 .riv の1キーフレームの補間を無損失で書き換える（rivEdit.setKeyframeCurve）
+      if (url.pathname === "/curve" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { keyframeIndex, type, cubic } = JSON.parse(body) as {
+              keyframeIndex: number;
+              type: "hold" | "linear" | "cubic";
+              cubic?: [number, number, number, number];
+            };
+            const { bytes, log } = setKeyframeCurve(new Uint8Array(readFileSync(rivPath)), { keyframeIndex, type, cubic });
+            suppressWatch = Date.now() + 400;
+            writeFileSync(rivPath, bytes);
+            send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true, log }));
+            notify();
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
+      // Undo/Redo（rivのみモード）: クライアントが保持するスナップショットへ丸ごと差し戻す
+      if (url.pathname === "/riv-restore" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { bytesBase64 } = JSON.parse(body) as { bytesBase64: string };
+            const bytes = Buffer.from(bytesBase64, "base64");
+            suppressWatch = Date.now() + 400;
+            writeFileSync(rivPath, bytes);
+            send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true }));
             notify();
           } catch (e) {
             send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
@@ -708,6 +846,10 @@ const I18N = {
     expNoAnim: 'エクスポートできるアニメーションがありません',
     kfEasingHint: 'easingは「このキーフレームへ向かう動き」を表します（前のキーフレームからの区間に適用）。elastic系はバネのように弾む動きになります。',
     kfFirstKeyHint: 'これはこのトラックの最初のキーフレームです。手前に区間が無いため、ここで設定したeasingは見た目に反映されません。',
+    curveHold: 'ホールド', curveLinear: 'リニア', curveCubic: 'カーブ',
+    curveElasticRO: 'elastic区間はここでは編集できません（上のamplitude/periodを調整してください）',
+    curveUnknownRO: '未対応の補間器のため読み取り専用です',
+    curveDragHint: 'ハンドルをドラッグして制御点を調整、またはプリセットをクリック',
     onionBtn: 'オニオンスキン', onionBtnT: '前後フレームを半透明表示（再生中は自動オフ）', onionRangeL: 'オニオンスキンの範囲（前後フレーム数）',
     aiCtxCheckA: '選択/時刻/アートボードを添付', aiCtxChipT: 'クリックで送信への添付をオン/オフ',
     ctxSelPrefix: '選択: ', ctxNone: '(コンテキストなし)',
@@ -761,6 +903,10 @@ const I18N = {
     expNoAnim: 'No animation to export',
     kfEasingHint: 'Easing describes the motion arriving at this keyframe (applied to the segment from the previous one). The elastic- options give a springy overshoot.',
     kfFirstKeyHint: 'This is the first keyframe on this track. There is no incoming segment, so any easing set here has no visible effect.',
+    curveHold: 'Hold', curveLinear: 'Linear', curveCubic: 'Curve',
+    curveElasticRO: 'Elastic segments are read-only here (adjust amplitude/period above)',
+    curveUnknownRO: 'Unsupported interpolator type — read-only',
+    curveDragHint: 'Drag a handle to shape the curve, or click a preset',
     onionBtn: 'Onion skin', onionBtnT: 'Ghost neighboring frames (auto-off while playing)', onionRangeL: 'Onion skin range (frames before/after)',
     aiCtxCheckA: 'Attach selection / time / artboard', aiCtxChipT: 'Click to toggle attaching context to the sent note',
     ctxSelPrefix: 'sel: ', ctxNone: '(no context)',
@@ -817,7 +963,13 @@ let sceneSpec = null;       // シーンJSONモード時の spec（編集の正�
 let imageSizes = {};        // 画像id → natural size
 let gTree = null;           // rivのみモードの構造（/tree）
 let sel = null;             // {src:'scene', kind, obj} | {src:'riv', node}
-let keySel = null;          // {tr, k} 選択中のキーフレーム（タイムライン）
+let keySel = null;          // {tr, k, riv?} 選択中のキーフレーム/区間（タイムライン）。riv:true = rivのみモード
+let rivAnimData = null;     // rivのみモード: /anim のレスポンス（現在のアートボード/アニメーション）
+// rivのみモードのUndo/Redo: JSONモデルが無いため、ファイル全体のスナップショット（base64）で代用
+let rivUndoStack = [];
+let rivRedoStack = [];
+const RIV_HISTORY_MAX = 30;
+let rivSnapshotPending = null; // Promise<string|null> — ドラッグ/クリック開始時に確保した「編集前」スナップショット
 const cv = document.getElementById('cv');
 const $ = (id) => document.getElementById(id);
 
@@ -840,22 +992,70 @@ function afterHistoryChange() {
   doRebuild();
 }
 function performUndo() {
-  if (!sceneSpec || !history.length) return;
-  redoStack.push(JSON.parse(JSON.stringify(sceneSpec)));
-  if (redoStack.length > HISTORY_MAX) redoStack.shift();
-  sceneSpec = history.pop();
-  afterHistoryChange();
+  if (sceneSpec) {
+    if (!history.length) return;
+    redoStack.push(JSON.parse(JSON.stringify(sceneSpec)));
+    if (redoStack.length > HISTORY_MAX) redoStack.shift();
+    sceneSpec = history.pop();
+    afterHistoryChange();
+    log(t('undoDone'));
+    toast(t('undoDone'));
+    return;
+  }
+  performRivUndo();
+}
+function performRedo() {
+  if (sceneSpec) {
+    if (!redoStack.length) return;
+    history.push(JSON.parse(JSON.stringify(sceneSpec)));
+    if (history.length > HISTORY_MAX) history.shift();
+    sceneSpec = redoStack.pop();
+    afterHistoryChange();
+    log(t('redoDone'));
+    toast(t('redoDone'));
+    return;
+  }
+  performRivRedo();
+}
+// rivのみモードのUndo/Redo: ファイル全体のbase64スナップショットを差し戻す。
+// 選択中キーフレームの復元はSSE 'reload' ハンドラのcapture/restoreに任せる（一元化）。
+async function currentRivBase64() {
+  try {
+    const buf = new Uint8Array(await (await fetch('/file.riv?' + Date.now())).arrayBuffer());
+    return b64FromBytes(buf);
+  } catch { return null; }
+}
+async function performRivUndo() {
+  if (!rivUndoStack.length) return;
+  const prevB64 = rivUndoStack.pop();
+  const curB64 = await currentRivBase64();
+  if (curB64) { rivRedoStack.push(curB64); if (rivRedoStack.length > RIV_HISTORY_MAX) rivRedoStack.shift(); }
+  await fetch('/riv-restore', { method: 'POST', body: JSON.stringify({ bytesBase64: prevB64 }) });
   log(t('undoDone'));
   toast(t('undoDone'));
 }
-function performRedo() {
-  if (!sceneSpec || !redoStack.length) return;
-  history.push(JSON.parse(JSON.stringify(sceneSpec)));
-  if (history.length > HISTORY_MAX) history.shift();
-  sceneSpec = redoStack.pop();
-  afterHistoryChange();
+async function performRivRedo() {
+  if (!rivRedoStack.length) return;
+  const nextB64 = rivRedoStack.pop();
+  const curB64 = await currentRivBase64();
+  if (curB64) { rivUndoStack.push(curB64); if (rivUndoStack.length > RIV_HISTORY_MAX) rivUndoStack.shift(); }
+  await fetch('/riv-restore', { method: 'POST', body: JSON.stringify({ bytesBase64: nextB64 }) });
   log(t('redoDone'));
   toast(t('redoDone'));
+}
+async function pushRivUndoSnapshot() {
+  if (rivSnapshotPending) return rivSnapshotPending;
+  rivSnapshotPending = currentRivBase64();
+  return rivSnapshotPending;
+}
+async function commitRivSnapshot() {
+  if (!rivSnapshotPending) return;
+  const b64 = await rivSnapshotPending;
+  rivSnapshotPending = null;
+  if (!b64) return;
+  rivUndoStack.push(b64);
+  if (rivUndoStack.length > RIV_HISTORY_MAX) rivUndoStack.shift();
+  rivRedoStack = [];
 }
 
 let rivName = 'scene';
@@ -910,6 +1110,7 @@ let bootSeq = 0; // 連続リロード時に破棄済みインスタンスの st
 function boot(artboard, smName, animName) {
   if (r) { try { r.cleanup(); } catch {} r = null; }
   const myBoot = ++bootSeq;
+  rivAnimData = null; // アートボード/SM/アニメ切替・再読込のたびに /anim キャッシュを破棄
   stopAnimLoop();
   clearOnionCanvas(); // アートボード/SM/アニメ切替のたびにオニオンスキンの残像を消す
   paused = false; $('pauseBtn').textContent = '⏸';
@@ -1302,6 +1503,255 @@ function textField(get, set) {
   i.onchange = () => { pushHistory(); set(i.value); };
   return i;
 }
+// ---- カーブエディタ（ベジェイージングの可視化・ドラッグ編集。両モード共通） -----------------
+// 名前付きプリセットの制御点（rivWriter.ts の EASING_BEZIER と同じ値。サーバー側と見た目を一致させる）
+const CURVE_PRESETS = {
+  ease: [0.25, 0.1, 0.25, 1],
+  'ease-in': [0.42, 0, 1, 1],
+  'ease-out': [0, 0, 0.58, 1],
+  'ease-in-out': [0.42, 0, 0.58, 1],
+  'ease-out-back': [0.34, 1.56, 0.64, 1],
+  'ease-in-back': [0.36, 0, 0.66, -0.56],
+  smooth: [0.4, 0, 0.2, 1],
+  snap: [0.7, 0, 0.1, 1],
+  'emphasized-decel': [0.05, 0.7, 0.1, 1],
+  'emphasized-accel': [0.3, 0, 0.8, 0.15],
+};
+const CURVE_Y_MIN = -1.0, CURVE_Y_MAX = 2.0, CURVE_PAD = 14;
+function curveToCanvas(cv, x, y) {
+  const w = cv.width - 2 * CURVE_PAD, h = cv.height - 2 * CURVE_PAD;
+  return [CURVE_PAD + x * w, (cv.height - CURVE_PAD) - ((y - CURVE_Y_MIN) / (CURVE_Y_MAX - CURVE_Y_MIN)) * h];
+}
+function canvasToCurve(cv, cx, cy) {
+  const w = cv.width - 2 * CURVE_PAD, h = cv.height - 2 * CURVE_PAD;
+  const x = (cx - CURVE_PAD) / (w || 1);
+  const y = CURVE_Y_MIN + ((cv.height - CURVE_PAD - cy) / (h || 1)) * (CURVE_Y_MAX - CURVE_Y_MIN);
+  return [x, y];
+}
+function drawCurveCanvas(cv, x1, y1, x2, y2, curveMode) {
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#141419'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#24242d'; ctx.lineWidth = 1;
+  for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+    const [gx] = curveToCanvas(cv, f, 0);
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+  }
+  const [, y0c] = curveToCanvas(cv, 0, 0), [, y1c] = curveToCanvas(cv, 0, 1);
+  ctx.strokeStyle = '#5f5f6b';
+  const [bx0] = curveToCanvas(cv, 0, 0), [bx1] = curveToCanvas(cv, 1, 1);
+  ctx.strokeRect(Math.min(bx0, bx1), Math.min(y0c, y1c), Math.abs(bx1 - bx0), Math.abs(y1c - y0c));
+  if (curveMode === 'hold') {
+    ctx.strokeStyle = '#9b9ba6'; ctx.lineWidth = 2;
+    const p0 = curveToCanvas(cv, 0, 0), p1 = curveToCanvas(cv, 0.999, 0), p2 = curveToCanvas(cv, 0.999, 1), p3 = curveToCanvas(cv, 1, 1);
+    ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.lineTo(...p2); ctx.lineTo(...p3); ctx.stroke();
+    return;
+  }
+  if (curveMode === 'linear') {
+    ctx.strokeStyle = '#5ba7ff'; ctx.lineWidth = 2;
+    const p0 = curveToCanvas(cv, 0, 0), p3 = curveToCanvas(cv, 1, 1);
+    ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p3); ctx.stroke();
+    return;
+  }
+  ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = '#3a3a46';
+  const d0 = curveToCanvas(cv, 0, 0), d3 = curveToCanvas(cv, 1, 1);
+  ctx.beginPath(); ctx.moveTo(...d0); ctx.lineTo(...d3); ctx.stroke();
+  ctx.restore();
+  const p0 = curveToCanvas(cv, 0, 0), p1 = curveToCanvas(cv, x1, y1), p2 = curveToCanvas(cv, x2, y2), p3 = curveToCanvas(cv, 1, 1);
+  ctx.strokeStyle = '#ff4e6b'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(...p0); ctx.lineTo(...p1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(...p3); ctx.lineTo(...p2); ctx.stroke();
+  ctx.strokeStyle = '#5ba7ff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(...p0); ctx.bezierCurveTo(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]); ctx.stroke();
+  const dot = (p) => { ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, Math.PI * 2); ctx.fillStyle = '#ff4e6b'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke(); };
+  dot(p1); dot(p2);
+}
+// model: { editable, readonlyReason?, elasticInfo?, getType(), getCurve(), beginDrag(), setCurve(x1,y1,x2,y2), endDrag(), applyType(type) }
+function renderCurvePane(box, model, opts) {
+  opts = opts || {};
+  if (!model.editable) {
+    const hint = document.createElement('div'); hint.className = 'hint'; hint.style.marginTop = '8px';
+    hint.textContent = model.readonlyReason || '';
+    box.appendChild(hint);
+    if (model.elasticInfo) {
+      box.appendChild(propRow('amplitude', (() => { const i = document.createElement('input'); i.type = 'number'; i.value = model.elasticInfo.amplitude ?? 1; i.disabled = true; return i; })()));
+      box.appendChild(propRow('period', (() => { const i = document.createElement('input'); i.type = 'number'; i.value = model.elasticInfo.period ?? 0.5; i.disabled = true; return i; })()));
+    }
+    return;
+  }
+  const wrap = document.createElement('div'); wrap.style.marginTop = '10px';
+  if (opts.showTypeButtons) {
+    const row = document.createElement('div'); row.className = 'row';
+    const mk = (label, val) => {
+      const b = document.createElement('button'); b.className = 'mini';
+      b.textContent = label;
+      if (model.getType() === val) b.classList.add('toggled');
+      b.onclick = async () => { await model.beginDrag(); model.applyType(val); await model.endDrag(); renderInspector(); };
+      return b;
+    };
+    row.appendChild(mk(t('curveHold'), 'hold'));
+    row.appendChild(mk(t('curveLinear'), 'linear'));
+    row.appendChild(mk(t('curveCubic'), 'cubic'));
+    wrap.appendChild(row);
+  }
+  const type = model.getType();
+  if (type !== 'cubic') {
+    if (opts.showTypeButtons) {
+      const cv2 = document.createElement('canvas'); cv2.width = 220; cv2.height = 70;
+      cv2.style.cssText = 'width:100%;max-width:220px;border-radius:6px;display:block';
+      wrap.appendChild(cv2);
+      drawCurveCanvas(cv2, 0, 0, 1, 1, type);
+    }
+    box.appendChild(wrap);
+    return;
+  }
+  const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = t('curveDragHint');
+  wrap.appendChild(hint);
+  const cv2 = document.createElement('canvas'); cv2.width = 220; cv2.height = 160;
+  cv2.style.cssText = 'width:100%;max-width:220px;border-radius:6px;cursor:crosshair;touch-action:none;display:block';
+  wrap.appendChild(cv2);
+  const nums = document.createElement('div');
+  nums.style.cssText = 'display:flex;gap:10px;margin-top:6px;font:11px var(--mono);color:var(--text-dim)';
+  wrap.appendChild(nums);
+  const presetsRow = document.createElement('div');
+  presetsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:8px';
+  for (const [name, pts] of Object.entries(CURVE_PRESETS)) {
+    const pb = document.createElement('button'); pb.className = 'mini'; pb.title = pts.join(', '); pb.textContent = name;
+    pb.onclick = async () => { await model.beginDrag(); model.setCurve(pts[0], pts[1], pts[2], pts[3]); await model.endDrag(); renderInspector(); };
+    presetsRow.appendChild(pb);
+  }
+  wrap.appendChild(presetsRow);
+  box.appendChild(wrap);
+  const redraw = () => {
+    const c = model.getCurve();
+    drawCurveCanvas(cv2, c[0], c[1], c[2], c[3], 'cubic');
+    nums.textContent = '';
+    [['x1', c[0]], ['y1', c[1]], ['x2', c[2]], ['y2', c[3]]].forEach(([lbl, v]) => {
+      const s = document.createElement('span'); s.textContent = lbl + ' ' + v.toFixed(2); nums.appendChild(s);
+    });
+  };
+  redraw();
+  let dragH = null, beginPromise = null;
+  const toLocal = (e) => {
+    const rect = cv2.getBoundingClientRect();
+    return [(e.clientX - rect.left) * (cv2.width / rect.width), (e.clientY - rect.top) * (cv2.height / rect.height)];
+  };
+  const hitTest = (mx, my) => {
+    const c = model.getCurve();
+    const p1 = curveToCanvas(cv2, c[0], c[1]), p2 = curveToCanvas(cv2, c[2], c[3]);
+    if (Math.hypot(mx - p1[0], my - p1[1]) < 11) return 1;
+    if (Math.hypot(mx - p2[0], my - p2[1]) < 11) return 2;
+    return null;
+  };
+  cv2.addEventListener('pointerdown', (e) => {
+    const [mx, my] = toLocal(e);
+    const h = hitTest(mx, my);
+    if (!h) return;
+    cv2.setPointerCapture(e.pointerId);
+    dragH = h;
+    beginPromise = model.beginDrag();
+  });
+  cv2.addEventListener('pointermove', (e) => {
+    if (!dragH) return;
+    const [mx, my] = toLocal(e);
+    let [x, y] = canvasToCurve(cv2, mx, my);
+    x = Math.max(0, Math.min(1, round2(x)));
+    y = Math.max(CURVE_Y_MIN + 0.5, Math.min(CURVE_Y_MAX - 0.5, round2(y)));
+    const c = model.getCurve();
+    if (dragH === 1) model.setCurve(x, y, c[2], c[3]); else model.setCurve(c[0], c[1], x, y);
+    redraw();
+  });
+  const finish = async () => {
+    if (!dragH) return;
+    dragH = null;
+    if (beginPromise) { await beginPromise; beginPromise = null; }
+    await model.endDrag();
+    renderInspector();
+  };
+  cv2.addEventListener('pointerup', finish);
+  cv2.addEventListener('pointercancel', finish);
+}
+// シーンJSONモード用モデル: k.easing に文字列プリセット/'hold'/'linear'/[x1,y1,x2,y2] を保持
+function sceneCurveModel(tr, k) {
+  const isElastic = typeof k.easing === 'string' && k.easing.indexOf('elastic') === 0;
+  if (isElastic) {
+    return {
+      editable: false, readonlyReason: t('curveElasticRO'),
+      elasticInfo: { amplitude: k.amplitude ?? 1, period: k.period ?? 0.5 },
+      getType() { return 'cubic'; }, getCurve() { return [0.42, 0, 0.58, 1]; },
+      beginDrag() {}, setCurve() {}, endDrag() {}, applyType() {},
+    };
+  }
+  return {
+    editable: true, readonlyReason: null, elasticInfo: null,
+    getType() {
+      if (Array.isArray(k.easing)) return 'cubic';
+      if (!k.easing || k.easing === 'linear') return 'linear';
+      if (k.easing === 'hold') return 'hold';
+      return 'cubic';
+    },
+    getCurve() {
+      if (Array.isArray(k.easing)) return k.easing;
+      if (k.easing && CURVE_PRESETS[k.easing]) return CURVE_PRESETS[k.easing];
+      return [0.42, 0, 0.58, 1];
+    },
+    beginDrag() { pushHistory(); },
+    setCurve(x1, y1, x2, y2) { k.easing = [round2(x1), round2(y1), round2(x2), round2(y2)]; },
+    endDrag() { scheduleRebuild(0); },
+    applyType(type) {
+      if (type === 'hold') { k.easing = 'hold'; delete k.amplitude; delete k.period; }
+      else if (type === 'linear') { delete k.easing; delete k.amplitude; delete k.period; }
+      else { k.easing = Array.isArray(k.easing) ? k.easing : (CURVE_PRESETS[k.easing] || [0.42, 0, 0.58, 1]); delete k.amplitude; delete k.period; }
+    },
+  };
+}
+// rivのみモード用モデル: /anim の segment 情報を初期値に、/curve へPOSTして無損失に書き込む
+function rivCurveModel(tr, k) {
+  const RO = (reason, elasticInfo) => ({
+    editable: false, readonlyReason: reason, elasticInfo: elasticInfo ?? null,
+    getType() { return 'cubic'; }, getCurve() { return [0.42, 0, 0.58, 1]; },
+    beginDrag() {}, setCurve() {}, endDrag() {}, applyType() {},
+  });
+  if (k.editTargetIndex == null) return RO(t('kfFirstKeyHint'));
+  const seg = k.segment;
+  const interp = seg && seg.interpolator;
+  if (interp && interp.kind === 'elastic') return RO(t('curveElasticRO'), { amplitude: interp.amplitude, period: interp.period });
+  if (interp && interp.kind === 'unknown') return RO(t('curveUnknownRO'));
+  let live = interp ? [interp.x1, interp.y1, interp.x2, interp.y2] : [0.42, 0, 0.58, 1];
+  let liveType = seg.interpolationType === 0 ? 'hold' : seg.interpolationType === 1 ? 'linear' : 'cubic';
+  return {
+    editable: true, readonlyReason: null, elasticInfo: null,
+    getType() { return liveType; },
+    getCurve() { return live; },
+    beginDrag() { return pushRivUndoSnapshot(); },
+    setCurve(x1, y1, x2, y2) { live = [x1, y1, x2, y2]; liveType = 'cubic'; },
+    async endDrag() {
+      await sendCurveNow(k.editTargetIndex, liveType, liveType === 'cubic' ? live : undefined);
+      await commitRivSnapshot();
+    },
+    applyType(type) {
+      liveType = type;
+      if (type === 'cubic' && !interp) live = [0.42, 0, 0.58, 1];
+    },
+  };
+}
+async function sendCurveNow(keyframeIndex, type, cubic) {
+  try {
+    const res = await (await fetch('/curve', { method: 'POST', body: JSON.stringify({ keyframeIndex, type, cubic }) })).json();
+    if (!res.ok) { log(t('editNg') + res.error, 'error'); toast(t('editNg') + res.error, 'err'); }
+    else { log(t('editOk') + ': curve #' + keyframeIndex + ' -> ' + type); rivAnimData = null; }
+  } catch (e) { log(t('editNg') + e, 'error'); }
+}
+async function loadRivAnim() {
+  if (sceneSpec || mode !== 'anim' || !scrubAnim) { rivAnimData = null; return; }
+  try {
+    const abName = $('artboardSel').value;
+    rivAnimData = await (await fetch('/anim?artboard=' + encodeURIComponent(abName) + '&animation=' + encodeURIComponent(scrubAnim))).json();
+    if (rivAnimData && rivAnimData.error) rivAnimData = null;
+  } catch { rivAnimData = null; }
+}
+
 // ドロップダウン（キーフレームのeasing選択などに使用）
 const EASING_OPTIONS = ['hold', 'linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'ease-out-back', 'ease-in-back', 'smooth', 'snap', 'elastic-in', 'elastic-out', 'elastic-in-out'];
 function selectField(options, get, set) {
@@ -1319,6 +1769,16 @@ function renderInspector() {
   updateAiContextChip();
   const box = $('inspector');
   box.textContent = '';
+  if (keySel && keySel.riv) {
+    const { tr, k } = keySel;
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--accent)';
+    title.textContent = (tr.targetName ?? tr.targetType ?? '?') + ' · ' + tr.propertyName + '  (f' + k.frame + ')';
+    box.appendChild(title);
+    inspSection(box, 'EASING');
+    renderCurvePane(box, rivCurveModel(tr, k), { showTypeButtons: true });
+    return;
+  }
   if (keySel) {
     const { tr, k } = keySel;
     const title = document.createElement('div');
@@ -1339,9 +1799,11 @@ function renderInspector() {
       box.appendChild(propRow('period', numField(() => k.period ?? 0.5, (v) => { k.period = v; scheduleRebuild(0); }, 0.05)));
     }
     const sortedKfs = (tr.keyframes ?? []).slice().sort((a, b) => a.frame - b.frame);
+    const isFirst = sortedKfs[0] === k;
     const hint = document.createElement('div'); hint.className = 'hint';
-    hint.textContent = sortedKfs[0] === k ? t('kfFirstKeyHint') : t('kfEasingHint');
+    hint.textContent = isFirst ? t('kfFirstKeyHint') : t('kfEasingHint');
     box.appendChild(hint);
+    if (!isFirst) renderCurvePane(box, sceneCurveModel(tr, k), { showTypeButtons: false });
     return;
   }
   if (!sel) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = t('noSel'); box.appendChild(d); return; }
@@ -1613,7 +2075,7 @@ function deleteSelectedObject() {
   toast(t('objDeleted'));
 }
 function deleteSelectedKeyframe() {
-  if (!keySel) return false;
+  if (!keySel || keySel.riv) return false; // rivのみモードのキーフレーム削除は非対応（追加/削除はスコープ外）
   const { tr, k } = keySel;
   if (!tr.keyframes || tr.keyframes.length <= 1) { log(t('kfDeleteMin')); toast(t('kfDeleteMin'), 'err'); return true; }
   const idx = tr.keyframes.indexOf(k);
@@ -1696,7 +2158,81 @@ let kfDrag = null;
 function renderTimeline() {
   const tl = $('timeline');
   tl.textContent = '';
-  if (mode !== 'anim' || !sceneSpec) { tl.style.display = 'none'; return; }
+  if (mode !== 'anim') { tl.style.display = 'none'; return; }
+  if (!sceneSpec) { renderRivTimelineBody(tl); return; }
+  renderSceneTimelineBody(tl);
+}
+// rivのみモード: /anim のデータからタイムラインを描画（キーフレームの追加/移動/削除は不可・選択のみ）
+function renderRivTimelineBody(tl) {
+  if (!rivAnimData) {
+    tl.style.display = 'none';
+    loadRivAnim().then(() => renderTimeline());
+    return;
+  }
+  tl.style.display = 'block';
+  const { fps, duration, tracks } = rivAnimData;
+  const durS = duration / (fps || 60);
+  scrubDur = durS;
+  {
+    const row = document.createElement('div'); row.className = 'trow';
+    const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = scrubAnim + ' · ' + duration + 'f';
+    const lane = document.createElement('div'); lane.className = 'tlane ruler';
+    for (let f = 0; f <= (duration || 1); f += 10) {
+      const tick = document.createElement('div'); tick.className = 'rtick';
+      tick.style.left = (100 * f / (duration || 1)) + '%';
+      const num = document.createElement('span'); num.textContent = f;
+      tick.appendChild(num);
+      lane.appendChild(tick);
+    }
+    const cur = document.createElement('div'); cur.className = 'tcur'; cur.style.left = '0%';
+    const head = document.createElement('div'); head.className = 'phead'; head.style.left = '0%';
+    lane.appendChild(cur); lane.appendChild(head);
+    lane.addEventListener('pointerdown', (ev) => {
+      lane.setPointerCapture(ev.pointerId);
+      const scrubAt = (x) => {
+        const rect = lane.getBoundingClientRect();
+        const tsec = ((x - rect.left) / rect.width) * durS;
+        animCurT = Math.max(0, Math.min(durS, tsec));
+        seekTo(animCurT);
+      };
+      scrubAt(ev.clientX);
+      const move = (e2) => scrubAt(e2.clientX);
+      const up = () => { lane.removeEventListener('pointermove', move); lane.removeEventListener('pointerup', up); };
+      lane.addEventListener('pointermove', move);
+      lane.addEventListener('pointerup', up);
+    });
+    row.appendChild(lb); row.appendChild(lane);
+    tl.appendChild(row);
+  }
+  for (const tr of tracks) {
+    const row = document.createElement('div'); row.className = 'trow';
+    const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = (tr.targetName ?? tr.targetType ?? '?') + ' · ' + tr.propertyName;
+    const lane = document.createElement('div'); lane.className = 'tlane';
+    for (const k of tr.keyframes) {
+      const d = document.createElement('div'); d.className = 'tkey' + (keySel && keySel.riv && keySel.tr === tr && keySel.k === k ? ' sel' : '');
+      d.style.left = (100 * k.frame / (duration || 1)) + '%';
+      d.title = 'f' + k.frame + (k.value !== undefined && k.value !== null ? ' = ' + k.value : '');
+      d.addEventListener('pointerdown', (ev) => {
+        ev.stopPropagation(); ev.preventDefault();
+        keySel = { riv: true, tr, k };
+        renderTimeline();
+        renderInspector();
+        seekTo(k.frame / (fps || 60));
+      });
+      lane.appendChild(d);
+    }
+    const cur = document.createElement('div'); cur.className = 'tcur'; cur.style.left = '0%';
+    lane.appendChild(cur);
+    lane.onclick = (ev) => {
+      if (ev.target.classList.contains('tkey')) return;
+      const rect = lane.getBoundingClientRect();
+      seekTo(((ev.clientX - rect.left) / rect.width) * durS);
+    };
+    row.appendChild(lb); row.appendChild(lane);
+    tl.appendChild(row);
+  }
+}
+function renderSceneTimelineBody(tl) {
   const ab = abSpec();
   const anim = (ab.animations ?? []).find(a => a.name === scrubAnim);
   if (!anim) { tl.style.display = 'none'; return; }
@@ -2143,15 +2679,43 @@ $('helpWrap').onclick = (e) => { if (e.target.id === 'helpWrap') $('helpWrap').c
 
 // ---- SSE -----------------------------------------------------------------------
 const sse = new EventSource('/events');
+// 選択中キーフレームをid的に記述（再読込でtr/kオブジェクトは作り直されるため、frame+対象で照合し直す）
+function captureKeySelId() {
+  if (!keySel) return null;
+  if (keySel.riv) {
+    return { riv: true, target: keySel.tr.targetName ?? keySel.tr.targetType, property: keySel.tr.propertyName, frame: keySel.k.frame };
+  }
+  return { riv: false, target: keySel.tr.target, property: keySel.tr.property, frame: keySel.k.frame };
+}
+function restoreKeySelId(w) {
+  if (!w) return;
+  if (!w.riv && sceneSpec) {
+    const ab = abSpec();
+    for (const anim of ab.animations ?? []) {
+      for (const tr of anim.tracks ?? []) {
+        if (tr.target !== w.target || tr.property !== w.property) continue;
+        const k = (tr.keyframes ?? []).find((kk) => kk.frame === w.frame);
+        if (k) { keySel = { tr, k }; return; }
+      }
+    }
+  } else if (w.riv && rivAnimData) {
+    for (const tr of rivAnimData.tracks) {
+      if ((tr.targetName ?? tr.targetType) !== w.target || tr.propertyName !== w.property) continue;
+      const k = tr.keyframes.find((kk) => kk.frame === w.frame);
+      if (k) { keySel = { riv: true, tr, k }; return; }
+    }
+  }
+}
 sse.onmessage = (e) => {
   if (e.data === 'reload') {
     log(t('fileUpdated'));
     const wasSel = sel;
+    const wasKeySel = captureKeySelId();
     keySel = null;
     const smv = $('smSel').value;
     if (mode === 'sm') boot($('artboardSel').value, smv && smv !== '-' ? smv : undefined);
     else boot($('artboardSel').value, null, scrubAnim);
-    loadState().then(() => {
+    loadState().then(async () => {
       // 選択を id で復元（specは再取得で別オブジェクトになる）
       if (wasSel?.src === 'scene' && sceneSpec) {
         const ab = abSpec();
@@ -2159,6 +2723,8 @@ sse.onmessage = (e) => {
         const again = (list ?? []).find(o => o.id === wasSel.obj.id);
         if (again) { sel = { src: 'scene', kind: wasSel.kind, obj: again }; }
       }
+      if (!sceneSpec && mode === 'anim' && scrubAnim) await loadRivAnim();
+      restoreKeySelId(wasKeySel);
       buildTree(); renderInspector(); drawSelBox(); renderTimeline();
     });
   } else if (e.data === 'notes-taken') {

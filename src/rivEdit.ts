@@ -184,6 +184,84 @@ function insertAt(
 
 const KEYFRAME_TYPES = new Set(["KeyFrameDouble", "KeyFrameColor", "KeyFrameId"]);
 
+// ---- setKeyframeCurve: 既存 .riv の1キーフレームの補間（hold/linear/cubic）を無損失で書き換える ----
+// 注意（CLAUDE.md 落とし穴6）: KeyFrame の interpolationType/interpolatorId は
+// 「そのフレームから次のフレームへの区間」に適用される。呼び出し側（studio.ts）は
+// UI上「キーフレームBへ向かう区間」を、バイナリ上は「キーフレームA（Bの直前）」に書く、
+// というシフトを既に済ませたうえで keyframeIndex にAのグローバルindexを渡すこと。
+export interface CurveEditSpec {
+  keyframeIndex: number; // 編集対象 KeyFrame* のグローバルindex（riv_dump/tree のindexと同じ）
+  type: "hold" | "linear" | "cubic";
+  cubic?: [number, number, number, number]; // type==="cubic" のとき必須
+}
+
+export function setKeyframeCurve(bytes: Uint8Array, spec: CurveEditSpec): { bytes: Uint8Array; log: string[] } {
+  const dump = readRiv(bytes);
+  if (dump.error) throw new Error(`Parse error: ${dump.error}`);
+  let objects = dump.objects;
+  const log: string[] = [];
+
+  const kfObj = objects.find((o) => o.index === spec.keyframeIndex);
+  if (!kfObj) throw new Error(`Object index ${spec.keyframeIndex} not found`);
+  // interpolationType/interpolatorId が存在する型か（InterpolatingKeyFrame を継承しているか）確認
+  requireProp(kfObj.typeName, "interpolationType");
+  const interpolationTypeKey = requireProp("InterpolatingKeyFrame", "interpolationType").key;
+  const interpolatorIdKey = requireProp("InterpolatingKeyFrame", "interpolatorId").key;
+
+  const { abStartPos, abEndPos } = artboardBoundsForPosition(objects, kfObj.index);
+
+  const setRaw = (obj: RivObject, key: number, fieldType: number, value: number) => {
+    const existing = obj.raw.find((r) => r.key === key);
+    if (existing) existing.value = value;
+    else obj.raw.push({ key, fieldType, value });
+  };
+  const rawOf = (obj: RivObject, key: number): number | undefined => {
+    const v = obj.raw.find((r) => r.key === key)?.value;
+    return typeof v === "number" ? v : undefined;
+  };
+
+  if (spec.type === "hold" || spec.type === "linear") {
+    setRaw(kfObj, interpolationTypeKey, 0, spec.type === "hold" ? 0 : 1);
+    log.push(`keyframe #${spec.keyframeIndex}: interpolation -> ${spec.type}`);
+  } else {
+    if (!spec.cubic || spec.cubic.length !== 4) throw new Error("cubic requires [x1,y1,x2,y2]");
+    const [x1, y1, x2, y2] = spec.cubic;
+    const curId = rawOf(kfObj, interpolatorIdKey);
+    const curType = rawOf(kfObj, interpolationTypeKey);
+
+    let reuseObj: RivObject | null = null;
+    if (curId !== undefined && curType === 2) {
+      const candidate = objects[abStartPos + curId];
+      if (candidate && candidate.typeName === "CubicEaseInterpolator") {
+        let sharedByOthers = 0;
+        for (let i = abStartPos; i < abEndPos; i++) {
+          if (objects[i] === kfObj) continue;
+          const o = objects[i];
+          if (rawOf(o, interpolationTypeKey) === 2 && rawOf(o, interpolatorIdKey) === curId) sharedByOthers++;
+        }
+        if (sharedByOthers === 0) reuseObj = candidate;
+      }
+    }
+
+    if (reuseObj) {
+      const keys = ["x1", "y1", "x2", "y2"].map((p) => requireProp("CubicEaseInterpolator", p).key);
+      [x1, y1, x2, y2].forEach((v, i) => setRaw(reuseObj!, keys[i], 2, v));
+      setRaw(kfObj, interpolationTypeKey, 0, 2);
+      log.push(`keyframe #${spec.keyframeIndex}: reused interpolator #${reuseObj.index} (x1=${x1}, y1=${y1}, x2=${x2}, y2=${y2})`);
+    } else {
+      const insertPos = abStartPos + 1; // コンポーネント領域（アートボード直後）に挿入
+      const newObj = buildRivObj("CubicEaseInterpolator", { x1, y1, x2, y2 });
+      objects = insertAt(objects, abStartPos, abEndPos, insertPos, [newObj]);
+      const newLocal = insertPos - abStartPos;
+      setRaw(kfObj, interpolatorIdKey, 0, newLocal);
+      setRaw(kfObj, interpolationTypeKey, 0, 2);
+      log.push(`keyframe #${spec.keyframeIndex}: created interpolator (local #${newLocal}) (x1=${x1}, y1=${y1}, x2=${x2}, y2=${y2})`);
+    }
+  }
+
+  return { bytes: writeRawRiv({ major: dump.major, minor: dump.minor, fileId: dump.fileId, objects }), log };
+}
+
 export function editRiv(bytes: Uint8Array, edits: EditOp[]): { bytes: Uint8Array; log: string[] } {
   const dump = readRiv(bytes);
   if (dump.error) throw new Error(`Parse error: ${dump.error}`);
