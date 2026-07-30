@@ -95,6 +95,7 @@ try {
   check("riv_inspect not error", !inspect.isError);
   const meta = JSON.parse(inspectText);
   check("riv_inspect has artboards", meta.artboardCount >= 1);
+  check("riv_inspect omits dataBinding for a file with no ViewModel", meta.dataBinding === undefined);
 
   const ab = meta.artboards[0];
   const anim = ab.animations[0];

@@ -383,6 +383,77 @@ export function buildSmJson(bytes: Uint8Array): unknown {
   return { artboards };
 }
 
+// /bones: 全アートボードのボーン階層（Bone/RootBone）+ ワールド変換に必要な祖先ノードをJSON化
+// （Web StudioのFKボーン編集オーバーレイ用）。rotation はバイナリ生の値（ラジアン）のまま返す。
+// ワールド変換の合成（親チェーンの行列積）はクライアント側で行う（rivWriter.ts の matMul/matTRS と
+// 同じ規約: RootBoneは自分のx/yを平行移動→回転、非rootのBoneは親ボーンのtip（親のlength分だけ
+// 平行移動）→自分のrotationのみ、を適用してワールド行列を合成する）
+function buildBonesJson(bytes: Uint8Array): unknown {
+  const dump = readRiv(bytes, { tolerant: true });
+  const objs = dump.objects;
+  const abPositions: number[] = [];
+  objs.forEach((o, i) => {
+    if (o.typeName === "Artboard") abPositions.push(i);
+  });
+  const artboards: Array<Record<string, unknown>> = [];
+  for (let a = 0; a < abPositions.length; a++) {
+    const abStartPos = abPositions[a];
+    const abEndPos = abPositions[a + 1] ?? objs.length;
+    const abObj = objs[abStartPos];
+    const blockLen = abEndPos - abStartPos;
+    const byLocal = (local: number) => (local >= 1 && local < blockLen ? objs[abStartPos + local] : undefined);
+    const isBoneType = (ty: string) => ty === "Bone" || ty === "RootBone";
+
+    const boneLocals: number[] = [];
+    for (let local = 1; local < blockLen; local++) {
+      if (isBoneType(byLocal(local)!.typeName)) boneLocals.push(local);
+    }
+
+    // 各ボーンの祖先チェーン（間に挟まるNode等のペアレントも含む）をワールド変換に必要な分だけ収集
+    const included = new Set<number>();
+    for (const bl of boneLocals) {
+      let cur: number | null = bl;
+      let guard = 0;
+      while (cur !== null && cur !== 0 && !included.has(cur) && guard++ < 128) {
+        included.add(cur);
+        const o = byLocal(cur);
+        const pid = (o?.properties.parentId as number | undefined) ?? 0;
+        cur = pid === 0 ? null : pid;
+      }
+    }
+
+    const nodes = [...included].sort((x, y) => x - y).map((local) => {
+      const o = byLocal(local)!;
+      const bone = isBoneType(o.typeName);
+      const node: Record<string, unknown> = {
+        id: local,
+        parentId: (o.properties.parentId as number | undefined) ?? 0,
+        globalIndex: o.index,
+        type: o.typeName,
+        name: (o.properties.name as string | undefined) ?? null,
+        x: (o.properties.x as number | undefined) ?? 0,
+        y: (o.properties.y as number | undefined) ?? 0,
+        rotation: (o.properties.rotation as number | undefined) ?? 0,
+        scaleX: (o.properties.scaleX as number | undefined) ?? 1,
+        scaleY: (o.properties.scaleY as number | undefined) ?? 1,
+      };
+      if (bone) {
+        node.length = (o.properties.length as number | undefined) ?? 0;
+        node.isRoot = o.typeName === "RootBone";
+      }
+      return node;
+    });
+
+    artboards.push({
+      name: (abObj.properties.name as string | undefined) ?? `Artboard ${a}`,
+      width: (abObj.properties.width as number | undefined) ?? 500,
+      height: (abObj.properties.height as number | undefined) ?? 500,
+      nodes,
+    });
+  }
+  return { artboards };
+}
+
 export interface StudioSnapshot {
   id: string;
   name: string;
@@ -530,6 +601,11 @@ export function startStudio(opts: StudioOptions): StudioHandle {
       if (url.pathname === "/sm") {
         if (!existsSync(rivPath)) return send(404, "application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
         return send(200, "application/json; charset=utf-8", JSON.stringify(buildSmJson(new Uint8Array(readFileSync(rivPath)))));
+      }
+      // /bones: ボーンオーバーレイ用の全アートボードのボーン階層（Bone/RootBone + 祖先ノード）
+      if (url.pathname === "/bones") {
+        if (!existsSync(rivPath)) return send(200, "application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
+        return send(200, "application/json; charset=utf-8", JSON.stringify(buildBonesJson(new Uint8Array(readFileSync(rivPath)))));
       }
       if (url.pathname === "/events") {
         res.writeHead(200, {
@@ -832,6 +908,9 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     repeating-conic-gradient(#17171c 0 25%, #101014 0 50%) 0 0/32px 32px; position:relative; overflow:hidden; }
   canvas { max-width:92%; max-height:92%; min-width:0; min-height:0; box-shadow:0 8px 24px rgba(0,0,0,.4); border-radius:4px; background:transparent; }
   #onionCv { position:absolute; max-width:none; max-height:none; pointer-events:none; border-radius:4px; box-shadow:none; }
+  #boneCv { position:absolute; max-width:none; max-height:none; pointer-events:none; border-radius:4px; box-shadow:none; touch-action:none; }
+  #boneCv.editable { pointer-events:auto; cursor:grab; }
+  #boneCv.dragging { cursor:grabbing; }
   button.toggled { border-color:var(--accent); background:rgba(91,167,255,.18); color:#fff; }
   /* ---- アセットドラッグ&ドロップ ---- */
   #dropOverlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:6;
@@ -1092,7 +1171,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 </div>
 <div class="gutter" id="gutterL"></div>
 <div id="center">
-  <div id="stage"><canvas id="cv" width="800" height="600"></canvas><canvas id="onionCv"></canvas><div id="selBox">
+  <div id="stage"><canvas id="cv" width="800" height="600"></canvas><canvas id="onionCv"></canvas><canvas id="boneCv"></canvas><div id="selBox">
     <div class="rzHandle nw" data-corner="nw"></div>
     <div class="rzHandle ne" data-corner="ne"></div>
     <div class="rzHandle sw" data-corner="sw"></div>
@@ -1117,6 +1196,11 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <button id="onionToggle" class="mini" data-i18n="onionBtn" data-i18n-title="onionBtnT"></button>
     <input type="range" id="onionRange" min="0" max="5" step="1" value="2" style="max-width:70px" data-i18n-aria="onionRangeL">
     <span id="onionRangeVal" class="badge">2</span>
+    <span class="toolbarSep"></span>
+    <button id="boneToggle" class="mini" data-i18n="boneBtn" data-i18n-title="boneBtnT"></button>
+    <label class="hint" style="display:flex; align-items:center; gap:4px; cursor:pointer;" data-i18n-title="boneKeyT">
+      <input type="checkbox" id="boneKeyToggle" style="width:13px; height:13px;"><span data-i18n="boneKeyLabel"></span>
+    </label>
     <span class="toolbarSep"></span>
     <span class="hint" data-i18n="expL"></span>
     <button id="snap" class="mini" data-i18n="expPng" data-i18n-title="expPngT"></button>
@@ -1276,6 +1360,10 @@ const I18N = {
     kfScaleInvalid: '倍率は0より大きい数値で指定してください', kfClearSel: '選択解除',
     kfCopiedSuffix: '個のキーフレームをコピーしました', kfMoveUnsupportedProp: 'この種類のトラック（色など）はrivのみモードでの一括編集に非対応です',
     kfMarqueeHint: 'ドラッグで矩形選択、Shift+クリックで追加/除外選択。Ctrl+C/V でコピー&ペースト',
+    boneBtn: 'ボーン', boneBtnT: 'ボーン骨格を重ね描画（一時停止中はドラッグでFK回転できます）',
+    boneKeyLabel: 'キーフレーム化', boneKeyT: 'ONの場合、アニメ単体再生中の確定操作は現在フレームにキーフレームを書き込みます（OFFの場合は定義値を直接書き換え）',
+    boneEditOk: 'ボーンを更新しました', boneEditNg: 'ボーン更新に失敗: ',
+    boneNoRiv: 'このファイルにボーンが見つかりません', bonePausedHint: '一時停止中のみドラッグで編集できます',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -1358,6 +1446,10 @@ const I18N = {
     kfScaleInvalid: 'Scale factor must be a number greater than 0', kfClearSel: 'Clear selection',
     kfCopiedSuffix: ' keyframe(s) copied', kfMoveUnsupportedProp: 'This track type (e.g. color) is not supported for bulk edits in riv-only mode',
     kfMarqueeHint: 'Drag to box-select, Shift+click to add/remove. Ctrl+C/V to copy & paste',
+    boneBtn: 'Bones', boneBtnT: 'Overlay the bone skeleton (drag to FK-rotate while paused)',
+    boneKeyLabel: 'Keyframe on drop', boneKeyT: 'When on, committing a drag while solo-playing an animation writes a keyframe at the current frame (when off, it edits the definition value directly)',
+    boneEditOk: 'Bone updated', boneEditNg: 'Bone update failed: ',
+    boneNoRiv: 'No bones found in this file', bonePausedHint: 'Pause playback to drag-edit bones',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -1413,6 +1505,7 @@ let sceneSpec = null;       // シーンJSONモード時の spec（編集の正�
 let imageSizes = {};        // 画像id → natural size
 let gTree = null;           // rivのみモードの構造（/tree）
 let gSm = null;             // SMグラフ用の全アートボード×ステートマシン構造（/sm。scene/rivのみ両モード共通）
+let gBones = null;          // ボーンオーバーレイ用の全アートボードのボーン階層（/bones。scene/rivのみ両モード共通）
 let graphMode = false;      // 左タブ「SMグラフ」がアクティブか（ステージのcanvasに代わりSVGを表示）
 let graphSel = null;        // {kind:'state', layerName, id, s} | {kind:'transition', layerName, tr}
 let graphActiveNames = [];  // SM実行中: StateChangeイベントで報告された現在アクティブなstate名（ハイライト用）
@@ -1527,6 +1620,7 @@ async function loadState() {
     try { gTree = await (await fetch('/tree')).json(); } catch { gTree = null; }
   }
   try { gSm = await (await fetch('/sm')).json(); } catch { gSm = null; }
+  try { gBones = await (await fetch('/bones')).json(); } catch { gBones = null; }
   return st;
 }
 function updateNotesBadge(n) {
@@ -1775,6 +1869,7 @@ function positionOnionCanvas() {
 }
 function drawSelBox() {
   positionOnionCanvas();
+  renderBoneOverlay();
   const box = $('selBox');
   if (!sel || sel.src !== 'scene') { box.style.display = 'none'; return; }
   const ab = abSpec();
@@ -3210,6 +3305,7 @@ function seekTo(tsec, opts) {
   document.querySelectorAll('.tcur, .phead').forEach(c => { c.style.left = pct; });
   updateAiContextChip();
   if (!(opts && opts.fromPlayback)) scheduleOnionRender(tsec);
+  if (!boneDrag) renderBoneOverlay();
 }
 
 // ---- オニオンスキン（前後Nフレームを半透明重ね描画。既存の seek→描画パスを多重化） ------------
@@ -3278,6 +3374,223 @@ $('onionRange').oninput = () => {
   if (onionOn) scheduleOnionRender(curTimeSec); else clearOnionCanvas();
 };
 syncOnionUI();
+
+// ---- ボーンオーバーレイ（RootBone→Boneチェーンを重ね描画・一時停止中のみFKドラッグ回転） --------
+// ワールド変換の合成は rivWriter.ts の matMul/matTRS と同じ規約（studio.ts buildBonesJson のコメント参照）:
+//  - RootBone: 親のワールド行列 ∘ Translate(x,y) ∘ Rotate(rotation)
+//  - Bone（非root）: 親ボーンのワールド行列 ∘ Translate(親のlength, 0) ∘ Rotate(自分のrotation)
+// 座標系は internal canvas pixel（cv.width/height）基準。CSS上の位置合わせは onionCv と同じ
+// getBoundingClientRect 方式（positionBoneCanvas）で、ズーム(cv.style.transform)にも自動追従する。
+const boneCv = $('boneCv');
+let boneOn = localStorage.getItem('rive-mcp-bone-on') === '1';
+let boneKeyOn = localStorage.getItem('rive-mcp-bone-key') !== '0'; // 既定ON: アニメ単体再生中はキーフレーム化
+let boneDrag = null;  // { local, node, ab, frameAngle, joint:{x,y}, startRotation, moved, snapshotPromise, pointerId }
+let boneLive = null;  // 直近の描画結果 { byLocal, mats, ab, map, handles } — ヒットテスト/ドラッグで再利用
+
+const MAT_ID = { xx: 1, yx: 0, xy: 0, yy: 1, tx: 0, ty: 0 };
+function matMulB(a, b) {
+  return {
+    xx: a.xx * b.xx + a.xy * b.yx, yx: a.yx * b.xx + a.yy * b.yx,
+    xy: a.xx * b.xy + a.xy * b.yy, yy: a.yx * b.xy + a.yy * b.yy,
+    tx: a.xx * b.tx + a.xy * b.ty + a.tx, ty: a.yx * b.tx + a.yy * b.ty + a.ty,
+  };
+}
+function matTRSB(x, y, rot, sx, sy) {
+  sx = sx == null ? 1 : sx; sy = sy == null ? 1 : sy;
+  const c = Math.cos(rot), s = Math.sin(rot);
+  return { xx: c * sx, yx: s * sx, xy: -s * sy, yy: c * sy, tx: x, ty: y };
+}
+function matApplyB(m, x, y) { return { x: x * m.xx + y * m.xy + m.tx, y: x * m.yx + y * m.yy + m.ty }; }
+
+function currentBoneArtboard() {
+  if (!gBones || !gBones.artboards || !gBones.artboards.length) return null;
+  const name = $('artboardSel') ? $('artboardSel').value : null;
+  return gBones.artboards.find(a => a.name === name) ?? gBones.artboards[0];
+}
+// 祖先チェーン（Node等）+ ボーンのワールド行列をメモ化しながら合成する
+function computeBoneWorldMats(ab) {
+  const byLocal = new Map(ab.nodes.map(n => [n.id, n]));
+  const mats = new Map();
+  function worldOf(local) {
+    if (!local) return MAT_ID;
+    if (mats.has(local)) return mats.get(local);
+    const n = byLocal.get(local);
+    if (!n) return MAT_ID;
+    mats.set(local, MAT_ID); // 循環参照ガード（壊れたデータでも無限再帰しない）
+    const parentMat = worldOf(n.parentId || 0);
+    let localMat;
+    if (n.type === 'Bone') {
+      const parentNode = byLocal.get(n.parentId || 0);
+      const parentLen = (parentNode && parentNode.length != null) ? parentNode.length : 0;
+      localMat = matMulB(matTRSB(parentLen, 0, 0), matTRSB(0, 0, n.rotation));
+    } else if (n.type === 'RootBone') {
+      localMat = matTRSB(n.x, n.y, n.rotation);
+    } else {
+      localMat = matTRSB(n.x, n.y, n.rotation, n.scaleX, n.scaleY);
+    }
+    const world = matMulB(parentMat, localMat);
+    mats.set(local, world);
+    return world;
+  }
+  for (const n of ab.nodes) worldOf(n.id);
+  return { byLocal, mats };
+}
+// アートボード座標 → boneCv の internal pixel（Fit.Contain・中央揃え前提。CSS位置合わせはpositionBoneCanvas側）
+function boneStageMap(ab) {
+  const aw = ab.width || 500, ah = ab.height || 500;
+  const s = Math.min((boneCv.width || 1) / aw, (boneCv.height || 1) / ah);
+  return { s, ox: (boneCv.width - aw * s) / 2, oy: (boneCv.height - ah * s) / 2 };
+}
+function positionBoneCanvas() {
+  const rect = cv.getBoundingClientRect();
+  const stageRect = $('stage').getBoundingClientRect();
+  boneCv.style.left = (rect.left - stageRect.left) + 'px';
+  boneCv.style.top = (rect.top - stageRect.top) + 'px';
+  boneCv.style.width = rect.width + 'px';
+  boneCv.style.height = rect.height + 'px';
+  if (boneCv.width !== cv.width) boneCv.width = cv.width;
+  if (boneCv.height !== cv.height) boneCv.height = cv.height;
+}
+// 現在のアニメ(rivAnimData)にそのボーンのrotationトラックが既にあるか（表示色分けの目安のみ）
+function boneHasRotationTrack(n) {
+  return !!(rivAnimData && rivAnimData.tracks && rivAnimData.tracks.some(tr => tr.targetIndex === n.globalIndex && tr.propertyName === 'rotation'));
+}
+function renderBoneOverlay() {
+  if (!boneCv.isConnected) return;
+  positionBoneCanvas();
+  const ctx = boneCv.getContext('2d');
+  ctx.clearRect(0, 0, boneCv.width, boneCv.height);
+  const editable = boneOn && paused && !!r;
+  boneCv.classList.toggle('editable', editable);
+  if (!boneOn) { boneLive = null; return; }
+  const ab = currentBoneArtboard();
+  const bones = ab ? ab.nodes.filter(n => n.type === 'Bone' || n.type === 'RootBone') : [];
+  if (!ab || !bones.length) { boneLive = null; return; }
+  const { byLocal, mats } = computeBoneWorldMats(ab);
+  const map = boneStageMap(ab);
+  const toCanvas = (wx, wy) => ({ x: map.ox + wx * map.s, y: map.oy + wy * map.s });
+  const handles = [];
+  ctx.lineCap = 'round';
+  for (const n of bones) {
+    const m = mats.get(n.id);
+    if (!m) continue;
+    const tipW = matApplyB(m, n.length || 0, 0);
+    const jc = toCanvas(m.tx, m.ty);
+    const tc = toCanvas(tipW.x, tipW.y);
+    const keyed = boneHasRotationTrack(n);
+    ctx.strokeStyle = keyed ? '#ffb454' : '#5ba7ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(jc.x, jc.y); ctx.lineTo(tc.x, tc.y); ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath(); ctx.arc(jc.x, jc.y, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(tc.x, tc.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = (boneDrag && boneDrag.local === n.id) ? '#ff4e6b' : '#fff';
+    ctx.fill();
+    ctx.strokeStyle = '#5ba7ff'; ctx.lineWidth = 2; ctx.stroke();
+    handles.push({ local: n.id, node: n, canvasX: tc.x, canvasY: tc.y });
+  }
+  boneLive = { byLocal, mats, ab, map, handles };
+}
+function boneCanvasToInternal(clientX, clientY) {
+  const rect = boneCv.getBoundingClientRect();
+  const sx = boneCv.width / (rect.width || 1);
+  const sy = boneCv.height / (rect.height || 1);
+  return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+}
+function internalToArtboard(px, py, map) { return { x: (px - map.ox) / map.s, y: (py - map.oy) / map.s }; }
+boneCv.addEventListener('pointerdown', (e) => {
+  if (!boneOn || !paused || !boneLive || !boneLive.handles.length) return;
+  const p = boneCanvasToInternal(e.clientX, e.clientY);
+  const rect = boneCv.getBoundingClientRect();
+  const scale = boneCv.width / (rect.width || 1);
+  const R = Math.max(10, 9 * scale);
+  let best = null, bestD = R * R;
+  for (const h of boneLive.handles) {
+    const dx = h.canvasX - p.x, dy = h.canvasY - p.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= bestD) { best = h; bestD = d2; }
+  }
+  if (!best) return;
+  e.preventDefault();
+  try { boneCv.setPointerCapture(e.pointerId); } catch {}
+  boneCv.classList.add('dragging');
+  const parentLocal = best.node.parentId || 0;
+  const pw = boneLive.mats.get(parentLocal) || MAT_ID;
+  const frameAngle = Math.atan2(pw.yx, pw.xx);
+  const selfMat = boneLive.mats.get(best.local);
+  boneDrag = {
+    local: best.local, node: best.node, ab: boneLive.ab, frameAngle,
+    joint: { x: selfMat.tx, y: selfMat.ty },
+    startRotation: best.node.rotation, moved: false,
+    snapshotPromise: pushRivUndoSnapshot(), pointerId: e.pointerId,
+  };
+});
+boneCv.addEventListener('pointermove', (e) => {
+  if (!boneDrag || boneDrag.pointerId !== e.pointerId) return;
+  const p = boneCanvasToInternal(e.clientX, e.clientY);
+  const map = boneLive ? boneLive.map : boneStageMap(boneDrag.ab);
+  const aw = internalToArtboard(p.x, p.y, map);
+  const dx = aw.x - boneDrag.joint.x, dy = aw.y - boneDrag.joint.y;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return;
+  boneDrag.node.rotation = Math.atan2(dy, dx) - boneDrag.frameAngle;
+  boneDrag.moved = true;
+  renderBoneOverlay();
+});
+async function commitBonePoseKeyframe(node) {
+  if (!rivAnimData || rivAnimData.error) await loadRivAnim();
+  if (!rivAnimData) throw new Error('no active animation to keyframe');
+  const fps = rivAnimData.fps || 60;
+  const frame = Math.max(0, Math.round(curTimeSec * fps));
+  let tr = rivAnimData.tracks.find(t => t.targetIndex === node.globalIndex && t.propertyName === 'rotation');
+  if (!tr) {
+    tr = { targetIndex: node.globalIndex, targetName: node.name, targetType: node.type, propertyName: 'rotation', keyframes: [] };
+    rivAnimData.tracks.push(tr);
+  }
+  let kf = tr.keyframes.find(k => k.frame === frame);
+  if (kf) kf.value = node.rotation;
+  else { kf = { frame, value: node.rotation, segment: null }; tr.keyframes.push(kf); tr.keyframes.sort((a, b) => a.frame - b.frame); }
+  await commitRivTrackEdits([tr]);
+  await loadRivAnim();
+}
+async function endBoneDrag(e) {
+  if (!boneDrag || (e && e.pointerId !== undefined && boneDrag.pointerId !== e.pointerId)) return;
+  const bd = boneDrag;
+  boneDrag = null;
+  boneCv.classList.remove('dragging');
+  try { boneCv.releasePointerCapture(bd.pointerId); } catch {}
+  if (!bd.moved) { renderBoneOverlay(); return; }
+  try {
+    if (boneKeyOn && mode === 'anim' && scrubAnim) {
+      await commitBonePoseKeyframe(bd.node);
+    } else {
+      await rivEditSet(bd.node.globalIndex, 'rotation', bd.node.rotation);
+    }
+    await commitRivSnapshot();
+    log(t('boneEditOk') + ' (' + (bd.node.name || bd.node.type) + ')');
+  } catch (err) {
+    bd.node.rotation = bd.startRotation;
+    log(t('boneEditNg') + err, 'error'); toast(t('boneEditNg') + err, 'err');
+    renderBoneOverlay();
+  }
+}
+boneCv.addEventListener('pointerup', endBoneDrag);
+boneCv.addEventListener('pointercancel', endBoneDrag);
+function syncBoneUI() {
+  $('boneToggle').classList.toggle('toggled', boneOn);
+  $('boneKeyToggle').checked = boneKeyOn;
+}
+$('boneToggle').onclick = () => {
+  boneOn = !boneOn;
+  localStorage.setItem('rive-mcp-bone-on', boneOn ? '1' : '0');
+  if (!boneOn) boneDrag = null;
+  syncBoneUI();
+  renderBoneOverlay();
+};
+$('boneKeyToggle').onchange = () => {
+  boneKeyOn = $('boneKeyToggle').checked;
+  localStorage.setItem('rive-mcp-bone-key', boneKeyOn ? '1' : '0');
+};
+syncBoneUI();
 
 // ---- SM グラフ（ステートマシンのノードグラフビュー。公式エディタ相当の差別化機能） -------------
 // レイアウト: Entry(id0)/Any(id1)を起点にBFSした深さを列とする簡易階層レイアウト（外部ライブラリ不使用）。
@@ -3676,6 +3989,7 @@ $('pauseBtn').onclick = () => {
   }
   $('pauseBtn').textContent = paused ? '▶' : '⏸';
   log(paused ? t('paused') : t('resumed'));
+  renderBoneOverlay();
 };
 $('speedSel').onchange = () => { playSpeed = Number($('speedSel').value); };
 $('zoom').oninput = () => { cv.style.transform = 'scale(' + $('zoom').value + ')'; drawSelBox(); };

@@ -43,11 +43,13 @@ const distStudio = pathToFileURL(join(root, "dist", "studio.js")).href;
 const distBinary = pathToFileURL(join(root, "dist", "rivBinary.js")).href;
 const distAssets = pathToFileURL(join(root, "dist", "rivAssets.js")).href;
 const distEdit = pathToFileURL(join(root, "dist", "rivEdit.js")).href;
+const distWriter = pathToFileURL(join(root, "dist", "rivWriter.js")).href;
 
 const { startStudio, stopStudio } = await import(distStudio);
 const { readRiv } = await import(distBinary);
 const { extractAssets } = await import(distAssets);
 const { editRiv } = await import(distEdit);
+const { createRiv } = await import(distWriter);
 
 let failures = 0;
 function check(label, cond, detail = "") {
@@ -302,6 +304,164 @@ try {
   }
 
   handle3.close();
+
+  // ---- ボーンオーバーレイ: GET /bones の階層/ワールド変換抽出 + FKポーズ編集の往復 -----------------
+  // Web StudioのボーンFKドラッグ機能が依存するサーバー側コントラクトをHTTP経由で直接検証する。
+  // ワールド変換の合成規約(matMul/matTRS)はテスト側で独立に再実装し、buildBonesJsonが返す生値
+  // (x/y/rotation/length。rotationはラジアン)から手計算した期待座標と突き合わせる(studio.ts
+  // renderBoneOverlay側の実装は同じ規約に依っており、ここでの一致がクライアント側計算の正しさの根拠になる)。
+  {
+    const matMul = (a, b) => ({
+      xx: a.xx * b.xx + a.xy * b.yx, yx: a.yx * b.xx + a.yy * b.yx,
+      xy: a.xx * b.xy + a.xy * b.yy, yy: a.yx * b.xy + a.yy * b.yy,
+      tx: a.xx * b.tx + a.xy * b.ty + a.tx, ty: a.yx * b.tx + a.yy * b.ty + a.ty,
+    });
+    const matTRS = (x, y, rot, sx = 1, sy = 1) => {
+      const c = Math.cos(rot), s = Math.sin(rot);
+      return { xx: c * sx, yx: s * sx, xy: -s * sy, yy: c * sy, tx: x, ty: y };
+    };
+    const matApply = (m, x, y) => ({ x: x * m.xx + y * m.xy + m.tx, y: x * m.yx + y * m.yy + m.ty });
+
+    // root(250,300) -> boneA(RootBone, x=0,y=-50, length=100, rotation未指定=0) -> boneB(Bone, length=60, rotation=30deg)
+    const { bytes: boneRivBytes } = createRiv({
+      artboard: { name: "BoneTest", width: 500, height: 400 },
+      groups: [{ id: "root", x: 250, y: 300 }],
+      bones: [
+        { id: "boneA", parent: "root", x: 0, y: -50, length: 100 },
+        { id: "boneB", parent: "boneA", length: 60, rotation: 30 },
+      ],
+      animations: [
+        {
+          name: "wave", fps: 60, duration: 60, loop: "loop",
+          tracks: [
+            { target: "boneB", property: "rotation", keyframes: [
+              { frame: 0, value: 30, easing: "linear" },
+              { frame: 60, value: 90, easing: "linear" },
+            ] },
+          ],
+        },
+      ],
+    });
+    const boneWork = join(scratch, "bone-test.riv");
+    writeFileSync(boneWork, boneRivBytes);
+    const PORT4 = PORT + 3;
+    const handle4 = startStudio({ rivPath: boneWork, port: PORT4 });
+    async function api4(path, opts) {
+      const res = await fetch(`http://localhost:${PORT4}${path}`, opts);
+      return { status: res.status, json: await res.json() };
+    }
+
+    const bonesRes = await api4("/bones");
+    const ab0 = bonesRes.json.artboards?.[0];
+    check("GET /bones returns the BoneTest artboard", ab0?.name === "BoneTest", JSON.stringify(bonesRes.json).slice(0, 300));
+    const nodeA = ab0?.nodes.find((n) => n.name === "boneA");
+    const nodeB = ab0?.nodes.find((n) => n.name === "boneB");
+    const nodeRoot = ab0?.nodes.find((n) => n.type !== "Bone" && n.type !== "RootBone");
+    check("boneA extracted as RootBone with x/y/length", nodeA?.type === "RootBone" && nodeA.x === 0 && nodeA.y === -50 && nodeA.length === 100, JSON.stringify(nodeA));
+    check("boneB extracted as Bone (no own x/y) with length60 and rotation~30deg(rad)", nodeB?.type === "Bone" && nodeB.length === 60 && Math.abs(nodeB.rotation - (30 * Math.PI) / 180) < 1e-4, JSON.stringify(nodeB));
+    check("ancestor 'root' group included for world-transform chain", !!nodeRoot && nodeRoot.x === 250 && nodeRoot.y === 300, JSON.stringify(nodeRoot));
+    check("boneB.parentId references boneA's local id", nodeA && nodeB && nodeB.parentId === nodeA.id);
+
+    // クライアント側と同じ規約でワールド変換を再合成し、手計算した期待座標と突き合わせる
+    const byId = new Map(ab0.nodes.map((n) => [n.id, n]));
+    function worldOf(local, memo) {
+      if (!local) return { xx: 1, yx: 0, xy: 0, yy: 1, tx: 0, ty: 0 };
+      if (memo.has(local)) return memo.get(local);
+      const n = byId.get(local);
+      const parentMat = worldOf(n.parentId || 0, memo);
+      let localMat;
+      if (n.type === "Bone") {
+        const pn = byId.get(n.parentId || 0);
+        localMat = matMul(matTRS(pn?.length ?? 0, 0, 0), matTRS(0, 0, n.rotation));
+      } else if (n.type === "RootBone") {
+        localMat = matTRS(n.x, n.y, n.rotation);
+      } else {
+        localMat = matTRS(n.x, n.y, n.rotation, n.scaleX, n.scaleY);
+      }
+      const world = matMul(parentMat, localMat);
+      memo.set(local, world);
+      return world;
+    }
+    const memo = new Map();
+    const mA = worldOf(nodeA.id, memo);
+    const mB = worldOf(nodeB.id, memo);
+    const tipA = matApply(mA, nodeA.length, 0);
+    const tipB = matApply(mB, nodeB.length, 0);
+    check("boneA joint world = (250,250)", Math.abs(mA.tx - 250) < 1e-3 && Math.abs(mA.ty - 250) < 1e-3, `(${mA.tx},${mA.ty})`);
+    check("boneA tip world = (350,250) (also = boneB joint)", Math.abs(tipA.x - 350) < 1e-3 && Math.abs(tipA.y - 250) < 1e-3, `(${tipA.x},${tipA.y})`);
+    check("boneB joint world continues from boneA's tip", Math.abs(mB.tx - tipA.x) < 1e-3 && Math.abs(mB.ty - tipA.y) < 1e-3);
+    const expectB = { x: 350 + 60 * Math.cos((30 * Math.PI) / 180), y: 250 + 60 * Math.sin((30 * Math.PI) / 180) };
+    check("boneB tip world matches hand-derived trig expectation", Math.abs(tipB.x - expectB.x) < 1e-2 && Math.abs(tipB.y - expectB.y) < 1e-2, `(${tipB.x},${tipB.y}) vs (${expectB.x},${expectB.y})`);
+
+    // ---- ポーズのキーフレーム化 (studio.ts commitBonePoseKeyframe と同じ手順): frame30に新規キーフレームを追加 ----
+    const anim0 = await api4("/anim?artboard=BoneTest&animation=wave");
+    const rotTrack0 = anim0.json.tracks.find((t) => t.propertyName === "rotation" && t.targetIndex === nodeB.globalIndex);
+    check("GET /anim exposes boneB's rotation track (frame0=30deg, frame60=90deg)",
+      rotTrack0?.keyframes.length === 2 &&
+        Math.abs(rotTrack0.keyframes[0].value - (30 * Math.PI) / 180) < 1e-4 &&
+        Math.abs(rotTrack0.keyframes[1].value - (90 * Math.PI) / 180) < 1e-4,
+      JSON.stringify(rotTrack0));
+    const newRotRad = (60 * Math.PI) / 180;
+    const mergedKfs = [...rotTrack0.keyframes, { frame: 30, value: newRotRad, segment: null }].sort((a, b) => a.frame - b.frame);
+    const specs = mergedKfs.map((k, i, arr) => {
+      const easing = i + 1 < arr.length ? segmentToEasingSpec(arr[i + 1].segment) : undefined;
+      return { frame: k.frame, value: (k.value * 180) / Math.PI, easing };
+    });
+    const kfRes = await api4("/edit", {
+      method: "POST",
+      body: JSON.stringify([{ op: "setKeyframes", index: nodeB.globalIndex, animation: "wave", property: "rotation", mode: "replace", keyframes: specs }]),
+    });
+    check("pose keyframe insert: POST /edit ok", kfRes.json.ok === true, JSON.stringify(kfRes.json));
+    const anim1 = await api4("/anim?artboard=BoneTest&animation=wave");
+    const rotTrack1 = anim1.json.tracks.find((t) => t.propertyName === "rotation" && t.targetIndex === nodeB.globalIndex);
+    const frames1 = rotTrack1.keyframes.map((k) => k.frame).sort((a, b) => a - b);
+    check("pose keyframe insert: track now has frames [0,30,60]", JSON.stringify(frames1) === JSON.stringify([0, 30, 60]), JSON.stringify(frames1));
+    const kf30 = rotTrack1.keyframes.find((k) => k.frame === 30);
+    check("pose keyframe insert: frame30 has the newly posed rotation (~60deg)", Math.abs(kf30.value - newRotRad) < 1e-3, String(kf30.value));
+    const kf0After = rotTrack1.keyframes.find((k) => k.frame === 0);
+    const kf60After = rotTrack1.keyframes.find((k) => k.frame === 60);
+    check("pose keyframe insert: original frame0/frame60 values untouched",
+      Math.abs(kf0After.value - (30 * Math.PI) / 180) < 1e-4 && Math.abs(kf60After.value - (90 * Math.PI) / 180) < 1e-4,
+      `${kf0After.value}, ${kf60After.value}`);
+
+    // ---- 直接ポーズ編集 (SMモード/非キーフレーム: op=set): boneAのrotationを直接書き換え、/bonesで再取得して反映を確認 ----
+    const newBoneARot = 0.4; // ラジアン。op=setはrivのみモードのインスペクタと同じく生値(ラジアン)をそのまま渡す
+    const setRes = await api4("/edit", {
+      method: "POST",
+      body: JSON.stringify([{ op: "set", index: nodeA.globalIndex, set: { rotation: newBoneARot } }]),
+    });
+    check("direct pose set: POST /edit ok", setRes.json.ok === true, JSON.stringify(setRes.json));
+    const bones2 = await api4("/bones");
+    const nodeA2 = bones2.json.artboards[0].nodes.find((n) => n.name === "boneA");
+    check("direct pose set: /bones reflects the new boneA.rotation", Math.abs(nodeA2.rotation - newBoneARot) < 1e-4, String(nodeA2.rotation));
+    // 再合成したワールド座標も新しい回転を反映していること(親→子の再帰計算が壊れていない)
+    const memo2 = new Map();
+    const byId2 = new Map(bones2.json.artboards[0].nodes.map((n) => [n.id, n]));
+    function worldOf3(local, byIdMap, memo3) {
+      if (!local) return { xx: 1, yx: 0, xy: 0, yy: 1, tx: 0, ty: 0 };
+      if (memo3.has(local)) return memo3.get(local);
+      const n = byIdMap.get(local);
+      const parentMat = worldOf3(n.parentId || 0, byIdMap, memo3);
+      let localMat;
+      if (n.type === "Bone") {
+        const pn = byIdMap.get(n.parentId || 0);
+        localMat = matMul(matTRS(pn?.length ?? 0, 0, 0), matTRS(0, 0, n.rotation));
+      } else if (n.type === "RootBone") {
+        localMat = matTRS(n.x, n.y, n.rotation);
+      } else {
+        localMat = matTRS(n.x, n.y, n.rotation, n.scaleX, n.scaleY);
+      }
+      const world = matMul(parentMat, localMat);
+      memo3.set(local, world);
+      return world;
+    }
+    const mA2 = worldOf3(nodeA2.id, byId2, memo2);
+    const tipA2 = matApply(mA2, nodeA2.length, 0);
+    const expectTipA2 = { x: 250 + 100 * Math.cos(newBoneARot), y: 250 + 100 * Math.sin(newBoneARot) };
+    check("direct pose set: boneA tip world moves to match the new rotation", Math.abs(tipA2.x - expectTipA2.x) < 1e-2 && Math.abs(tipA2.y - expectTipA2.y) < 1e-2, `(${tipA2.x},${tipA2.y}) vs (${expectTipA2.x},${expectTipA2.y})`);
+
+    handle4.close();
+  }
 } catch (e) {
   console.error(e);
   failures++;

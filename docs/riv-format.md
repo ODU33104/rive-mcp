@@ -94,3 +94,60 @@ ToC: varuint propertyKey... 0終端
 - 変形式: `Σ(w/255 × boneWorld × invTendonBind) × skinBind × 頂点ローカル座標`
 - 自動ウェイトは点-線分距離の 1/(d+1)^4。減衰が緩いとボーン影響が薄まり曲げが弱くなる
 - C2Dレンダラ（プレビュー）はメッシュ描画にシームが出る。**本番プレイヤー（WebGL/Skia）では出ない**
+
+## Data Binding / ViewModel（読み取り実装済み・書き込みは未実装）
+
+実装: `src/dataBinding.ts`（デコーダ、`riv_inspect` の `dataBinding` フィールドとして合流）。
+出典: rive-runtime `src/file.cpp` / `src/importers/*.cpp` / `src/viewmodel/*.cpp` /
+`src/data_bind/*.cpp` と `dev/defs/**/*.json` の `"runtime"`/`"typeRuntime"` フラグを実際に読んで検証
+（defs.json 自体にはこの帰属規則までは書かれていない）。
+
+### 重大な既知の罠: `List<Id>` フィールドの直列化
+
+`sourcePathIds`（DataBindContext）や `path`（DataBindPath）等 `type: "List<Id>"` のプロパティは、
+`typeRuntime: "Bytes"` で `CoreBytesType`（id=1、**FIELD_STRING と同一の wire type**）直列化される
+（varuint長 + 生バイト列。中身は varuint(LEB128) を詰めただけの数値配列）。
+`rivBinary.ts` の `fieldTypeOf()` は元々これを未知の default 扱いで `"uint"`（単一varuint）と誤判定しており、
+**DataBindContext を含む .riv を読むとその1プロパティで即座にバイトずれが起き、以降のオブジェクトストリーム
+全体が破壊される**バグだった（`riv_dump`/`riv_inspect` 双方に影響。このタスクで修正済み: `List<`
+で始まる型は `"string"`（＝FIELD_STRING）として読み、`decodeVaruintList()` で中身をさらに `number[]` に
+デコードする。生バイトは roundtrip 用に `raw` にも保持）。
+
+### オブジェクトの所属規則（フラットなストリーム上の ImportStack 方式）
+
+ViewModel系オブジェクトの親子関係は `parentId` ではなく、他の箇所（KeyedProperty→LinearAnimation、
+StateTransition→直前のstate）と同じ「ストリーム上で直前に出現した該当オブジェクトに帰属する」規則で決まる
+（rive-runtime の `ImportStack::latest<T>()` に相当）:
+
+| 子 | 帰属先 | 備考 |
+|---|---|---|
+| `ViewModelProperty*` | 直前の `ViewModel` | 子の出現順 = その ViewModel 内でのローカルindex |
+| `ViewModelInstanceValue*` | 直前の `ViewModelInstance` | `viewModelInstanceId` は **runtime:false（ファイルに存在しない）**。所属はストリーム位置のみ |
+| `ViewModelInstanceListItem` | 直前の `ViewModelInstanceList` | `instanceListId` も runtime:false |
+| `DataEnumValue` | 直前の `DataEnumCustom` | `enumId` も runtime:false。**`DataEnumSystem` には帰属しない**（rive-runtimeのEnumImporterはDataEnumCustomにしか積まれない） |
+| `FormulaToken*` | 直前の `DataConverterFormula` | `formulaId` も runtime:false |
+| `DataBind`/`DataBindContext` の target | **ファイル全体でこのオブジェクトの直前にある「DataBindではない」オブジェクト** | `targetId` は **runtime:false（ファイルに存在せず、ランタイムも使わない）**。StateTransitionの「直前に書いたstateに帰属」と同型だが、こちらは（Artboard境界を跨いだ）ファイル全体でのグローバルな直前オブジェクト |
+
+### Idフィールドの意味（グローバル通し番号 or ローカルindexか）
+
+| フィールド | 意味 |
+|---|---|
+| `ViewModelInstance.viewModelId` / `ViewModelPropertyViewModel.viewModelReferenceId` / `ViewModelInstanceListItem.viewModelId` | **ファイル全体でのViewModelの出現順**（グローバル通し番号） |
+| `ViewModelInstanceValue.viewModelPropertyId` | **所属ViewModelのproperties配列内でのローカルindex**（"normalized relative to the ViewModel itself" — dev/defsの説明そのまま） |
+| `ViewModelInstanceViewModel.propertyValue` / `ViewModelInstanceListItem.viewModelInstanceId` | 参照先ViewModelの `instance()` ローカルindex（＝そのViewModelIdを持つViewModelInstanceの出現順） |
+| `ViewModelPropertyEnumCustom.enumId` | **DataEnum/DataEnumCustumのみを積んだグローバル列**でのindex（`DataEnumSystem`は含まれない） |
+| `DataBind.converterId` / `DataConverterGroupItem.converterId`/`groupId` | `object->is<DataConverter>()` なオブジェクト（`DataConverterGroupItem`・`FormulaToken*`系を除く）のグローバル出現順index |
+| `DataBind.propertyKey` | 通常のpropertyKeyと同じ意味（targetオブジェクト上のどのプロパティにバインドするか） |
+| `DataBind.flags` | `DataBindFlags`（`include/rive/data_bind_flags.hpp`）: bit0=Direction(0=toTarget/1=toSource), bit1=TwoWay, bit2=Once, bit3=SourceToTargetRunsFirst, bit4=NameBased |
+
+### 実装上の要注意点
+
+1. `ViewModel`/`ViewModelInstance` は Backboard直後・Artboard前に置かれることが多いが、
+   フラットなストリームを1パスで舐めるだけの実装で正しく解釈できる（Artboard境界を意識する必要はない）
+2. `ViewModel.viewModelOrder`/`defaultInstanceId`/`editingInstanceId`、`ViewModelInstance.x/y/onStage/order/export/isOverride`、
+   各種 `order`（FractionalIndex型）はすべて **runtime:false = 実ファイルには一切書かれない**エディタ専用メタデータ。
+   defs.json には載っているが、実データで出現することはない
+3. `DataEnumSystem`（組み込み enum。`enumType` で種別を識別）は `DataEnumValue` を持たない。
+   値は defs.json だけからは分からないランタイム内蔵テーブル由来なので、バイナリ解析だけでは列挙できない
+   （`src/dataBinding.ts` は `systemEnums` として `enumType` のみ返す）
+4. 生成（create）側は未実装。読み取り専用（`riv_inspect` の `dataBinding` フィールド）

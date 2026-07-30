@@ -55,8 +55,14 @@ export function propInfo(key: number): { name: string; type: string; owner: stri
 
 // defs の type 文字列 → バイナリフィールドタイプ
 // uint/bool → varuint系, double → float32, string/bytes → 長さ+データ, color → uint32
+// List<Id>（例: DataBindContext.sourcePathIds）は typeRuntime="Bytes" で CoreBytesType(id=1) 直列化。
+// FIELD_STRING と同じ「varuint長 + 生バイト列」。ここを "uint" に誤判定すると単一varuintとして
+// 読んでしまい、以降のオブジェクトストリーム全体がバイトずれで破壊される（詳細: docs/riv-format.md の
+// 「Data Binding / ViewModel」節）
 export function fieldTypeOf(defType: string): "uint" | "string" | "double" | "color" {
-  switch (defType.toLowerCase()) {
+  const t = defType.toLowerCase();
+  if (t.startsWith("list<")) return "string";
+  switch (t) {
     case "double":
       return "double";
     case "string":
@@ -67,6 +73,14 @@ export function fieldTypeOf(defType: string): "uint" | "string" | "double" | "co
     default:
       return "uint"; // uint / bool / callback / Id 等
   }
+}
+
+// List<Id> の中身: 生バイト列に varuint(LEB128) を詰めただけ（DataBindContext::decodeSourcePathIds と同じ形式）
+export function decodeVaruintList(bytes: Uint8Array): number[] {
+  const r = new BinaryReader(bytes);
+  const out: number[] = [];
+  while (!r.eof) out.push(r.varuint());
+  return out;
 }
 
 // ---- リーダー -----------------------------------------------------------
@@ -216,6 +230,11 @@ export function readRiv(bytes: Uint8Array, opts?: { tolerant?: boolean }): RivDu
             const len = r.varuint();
             rawValue = r.bytes_(len).slice();
             value = `<bytes:${len}>`;
+          } else if (info && info.type.toLowerCase().startsWith("list<")) {
+            const len = r.varuint();
+            const raw = r.bytes_(len).slice();
+            rawValue = raw; // roundtrip は生バイトのまま保持
+            value = decodeVaruintList(raw); // 表示用: varuint列をデコードしたnumber[]
           } else {
             rawValue = value = r.string();
           }

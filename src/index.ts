@@ -13,6 +13,7 @@ import { encodeGif } from "./gif.js";
 import { encodeApng } from "./apng.js";
 import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
+import { decodeDataBinding } from "./dataBinding.js";
 import { lintRiv } from "./rivLint.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
@@ -145,7 +146,7 @@ server.registerTool(
   {
     title: "Inspect a .riv file",
     description:
-      "Extract full metadata from a .riv file: artboards, animations (duration/fps/loop), state machines and their inputs (name/type/initial value). Uses the official Rive runtime.",
+      "Extract full metadata from a .riv file: artboards, animations (duration/fps/loop), state machines and their inputs (name/type/initial value). Uses the official Rive runtime. Also decodes Data Binding (ViewModel) structure when present — ViewModel definitions and their properties, ViewModelInstances with resolved property values (including enum/nested-viewmodel/list references), enums, converters, and DataBind wiring (which target object/property each bind writes to) — via direct binary parsing (returned as `dataBinding`, omitted when the file has none).",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
     },
@@ -154,12 +155,25 @@ server.registerTool(
     const { bytes, abs } = loadRiv(path);
     const header = readHeader(bytes);
     const info = await host.inspect(bytes);
+    // dataBinding (ViewModel等) はランタイムのinspect APIでは取れないので、バイナリ解析で補完する
+    let dataBinding = null;
+    try {
+      const dump = readRiv(bytes, { tolerant: true });
+      dataBinding = decodeDataBinding(dump);
+    } catch {
+      // 解析失敗時は黙って省略（riv_inspect本来の結果は返す）
+    }
     return {
       content: [
         {
           type: "text",
           text: JSON.stringify(
-            { file: abs, formatVersion: header ? `${header.major}.${header.minor}` : null, ...info },
+            {
+              file: abs,
+              formatVersion: header ? `${header.major}.${header.minor}` : null,
+              ...info,
+              ...(dataBinding ? { dataBinding } : {}),
+            },
             null,
             2
           ),
