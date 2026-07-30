@@ -39,3 +39,7 @@ samples/ref/skills_listener.riv
 samples/cute_cat.riv
 !assets/inter.ttf
 
+samples/e2e-batch-out/
+samples/test-ab-compare.gif
+samples/*.ab.apng
+samples/*.ab.gif
