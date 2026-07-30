@@ -396,8 +396,16 @@ window.riveApi = {
         // ウォームアップが間に合わず空(~110B)のWebMを返すことがある(非決定的)。中身が明らかに空なら
         // 同じシーンで1回だけ録り直す。
         let result = await recordOnce();
-        if (result.blob.size < 1000 && result.steps > 3) {
+        for (let retry = 0; retry < 2 && result.blob.size < 1000 && result.steps > 3; retry++) {
           result = await recordOnce();
+        }
+        if (result.blob.size < 1000 && result.steps > 3) {
+          // 実測: 高CPU負荷下(並列レンダリング等)ではリトライしても全フレーム落ちすることがある。
+          // 110B程度のヘッダのみのWebMを黙って返すより、明示エラーで呼び出し側に再試行を促す。
+          throw new Error(
+            "Video capture produced an empty WebM (" + result.blob.size + " bytes after " + result.steps +
+              " frames, 3 attempts). This usually means the machine was under heavy CPU load during the realtime recording. Retry when the system is idle."
+          );
         }
         const base64 = await blobToBase64(result.blob);
         return {

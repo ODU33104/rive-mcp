@@ -25,6 +25,8 @@ import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin,
 import { importSvg } from "./svgImport.js";
 import { importLottie } from "./lottieImport.js";
 import { decompileRiv } from "./rivDecompile.js";
+import { runBatchRender, type BatchJobSpec } from "./batchRender.js";
+import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 
@@ -1343,6 +1345,53 @@ server.registerTool(
   )
 );
 
+// ---- riv_batch_render ------------------------------------------------------
+const batchDefaultsShape = {
+  format: z.enum(["png", "gif", "apng", "webm", "sprites"]).optional().describe("Output format for this job"),
+  outDir: z.string().optional().describe("Output directory (default: alongside the source .riv)"),
+  artboard: z.string().optional(),
+  animation: z.string().optional(),
+  stateMachine: z.string().optional(),
+  width: z.number().int().positive().max(2048).optional(),
+  height: z.number().int().positive().max(2048).optional(),
+  background: z.string().optional().describe("CSS background color"),
+  time: z.number().optional().describe("format=png: seconds to advance before capture (default 0)"),
+  duration: z.number().positive().max(30).optional().describe("format=gif/apng/webm/sprites: seconds to render (default: one animation loop, or 2s)"),
+  fps: z.number().int().positive().max(60).optional(),
+  transparent: z.boolean().optional().describe("format=apng: render on a transparent background (default true)"),
+  loops: z.number().int().min(0).optional().describe("format=apng: loop count, 0=infinite (default 0)"),
+  count: z.number().int().positive().max(256).optional().describe("format=sprites: frame count (default 16)"),
+};
+const batchJobSchema = z.object({
+  rivPath: z.string().optional().describe("Path to a single .riv file (mutually exclusive with glob)"),
+  glob: z.string().optional().describe("Glob pattern matching multiple .riv files, e.g. 'samples/**/*.riv' (self-contained matcher: only '*' and '**' are supported, no {a,b} or [abc])"),
+  ...batchDefaultsShape,
+});
+
+server.registerTool(
+  "riv_batch_render",
+  {
+    title: "Batch-render many .riv files/formats in one call",
+    description:
+      "Render a list of jobs — each a single .riv (rivPath) or a glob of .riv files (glob) — to png/gif/apng/webm/sprites, sequentially reusing the same headless Chromium page (no parallel pages). Built for CI/scripts: call this tool repeatedly from your pipeline instead of expecting a live watch mode — none is provided, since MCP's request/response model doesn't fit a background file watcher. 'defaults' holds options shared across every job; each job's own fields override them. One job's failure does not stop the batch — every job (and every file a glob expands to) gets its own success/error/outPath/durationMs entry in the returned report.",
+    inputSchema: {
+      jobs: z.array(batchJobSchema).min(1).max(200).describe("Jobs to render, in order"),
+      defaults: z.object(batchDefaultsShape).optional().describe("Shared defaults merged under each job (job-level values win)"),
+    },
+  },
+  wrap(async ({ jobs, defaults }: { jobs: BatchJobSpec[]; defaults?: BatchJobSpec }) => {
+    const report = await runBatchRender(host, jobs, defaults, process.cwd());
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Batch render: ${report.succeeded}/${report.total} succeeded, ${report.failed} failed (${report.totalMs}ms)\n${JSON.stringify(report.results, null, 1)}`,
+        },
+      ],
+    };
+  })
+);
+
 // ---- riv_extract_assets --------------------------------------------------
 server.registerTool(
   "riv_extract_assets",
@@ -1447,6 +1496,47 @@ server.registerTool(
       };
     }
   )
+);
+
+// ---- riv_ab_compare ------------------------------------------------------
+server.registerTool(
+  "riv_ab_compare",
+  {
+    title: "Render two .riv files side by side for visual A/B review",
+    description:
+      "Render the same artboard/animation/state-machine from two .riv files under identical conditions and composite them side by side (horizontal or vertical) into a single GIF/APNG for human review — e.g. a rig before/after an edit, or two design variants. 'A: <file>' / 'B: <file>' labels are burned into each frame by default. If the two files' animation lengths differ, the shorter one holds on its final frame once it ends. Different from riv_visual_diff: that tool computes a per-pixel numeric diff of the SAME thing rendered two ways (for regression testing); this tool is for eyeballing two DIFFERENT things playing side by side (for design review), not measuring a delta.",
+    inputSchema: {
+      pathA: z.string().describe("First .riv file"),
+      pathB: z.string().describe("Second .riv file"),
+      artboard: z.string().optional().describe("Artboard name, applied to both files (default: first)"),
+      animation: z.string().optional().describe("Animation name, applied to both files (default: first)"),
+      stateMachine: z.string().optional().describe("State machine name, applied to both files (takes precedence over animation)"),
+      width: z.number().int().positive().max(1024).optional().describe("Panel width (default 320); panel height is derived from file A's aspect ratio and then forced onto file B so both panels align"),
+      height: z.number().int().positive().max(1024).optional().describe("Panel height (default: derived from file A's own aspect ratio)"),
+      fps: z.number().int().positive().max(60).optional().describe("Default 20"),
+      duration: z.number().positive().max(30).optional().describe("Seconds to render (default: the longer of the two files' own animation lengths)"),
+      background: z.string().optional().describe("CSS background per panel (default: white for gif, transparent for apng)"),
+      format: z.enum(["gif", "apng"]).optional().describe("Output format (default gif)"),
+      layout: z.enum(["horizontal", "vertical"]).optional().describe("Panel arrangement (default horizontal)"),
+      labels: z.boolean().optional().describe("Burn 'A: <file>' / 'B: <file>' labels into each frame (default true)"),
+      out: z.string().optional().describe("Output path (default: alongside pathA)"),
+    },
+  },
+  wrap(async (a: AbCompareOptions) => {
+    const result = await runAbCompare(host, a);
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            `A/B compare (${result.layout}, ${result.format}) -> ${result.outPath}\n` +
+            `${result.width}x${result.height}, ${result.frameCount} frames @ ${result.fps}fps ` +
+            `(A duration ${result.durationA.toFixed(2)}s, B duration ${result.durationB.toFixed(2)}s, target ${result.targetDuration.toFixed(2)}s)`,
+        },
+        { type: "image", data: result.previewFramePng, mimeType: "image/png" },
+      ],
+    };
+  })
 );
 
 // ---- riv_studio --------------------------------------------------------

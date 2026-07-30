@@ -6,12 +6,15 @@
 // - rivのみモード: /tree で構造展開、/edit（editRiv）で生プロパティ編集
 // - 「AIへの指示」ボックス: UIから指示を積む → MCPツール riv_studio_notes で取得
 import { createServer, type Server } from "node:http";
-import { readFileSync, writeFileSync, existsSync, watch, type FSWatcher } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, watch, mkdirSync, rmSync, unlinkSync, type FSWatcher } from "node:fs";
 import { join, dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { createRiv, pngSize, type SceneSpec } from "./rivWriter.js";
 import { readRiv, propInfo, type RivObject } from "./rivBinary.js";
 import { editRiv, setKeyframeCurve, type EditOp } from "./rivEdit.js";
+import { extractAssets, replaceAssetBytes } from "./rivAssets.js";
 import { encodeApng } from "./apng.js";
 import { encodeGif } from "./gif.js";
 
@@ -380,18 +383,28 @@ export function buildSmJson(bytes: Uint8Array): unknown {
   return { artboards };
 }
 
+export interface StudioSnapshot {
+  id: string;
+  name: string;
+  time: string; // ISO
+  file: string; // snapDir 内の絶対パス
+}
+
 let current: {
   server: Server;
   watchers: FSWatcher[];
   port: number;
   notes: StudioNote[];
   notify: (msg: string) => void;
+  snapDir: string;
+  snapshots: StudioSnapshot[];
 } | null = null;
 
 export function stopStudio(): void {
   if (current) {
     for (const w of current.watchers) w.close();
     current.server.close();
+    try { rmSync(current.snapDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     current = null;
   }
 }
@@ -411,6 +424,9 @@ export function startStudio(opts: StudioOptions): StudioHandle {
   const port = opts.port ?? 8787;
   const sseClients = new Set<import("node:http").ServerResponse>();
   const notes: StudioNote[] = [];
+  // スナップショット履歴: undoとは別に名前付きで .riv 全体をコピー保存する作業ディレクトリ（セッション終了時にrmSync）
+  const snapDir = join(tmpdir(), `rive-mcp-studio-${randomUUID()}`);
+  const snapshots: StudioSnapshot[] = [];
 
   const notify = (msg = "reload") => {
     for (const res of sseClients) res.write(`data: ${msg}\n\n`);
@@ -648,13 +664,118 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         });
         return;
       }
+      // アセット差し替え(ドラッグ&ドロップ): 埋め込み画像アセットの一覧をサムネイル(base64)付きで返す
+      if (url.pathname === "/api/assets") {
+        if (!existsSync(rivPath)) return send(200, "application/json; charset=utf-8", JSON.stringify({ assets: [] }));
+        const list = extractAssets(new Uint8Array(readFileSync(rivPath)))
+          .filter((a) => a.typeName === "ImageAsset")
+          .map((a) => ({
+            index: a.index,
+            name: a.name,
+            ext: a.ext,
+            width: a.width ?? null,
+            height: a.height ?? null,
+            dataBase64: Buffer.from(a.bytes).toString("base64"),
+          }));
+        return send(200, "application/json; charset=utf-8", JSON.stringify({ assets: list }));
+      }
+      // アセット差し替え: 指定index(ExtractedAsset.index)のFileAssetContentsバイト列を無損失で置換
+      if (url.pathname === "/api/replace-asset" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { index, dataBase64 } = JSON.parse(body) as { index: number; dataBase64: string };
+            if (typeof index !== "number" || typeof dataBase64 !== "string" || !dataBase64) {
+              throw new Error("index and dataBase64 are required");
+            }
+            const newBytes = new Uint8Array(Buffer.from(dataBase64, "base64"));
+            const { bytes, log } = replaceAssetBytes(new Uint8Array(readFileSync(rivPath)), index, newBytes);
+            suppressWatch = Date.now() + 400;
+            writeFileSync(rivPath, bytes);
+            send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true, log }));
+            notify();
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
+      // スナップショット履歴: 名前付きで .riv 全体のコピーをセッション作業ディレクトリに保存/一覧/復元/削除
+      if (url.pathname === "/api/snapshots" && req.method === "GET") {
+        return send(
+          200,
+          "application/json; charset=utf-8",
+          JSON.stringify({ snapshots: snapshots.map(({ id, name, time }) => ({ id, name, time })) })
+        );
+      }
+      if (url.pathname === "/api/snapshots" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            if (!existsSync(rivPath)) throw new Error("riv not found yet");
+            const { name } = JSON.parse(body) as { name?: string };
+            mkdirSync(snapDir, { recursive: true });
+            const id = randomUUID();
+            const file = join(snapDir, `${id}.riv`);
+            writeFileSync(file, readFileSync(rivPath));
+            const snap: StudioSnapshot = {
+              id,
+              name: name && name.trim() ? name.trim() : new Date().toLocaleString(),
+              time: new Date().toISOString(),
+              file,
+            };
+            snapshots.push(snap);
+            send(
+              200,
+              "application/json; charset=utf-8",
+              JSON.stringify({ ok: true, snapshots: snapshots.map(({ id: sid, name: sn, time: st }) => ({ id: sid, name: sn, time: st })) })
+            );
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
+      if (url.pathname === "/api/snapshots/restore" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { id } = JSON.parse(body) as { id: string };
+            const snap = snapshots.find((s) => s.id === id);
+            if (!snap) throw new Error(`Snapshot ${id} not found`);
+            suppressWatch = Date.now() + 400;
+            writeFileSync(rivPath, readFileSync(snap.file));
+            send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true }));
+            notify();
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
+      if (url.pathname === "/api/snapshots/delete" && req.method === "POST") {
+        readBody((body) => {
+          try {
+            const { id } = JSON.parse(body) as { id: string };
+            const idx = snapshots.findIndex((s) => s.id === id);
+            if (idx === -1) throw new Error(`Snapshot ${id} not found`);
+            const [snap] = snapshots.splice(idx, 1);
+            try { unlinkSync(snap.file); } catch { /* already gone */ }
+            send(
+              200,
+              "application/json; charset=utf-8",
+              JSON.stringify({ ok: true, snapshots: snapshots.map(({ id: sid, name: sn, time: st }) => ({ id: sid, name: sn, time: st })) })
+            );
+          } catch (e) {
+            send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+          }
+        });
+        return;
+      }
       send(404, "text/plain", "not found");
     } catch (e) {
       send(500, "text/plain", e instanceof Error ? e.message : String(e));
     }
   });
   server.listen(port);
-  current = { server, watchers, port, notes, notify };
+  current = { server, watchers, port, notes, notify, snapDir, snapshots };
   return { url: `http://localhost:${port}/`, port, close: stopStudio };
 }
 
@@ -689,6 +810,17 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   #dirtyBadge { color:var(--warn); font-size:14px; line-height:1; display:none; }
   #connDot { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; transition:background .12s ease; }
   #connDot.off { background:var(--accent-2); }
+  /* ---- アートボードタブ (マルチアートボード切替。2枚以上のときのみ表示) ---- */
+  #artboardTabs { display:none; gap:4px; padding:6px 12px; background:var(--panel); border-bottom:1px solid var(--border);
+    overflow-x:auto; flex-shrink:0; }
+  #artboardTabs.show { display:flex; }
+  .abTab { height:26px; display:inline-flex; align-items:center; gap:6px; padding:0 12px; background:var(--panel-2);
+    border:1px solid var(--border); border-radius:var(--radius-s); color:var(--text-dim); font-size:12px; cursor:pointer;
+    white-space:nowrap; flex-shrink:0; transition:border-color .12s ease, color .12s ease, background .12s ease; }
+  .abTab:hover { border-color:var(--accent); color:var(--text); }
+  .abTab.on { background:rgba(91,167,255,.16); border-color:var(--accent); color:#fff; }
+  .abTab .abTabIcon { width:12px; height:12px; flex-shrink:0; opacity:.8; }
+  .abTab .abTabIcon svg { width:12px; height:12px; }
   /* ---- レイアウト ---- */
   #main { flex:1; display:flex; min-height:0; }
   #left { width:240px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
@@ -701,6 +833,11 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   canvas { max-width:92%; max-height:92%; min-width:0; min-height:0; box-shadow:0 8px 24px rgba(0,0,0,.4); border-radius:4px; background:transparent; }
   #onionCv { position:absolute; max-width:none; max-height:none; pointer-events:none; border-radius:4px; box-shadow:none; }
   button.toggled { border-color:var(--accent); background:rgba(91,167,255,.18); color:#fff; }
+  /* ---- アセットドラッグ&ドロップ ---- */
+  #dropOverlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:6;
+    background:rgba(20,20,25,.82); border:2px dashed var(--accent); border-radius:4px; pointer-events:none; }
+  #dropOverlay.show { display:flex; }
+  #dropOverlay span { font-size:13px; color:var(--accent); font-weight:600; }
   /* ---- 選択枠 ---- */
   #selBox { position:absolute; border:1px solid var(--accent); border-radius:2px; pointer-events:none; display:none; }
   #selBox.dragging { border-style:dashed; }
@@ -863,6 +1000,28 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   #help h4 { margin:16px 0 4px; font-size:13px; }
   #help p, #help li { font-size:12.5px; color:var(--text); }
   #help code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:11.5px; font-family:var(--mono); color:var(--accent); }
+  /* ---- アセット選択モーダル (差し替え先が複数のとき) ---- */
+  #assetPickWrap { position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; z-index:11; }
+  #assetPickWrap.open { display:flex; }
+  #assetPick { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); max-width:420px; width:92%;
+    max-height:80vh; overflow-y:auto; padding:16px; animation:panelIn .15s ease; }
+  #assetPick h3 { color:var(--accent); margin:0 0 4px; font-size:14px; }
+  #assetPick .hint { margin-bottom:10px; }
+  #assetPickGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .assetPickItem { background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-s); padding:8px;
+    cursor:pointer; text-align:center; transition:border-color .12s ease; }
+  .assetPickItem:hover { border-color:var(--accent); }
+  .assetPickItem img { width:100%; height:56px; object-fit:contain; background:var(--bg); border-radius:4px; margin-bottom:6px; }
+  .assetPickItem .apName { font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* ---- スナップショット履歴 ---- */
+  #snapList { display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .snapRow { display:flex; align-items:center; gap:6px; background:var(--panel-2); border:1px solid var(--border);
+    border-radius:var(--radius-s); padding:5px 8px; }
+  .snapRow .snapInfo { flex:1; min-width:0; }
+  .snapRow .snapName { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .snapRow .snapTime { font-size:10.5px; color:var(--text-faint); }
+  .snapRow.confirming { border-color:var(--accent-2); background:rgba(255,78,107,.08); }
+  .snapConfirmText { font-size:11px; color:var(--accent-2); flex:1; }
 </style></head><body>
 <div id="appbar">
   <div class="ab-left">
@@ -885,6 +1044,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <span id="connDot" data-i18n-title="connT"></span>
   </div>
 </div>
+<div id="artboardTabs"></div>
 <div id="main">
 <div id="left">
   <div id="leftTabs">
@@ -928,7 +1088,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <div class="rzHandle ne" data-corner="ne"></div>
     <div class="rzHandle sw" data-corner="sw"></div>
     <div class="rzHandle se" data-corner="se"></div>
-  </div><svg id="smGraphSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  </div><svg id="smGraphSvg" xmlns="http://www.w3.org/2000/svg"></svg><div id="dropOverlay"><span data-i18n="dropHint"></span></div></div>
   <div id="timeline"></div>
   <div id="toolbar">
     <button id="pauseBtn" class="mini icon" data-i18n-aria="pauseA">⏸</button>
@@ -973,6 +1133,13 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   <div class="hint" data-i18n="aiHint"></div>
   <h2><span data-i18n="hLog"></span> <button class="mini" id="logClear" data-i18n="clear" style="float:right"></button></h2>
   <div id="log"></div>
+  <h2 data-i18n="hSnap"></h2>
+  <div class="hint" data-i18n="snapHint"></div>
+  <div id="snapList"><span class="hint">-</span></div>
+  <div class="row">
+    <input type="text" id="snapName" data-i18n-ph="snapNamePh">
+    <button id="snapSave" class="mini" data-i18n="snapSave"></button>
+  </div>
   <h2 data-i18n="hScene"></h2>
   <textarea id="scene" spellcheck="false" data-i18n-ph="scenePlaceholder"></textarea>
   <div class="row">
@@ -1008,6 +1175,12 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <li data-i18n="helpP6"></li>
   </ul>
   <p style="text-align:right"><button id="helpClose" data-i18n="close"></button></p>
+</div></div>
+<div id="assetPickWrap"><div id="assetPick">
+  <h3 data-i18n="assetPickTitle"></h3>
+  <div class="hint" data-i18n="assetPickHint"></div>
+  <div id="assetPickGrid"></div>
+  <p style="text-align:right; margin-top:10px"><button id="assetPickCancel" data-i18n="close"></button></p>
 </div></div>
 <script src="/rive.js"></script>
 <script>
@@ -1079,6 +1252,17 @@ const I18N = {
     onionBtn: 'オニオンスキン', onionBtnT: '前後フレームを半透明表示（再生中は自動オフ）', onionRangeL: 'オニオンスキンの範囲（前後フレーム数）',
     aiCtxCheckA: '選択/時刻/アートボードを添付', aiCtxChipT: 'クリックで送信への添付をオン/オフ',
     ctxSelPrefix: '選択: ', ctxNone: '(コンテキストなし)',
+    dropHint: '画像をドロップしてアセットを差し替え', dropNoAssets: 'このファイルには埋め込み画像アセットがありません',
+    assetReplaced: 'アセットを差し替えました', assetReplaceFail: '差し替え失敗: ',
+    assetPickTitle: '差し替え先のアセットを選択', assetPickHint: '複数の埋め込み画像があります。クリックして差し替え先を選んでください。',
+    hSnap: 'スナップショット', snapHint: '名前を付けて .riv の状態を保存し、後で復元できます（undoとは別枠）',
+    snapNamePh: 'スナップショット名（省略可）', snapSave: '保存', snapNone: 'スナップショットなし',
+    snapRestoreBtn: '復元', snapDeleteBtn: '削除',
+    snapRestoreConfirm: 'この時点まで復元しますか？（今の変更は失われます）', snapDeleteConfirm: 'このスナップショットを削除しますか？',
+    snapConfirmYes: 'はい', snapConfirmNo: 'キャンセル',
+    snapSaved: 'スナップショットを保存しました', snapRestored: 'スナップショットを復元しました', snapDeleted: 'スナップショットを削除しました',
+    snapFail: 'スナップショット操作に失敗: ',
+    abTabsHint: 'アートボード',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -1146,6 +1330,17 @@ const I18N = {
     onionBtn: 'Onion skin', onionBtnT: 'Ghost neighboring frames (auto-off while playing)', onionRangeL: 'Onion skin range (frames before/after)',
     aiCtxCheckA: 'Attach selection / time / artboard', aiCtxChipT: 'Click to toggle attaching context to the sent note',
     ctxSelPrefix: 'sel: ', ctxNone: '(no context)',
+    dropHint: 'Drop an image to replace an asset', dropNoAssets: 'This file has no embedded image assets',
+    assetReplaced: 'Asset replaced', assetReplaceFail: 'Replace failed: ',
+    assetPickTitle: 'Pick an asset to replace', assetPickHint: 'This file has multiple embedded images. Click one to replace it.',
+    hSnap: 'Snapshots', snapHint: 'Save a named copy of the .riv and restore it later (separate from undo)',
+    snapNamePh: 'Snapshot name (optional)', snapSave: 'Save', snapNone: 'No snapshots yet',
+    snapRestoreBtn: 'Restore', snapDeleteBtn: 'Delete',
+    snapRestoreConfirm: 'Restore to this snapshot? Current changes will be lost.', snapDeleteConfirm: 'Delete this snapshot?',
+    snapConfirmYes: 'Yes', snapConfirmNo: 'Cancel',
+    snapSaved: 'Snapshot saved', snapRestored: 'Snapshot restored', snapDeleted: 'Snapshot deleted',
+    snapFail: 'Snapshot operation failed: ',
+    abTabsHint: 'Artboard',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -1419,6 +1614,31 @@ function populate() {
   buildTree();
   renderGraphFindings();
   if (graphMode) renderSmGraph();
+  renderArtboardTabs(abNames, r.activeArtboard);
+}
+
+// ---- マルチアートボードタブ（appbar直下。2枚以上のときのみ表示） -----------------------
+// 実体は既存の artboardSel(<select>、playPane内)と同じ状態を駆動する。切替の唯一の入口は switchArtboard()。
+function renderArtboardTabs(names, active) {
+  const bar = $('artboardTabs');
+  bar.textContent = '';
+  bar.classList.toggle('show', names.length > 1);
+  if (names.length <= 1) return;
+  for (const n of names) {
+    const b = document.createElement('button');
+    b.className = 'abTab' + (n === active ? ' on' : '');
+    b.textContent = n;
+    b.title = t('abTabsHint') + ': ' + n;
+    b.onclick = () => switchArtboard(n);
+    bar.appendChild(b);
+  }
+}
+function switchArtboard(name) {
+  if ($('artboardSel').value === name && r && r.activeArtboard === name) return;
+  $('artboardSel').value = name;
+  mode = 'sm'; sel = null; keySel = null;
+  boot(name);
+  renderTimeline();
 }
 
 function renderInputs() {
@@ -3043,7 +3263,7 @@ function showLeftPane(which) {
 $('tabTree').onclick = () => showLeftPane('tree');
 $('tabPlay').onclick = () => showLeftPane('play');
 $('tabGraph').onclick = () => showLeftPane('graph');
-$('artboardSel').onchange = () => { mode = 'sm'; sel = null; boot($('artboardSel').value); renderTimeline(); };
+$('artboardSel').onchange = () => switchArtboard($('artboardSel').value);
 $('smSel').onchange = () => { mode = 'sm'; const v = $('smSel').value; boot($('artboardSel').value, v && v !== '-' ? v : undefined); };
 $('playAnim').onclick = () => {
   mode = 'anim';
@@ -3288,6 +3508,145 @@ $('aiSend').onclick = async () => {
     guideStep(3);
   }
 };
+
+// ---- アセット差し替え（画像ドラッグ&ドロップ） ---------------------------------------
+// ステージに画像ファイルをドロップ → 埋め込み画像アセット一覧を取得 → 1件なら即差し替え、
+// 複数あればモーダルで選ばせる。バイナリの無損失差し替え自体はサーバー側 rivAssets.replaceAssetBytes。
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(file);
+  });
+}
+async function replaceAssetWithFile(index, file) {
+  try {
+    const dataBase64 = await fileToBase64(file);
+    const res = await (await fetch('/api/replace-asset', { method: 'POST', body: JSON.stringify({ index, dataBase64 }) })).json();
+    if (res.ok) { log(t('assetReplaced')); toast(t('assetReplaced')); }
+    else { log(t('assetReplaceFail') + res.error, 'error'); toast(t('assetReplaceFail') + res.error, 'err'); }
+  } catch (e) {
+    log(t('assetReplaceFail') + e, 'error'); toast(t('assetReplaceFail') + e, 'err');
+  }
+}
+function closeAssetPick() { $('assetPickWrap').classList.remove('open'); $('assetPickGrid').textContent = ''; }
+function openAssetPick(assets, file) {
+  const grid = $('assetPickGrid');
+  grid.textContent = '';
+  for (const a of assets) {
+    const item = document.createElement('div'); item.className = 'assetPickItem';
+    const img = document.createElement('img'); img.src = 'data:image/' + (a.ext === 'jpg' ? 'jpeg' : a.ext) + ';base64,' + a.dataBase64;
+    const nm = document.createElement('div'); nm.className = 'apName'; nm.textContent = a.name;
+    item.appendChild(img); item.appendChild(nm);
+    item.onclick = () => { closeAssetPick(); replaceAssetWithFile(a.index, file); };
+    grid.appendChild(item);
+  }
+  $('assetPickWrap').classList.add('open');
+}
+$('assetPickCancel').onclick = closeAssetPick;
+$('assetPickWrap').onclick = (e) => { if (e.target.id === 'assetPickWrap') closeAssetPick(); };
+async function handleAssetDrop(file) {
+  let assets = [];
+  try { assets = (await (await fetch('/api/assets')).json()).assets ?? []; } catch { /* treated as empty below */ }
+  if (!assets.length) { toast(t('dropNoAssets'), 'err'); return; }
+  if (assets.length === 1) { replaceAssetWithFile(assets[0].index, file); return; }
+  openAssetPick(assets, file);
+}
+(() => {
+  const stage = $('stage'), overlay = $('dropOverlay');
+  let dragDepth = 0;
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+  stage.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    overlay.classList.add('show');
+  });
+  stage.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  stage.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (dragDepth === 0) overlay.classList.remove('show'); });
+  stage.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    overlay.classList.remove('show');
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) { toast(t('dropNoAssets'), 'err'); return; }
+    handleAssetDrop(file);
+  });
+})();
+
+// ---- スナップショット履歴（undoとは別枠。名前付きで.riv全体を保存/復元/削除） ------------------
+// サーバー側はセッション用の一時ディレクトリにコピーを持つ（/api/snapshots系）。
+// 復元・削除は行内インライン確認（ブラウザ標準confirmは使わない）。
+let snapConfirmId = null; // 確認モード中の対象snapshot id（'restore:'/'delete:' + id）
+async function loadSnapshots() {
+  try {
+    const res = await (await fetch('/api/snapshots')).json();
+    renderSnapshots(res.snapshots ?? []);
+  } catch { renderSnapshots([]); }
+}
+function renderSnapshots(list) {
+  const box = $('snapList');
+  box.textContent = '';
+  if (!list.length) {
+    const h = document.createElement('span'); h.className = 'hint'; h.textContent = t('snapNone');
+    box.appendChild(h);
+    return;
+  }
+  for (const s of list) {
+    const row = document.createElement('div'); row.className = 'snapRow';
+    if (snapConfirmId === 'restore:' + s.id || snapConfirmId === 'delete:' + s.id) {
+      const isDelete = snapConfirmId === 'delete:' + s.id;
+      row.classList.add('confirming');
+      const msg = document.createElement('span'); msg.className = 'snapConfirmText';
+      msg.textContent = isDelete ? t('snapDeleteConfirm') : t('snapRestoreConfirm');
+      const yes = document.createElement('button'); yes.className = 'mini danger'; yes.textContent = t('snapConfirmYes');
+      yes.onclick = () => (isDelete ? doDeleteSnapshot(s.id) : doRestoreSnapshot(s.id));
+      const no = document.createElement('button'); no.className = 'mini'; no.textContent = t('snapConfirmNo');
+      no.onclick = () => { snapConfirmId = null; loadSnapshots(); };
+      row.appendChild(msg); row.appendChild(yes); row.appendChild(no);
+    } else {
+      const info = document.createElement('div'); info.className = 'snapInfo';
+      const nm = document.createElement('div'); nm.className = 'snapName'; nm.textContent = s.name;
+      const tm = document.createElement('div'); tm.className = 'snapTime'; tm.textContent = new Date(s.time).toLocaleString();
+      info.appendChild(nm); info.appendChild(tm);
+      const restoreBtn = document.createElement('button'); restoreBtn.className = 'mini'; restoreBtn.textContent = t('snapRestoreBtn');
+      restoreBtn.onclick = () => { snapConfirmId = 'restore:' + s.id; renderSnapshots(list); };
+      const delBtn = document.createElement('button'); delBtn.className = 'mini danger'; delBtn.textContent = t('snapDeleteBtn');
+      delBtn.onclick = () => { snapConfirmId = 'delete:' + s.id; renderSnapshots(list); };
+      row.appendChild(info); row.appendChild(restoreBtn); row.appendChild(delBtn);
+    }
+    box.appendChild(row);
+  }
+}
+async function doRestoreSnapshot(id) {
+  snapConfirmId = null;
+  try {
+    const res = await (await fetch('/api/snapshots/restore', { method: 'POST', body: JSON.stringify({ id }) })).json();
+    if (res.ok) { log(t('snapRestored')); toast(t('snapRestored')); } // ファイル書き換え→SSE 'reload' が自動でプレビューを更新
+    else { log(t('snapFail') + res.error, 'error'); toast(t('snapFail') + res.error, 'err'); }
+  } catch (e) { log(t('snapFail') + e, 'error'); toast(t('snapFail') + e, 'err'); }
+  loadSnapshots();
+}
+async function doDeleteSnapshot(id) {
+  snapConfirmId = null;
+  try {
+    const res = await (await fetch('/api/snapshots/delete', { method: 'POST', body: JSON.stringify({ id }) })).json();
+    if (res.ok) { log(t('snapDeleted')); toast(t('snapDeleted')); renderSnapshots(res.snapshots ?? []); return; }
+    log(t('snapFail') + res.error, 'error'); toast(t('snapFail') + res.error, 'err');
+  } catch (e) { log(t('snapFail') + e, 'error'); toast(t('snapFail') + e, 'err'); }
+  loadSnapshots();
+}
+$('snapSave').onclick = async () => {
+  try {
+    const name = $('snapName').value;
+    const res = await (await fetch('/api/snapshots', { method: 'POST', body: JSON.stringify({ name }) })).json();
+    if (res.ok) { $('snapName').value = ''; log(t('snapSaved')); toast(t('snapSaved')); renderSnapshots(res.snapshots ?? []); return; }
+    log(t('snapFail') + res.error, 'error'); toast(t('snapFail') + res.error, 'err');
+  } catch (e) { log(t('snapFail') + e, 'error'); toast(t('snapFail') + e, 'err'); }
+};
+loadSnapshots();
 
 // ---- ガイド / ヘルプ ---------------------------------------------------------------
 if (localStorage.getItem('rive-mcp-guide-done')) $('guide').style.display = 'none';

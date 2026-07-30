@@ -1,11 +1,15 @@
 // stdio JSON-RPC で実サーバーを spawn し全ツールを実呼び出しする E2E テスト
 import { spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const RIV = join(root, "samples", "vehicles.riv");
+
+function fsMod2Sig(path) {
+  return readFileSync(path).subarray(0, 4).toString("hex");
+}
 
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
   stdio: ["pipe", "pipe", "inherit"],
@@ -78,7 +82,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 28 tools", names.length === 28, names.join(","));
+  check("tools/list has 30 tools", names.length === 30, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -624,6 +628,110 @@ try {
     diffChangedText.slice(0, 200)
   );
   check("riv_visual_diff returns a diff image", (diffChanged.content || []).some((c) => c.type === "image"));
+
+  // riv_batch_render: rivPath job + glob job (multiple matches) + intentionally-missing job (must not abort the batch)
+  const batchOutDir = join(root, "samples", "e2e-batch-out");
+  const batchGlobPattern = join(root, "samples", "e2e-optimize-*.riv").replace(/\\/g, "/"); // matches 3 existing files
+  const batchRender = await callTool("riv_batch_render", {
+    defaults: { outDir: batchOutDir, width: 120 },
+    jobs: [
+      { rivPath: RIV, format: "png", time: 0.2 },
+      { rivPath: genPath, format: "gif", duration: 0.4, fps: 8 },
+      { glob: batchGlobPattern, format: "sprites", count: 4, duration: 0.5 },
+      { rivPath: join(root, "samples", "__does_not_exist__.riv"), format: "png" },
+    ],
+  });
+  const batchText = textOf(batchRender);
+  check("riv_batch_render not error", !batchRender.isError, batchText.slice(0, 300));
+  let batchReport = null;
+  try {
+    batchReport = JSON.parse(batchText.slice(batchText.indexOf("[")));
+  } catch {}
+  check(
+    "riv_batch_render: 5 successes (1 rivPath png + 1 rivPath gif + 3 glob matches) and 1 failure (missing file)",
+    Array.isArray(batchReport) && batchReport.filter((r) => r.success).length === 5 && batchReport.filter((r) => !r.success).length === 1,
+    batchText.slice(0, 800)
+  );
+  check(
+    "riv_batch_render: failed job reports an error without aborting the rest",
+    Array.isArray(batchReport) && batchReport.some((r) => !r.success && r.error && r.error.includes("File not found")),
+    JSON.stringify(batchReport?.filter((r) => !r.success))
+  );
+  {
+    const pngJobOut = batchReport?.find((r) => r.success && r.format === "png" && r.rivPath === RIV)?.outPath;
+    const gifJobOut = batchReport?.find((r) => r.success && r.format === "gif")?.outPath;
+    const spriteOuts = batchReport?.filter((r) => r.success && r.format === "sprites").map((r) => r.outPath) ?? [];
+    check(
+      "riv_batch_render writes the png job output",
+      !!pngJobOut && existsSync(pngJobOut) && statSync(pngJobOut).size > 500,
+      pngJobOut
+    );
+    check(
+      "riv_batch_render writes the gif job output",
+      !!gifJobOut && existsSync(gifJobOut) && statSync(gifJobOut).size > 500,
+      gifJobOut
+    );
+    check(
+      "riv_batch_render glob expands to 3 separate sprite-sheet outputs",
+      spriteOuts.length === 3 && spriteOuts.every((p) => existsSync(p)),
+      JSON.stringify(spriteOuts)
+    );
+  }
+
+  // riv_ab_compare: two different real files (vehicles vs. cute_cat), explicit duration -> deterministic frame count
+  const abOut = join(root, "samples", "test-ab-compare.gif");
+  const abCompare = await callTool("riv_ab_compare", {
+    pathA: RIV,
+    pathB: join(root, "samples", "cute_cat.riv"),
+    width: 160,
+    duration: 0.5,
+    fps: 8,
+    out: abOut,
+  });
+  const abText = textOf(abCompare);
+  check("riv_ab_compare not error", !abCompare.isError, abText.slice(0, 300));
+  check("riv_ab_compare returns a preview image", (abCompare.content || []).some((c) => c.type === "image"));
+  {
+    const bytes = existsSync(abOut) ? (await import("node:fs")).readFileSync(abOut) : null;
+    let frameCount = 0;
+    if (bytes) {
+      for (let i = 0; i < bytes.length - 2; i++) {
+        if (bytes[i] === 0x21 && bytes[i + 1] === 0xf9 && bytes[i + 2] === 0x04) frameCount++;
+      }
+    }
+    check(
+      "riv_ab_compare writes an animated gif with fps*duration frames (4)",
+      !!bytes && bytes.subarray(0, 6).toString() === "GIF89a" && frameCount === 4,
+      bytes ? `${bytes.length} bytes, ${frameCount} frames` : "missing"
+    );
+  }
+
+  // riv_ab_compare: vertical layout + apng, default out path naming (alongside pathA, mentions both basenames)
+  const abVertical = await callTool("riv_ab_compare", {
+    pathA: RIV,
+    pathB: join(root, "samples", "cute_cat.riv"),
+    width: 120,
+    duration: 0.3,
+    fps: 6,
+    layout: "vertical",
+    format: "apng",
+  });
+  const abVerticalText = textOf(abVertical);
+  check(
+    "riv_ab_compare vertical/apng not error and defaults the output path alongside pathA",
+    !abVertical.isError && abVerticalText.includes("vehicles") && abVerticalText.includes("cute_cat") && abVerticalText.includes("vertical, apng"),
+    abVerticalText.slice(0, 300)
+  );
+  {
+    const defaultOutMatch = abVerticalText.match(/-> (.+\.ab\.apng)/);
+    const defaultOut = defaultOutMatch?.[1];
+    const sig = defaultOut && existsSync(defaultOut) ? fsMod2Sig(defaultOut) : null;
+    check(
+      "riv_ab_compare vertical/apng writes a valid APNG file (PNG signature)",
+      !!defaultOut && existsSync(defaultOut) && sig === "89504e47",
+      `${defaultOut} sig=${sig}`
+    );
+  }
 
   // HLAPI: bake + particles
   const hlapi = await callTool("riv_create", {
