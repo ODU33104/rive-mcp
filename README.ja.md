@@ -10,7 +10,7 @@
 <p align="center"><i>このアニメーションは <code>riv_create</code> だけで生成（Riveエディタ不使用）</i></p>
 
 Claude（や任意の MCP クライアント）から `.riv` アニメーションファイルの
-**解析・レンダリング・State Machine 実行・統合コード生成** ができる。
+**解析・データバインディング解析・レンダリング（バッチ書き出し・A/B比較含む）・State Machine 実行・統合コード生成** ができる。
 
 公式 Rive MCP（エディタ常駐が前提）や有料のサードパーティ MCP と違い、
 `.riv` ファイルさえあれば動く。レンダリングには公式 Rive ランタイム
@@ -54,16 +54,17 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | ツール | 機能 |
 |---|---|
 | `riv_list` | ディレクトリ配下の `.riv` を再帰検索（サイズ・フォーマット版） |
-| `riv_inspect` | アートボード / アニメーション（duration・fps・loop）/ State Machine と入力（型・初期値）の全メタデータ抽出 |
+| `riv_inspect` | アートボード / アニメーション（duration・fps・loop）/ State Machine と入力（型・初期値）の全メタデータ抽出。ViewModel/データバインディングを使うファイルでは、定義・インスタンス（解決済み値付き）・enum・converter・バインド先（対象オブジェクト/プロパティ/flags）を `dataBinding` フィールドとして併せて返す |
 | `riv_lint` | 静的診断: 壊れた参照、巨大な埋め込みアセット、到達不能な state、条件無しの自己遷移（無限ループの恐れ）、未使用input、トラック最終キーフレームで無効化されるeasing、**モーション品質ルール**（全区間linearの機械的な動き・瞬間移動・同時出現のstagger不足・片側だけのscale）を検出 |
 | `riv_render_frame` | 任意時刻の1フレームを PNG レンダリング（インライン画像 + ファイル保存） |
 | `riv_render_gif` | アニメーションをプレビュー GIF に変換 |
 | `riv_render_apng` | アニメーションPNG（APNG）書き出し — 24bit色+アルファ透過（GitHub上でも再生される） |
 | `riv_render_video` | アニメーション/SM 実行を WebM 動画に録画 |
 | `riv_render_sprites` | スプライトシート PNG + メタデータ JSON（ゲームエンジン向け） |
+| `riv_batch_render` | 複数ジョブ（単一ファイル or glob）を png/gif/apng/webm/sprites に一括レンダリング。ジョブごとにエラーを分離して所要時間つきレポートを返す。CI向け |
 | `riv_play_state_machine` | 入力の set / fire → advance → 状態遷移レポート（+任意でフレームキャプチャ）|
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
-| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ28種、`stagger`で時差出現）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
+| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ28種、`stagger`で時差出現）。**音声埋め込み**にも対応: WAV/MP3/FLAC を AudioAsset として埋め込み、タイムライン上の指定フレームまたは State 進入時に AudioEvent を発火（データは正しく書き込まれるが、GPU版Riveランタイムでのみ再生され、このサーバー自身のプレビューでは無音）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
 | `riv_design_tokens` | **設計前にデザイントークンを生成**: OKLCH色空間で調和させたパレット（WCAGコントラスト比付き）、グラデーションペア、Material Motion準拠のduration/easingロール、余白・角丸・文字スケール。シード色+ムードから決定論的に生成 |
 | `riv_import_svg` | **SVG → Riveベジェシェイプ変換**（Figma/Illustrator書き出し・アイコン・イラスト）: cubic頂点・複合パス（穴あき）・グラデーション・ストローク・入れ子transformを完全変換。AIが「プリミティブで描く」代わりに「プロが描いたベクターを構成する」ための素材パイプライン。`riv_create` の `imports` で配置 |
 | `riv_asset_search` | **Iconifyの約20万個のプロ製アイコンを検索**し、そのままRiveシェイプとしてインポート（要ネットワーク） |
@@ -76,6 +77,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_optimize` | **見た目を変えずに.rivを軽量化**: 過去の編集で残った未参照interpolator/event/空トラックの除去、全区間linearのトラックに限定した冗長キーフレーム間引き（Douglas-Peucker、easing安全 — cubic/holdの区間には一切触れない）。`dryRun` で書き込み前に削減プランだけ確認可能 |
 | `riv_extract_assets` | .riv 埋め込み画像/フォントの抽出 |
 | `riv_visual_diff` | 2つの .riv のピクセル差分（一致率 + 相違箇所を赤表示した差分画像） |
+| `riv_ab_compare` | 2つの .riv を同条件でレンダリングし、ラベル付き横並び/縦並びの GIF/APNG を1本に合成（レビュー用）。riv_visual_diff がピクセル単位の定量差分なのに対し、こちらは別々のファイルを並べて目視比較するためのツール |
 | `riv_rig_character` | **キャラPNG1枚→完成リグをワンコール生成**: パーツ切り出し+2ボーン頭メッシュ+目パチ+idle/happyアニメ+SM |
 | `riv_diff` | 2つの.rivの構造差分（型数変化・オブジェクト単位のプロパティ差分） |
 | `riv_studio` | **ローカルWebスタジオ**（公式エディタ風ダークUI・日英対応）: 階層ツリー（アイコン付き）/ キャンバス選択・ドラッグ・四隅リサイズ / インスペクタ（ラベル横ドラッグで数値変更）/ タイムライン編集（キーフレームのドラッグ移動・ダブルクリック追加・削除）/ **ベジェカーブエディタ**（区間選択→制御点ドラッグ、hold/linear/cubic切替、10種のワンクリックイージングプリセット、riv-onlyモードでも編集可）/ **State Machineグラフビュー**（レイヤー/状態/遷移をノードグラフ表示、遷移条件をクリックで詳細表示、到達不能state・条件無し自己遷移をlint連動で色分け、実行中stateをライブハイライト）/ **オニオンスキン**（前後0-5フレームを距離に応じた濃さで重ね表示、再生中は自動オフ）/ Undo/Redo / 矢印キー移動・Deleteキー削除 / オブジェクト追加ボタン / 再生速度切替 / **ワンクリック書き出し（PNG/APNG/GIF/WebM）** / ライブプレビュー+ホットリロード / SM入力コントロール。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
@@ -128,6 +130,7 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 - **構造**: 複数アートボード、ネストアートボード（SM入力自動公開）、グループ階層、ボーン+スキニング、IKコンストレイント
 - **アニメ**: キーフレーム（linear/hold/ease系 + **elastic-in/out/in-out**）、色アニメ、メッシュ頂点アニメ、物理ベイク（gravity/spring/pendulum/wind → Douglas-Peucker圧縮 + 自動イージング付与）、パーティクル（rain/snow/sparks/dust/confetti/bubbles）
 - **State Machine**: 複数SM・複数レイヤー、ブレンドステート(1D)、条件付き遷移（==,!=,<,>,<=,>=）、duration/exit time、**リスナー**（click/down/up/enter/exit/move → trigger発火・bool設定/トグル・number設定）、**イベント**（カスタム/OpenURL、state進入時発火）
+- **音声**: WAV/MP3/FLAC を AudioAsset として埋め込み、タイムライン上の指定フレームまたは State 進入時に AudioEvent を発火（データは正しく書き込まれるが、このサーバーのプレビューでは再生されない）
 
 ### 対象外（理由）
 
@@ -146,7 +149,7 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 `riv_studio` で開くローカルWeb画面は、AIが作った .riv を人間がその場で確認・直接編集・修正指示するためのものです（日本語/英語切替対応・初回ガイド付き）:
 
 1. **AIに作らせる** — 「ボールが跳ねる riv を作って riv_studio で開いて」
-2. **直接さわる** — キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色/テキストを変更（即時反映）。イージングはベジェカーブエディタで、State Machineの遷移はグラフビューで直接確認・編集できる。オニオンスキンをオンにすれば前後のフレームを重ねて動きを一目でチェックできる
+2. **直接さわる** — キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色/テキストを変更（即時反映）。イージングはベジェカーブエディタで、State Machineの遷移はグラフビューで直接確認・編集できる。オニオンスキンをオンにすれば前後のフレームを重ねて動きを一目でチェックできる。画像をキャンバスへドラッグ&ドロップすれば埋め込みアセットを無損失差し替え、複数アートボードはタブで切替、編集内容は名前付きスナップショットで保存/復元できる。ドープシートは矩形選択・Shift+クリックで複数キーフレームを選び一括ドラッグ、Ctrl+C/Vでコピペできる。ボーンはオーバーレイ表示してドラッグでポーズ付け→現在フレームへキーフレーム化できる
 3. **AIに頼む** — 大きな変更は「AIへの指示」ボックスに書いて送信（選択中オブジェクト・アートボード・時刻などのコンテキストが自動添付される）→ チャットで「スタジオの指示を確認して」
 4. AIが `riv_edit` / `riv_create` で修正すると、ブラウザは自動で最新状態に更新される
 
@@ -154,9 +157,15 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 
 ### 機能ツアー
 
-**タイムライン / ドープシート** — トラックごとのキーフレームを一覧・シーク。ズームと再生速度切替付き。
+**複数アートボード & スナップショット** — タブでアートボードを切替、編集内容を名前付きスナップショットとして保存/復元/削除できる（undo/redo とは別枠の履歴）。
+
+![アートボードタブとスナップショット](docs/media/studio-artboards-ja.png)
+
+**タイムライン / ドープシート** — トラックごとのキーフレームを一覧・シーク。ズームと再生速度切替付き。矩形選択・Shift+クリックで複数キーフレームを選び一括ドラッグ、再生ヘッド起点でCtrl+C/Vコピペ（カーブも保持）。
 
 ![タイムライン](docs/media/studio-timeline.png)
+
+![ドープシート複数選択](docs/media/studio-dopesheet-ja.png)
 
 **ベジェカーブエディタ** — キーフレーム区間を選んで制御点をドラッグ。hold / linear / cubic 切替と定番プリセット10種。
 
@@ -177,6 +186,10 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 **直接編集** — 階層ツリーやキャンバスで選択し、インスペクタで位置・回転・スケール・色・テキストを即時変更（undo/redo 対応）。
 
 ![インスペクタ編集](docs/media/studio-edit.png)
+
+**ボーンオーバーレイ & ポージング** — キャンバス上にボーン骨格を表示、一時停止中はドラッグでボーンを回転（FK）、現在のポーズを現在フレームへキーフレーム化できる。
+
+![ボーンオーバーレイ](docs/media/studio-bones-ja.png)
 
 **AIへの指示** — 修正依頼を書いて送ると、選択中オブジェクト・アートボード・アニメーション・再生時刻が自動で添付され、AI 側が `riv_studio_notes` で受け取る。
 

@@ -4273,7 +4273,7 @@ async function handleAssetDrop(file) {
     dragDepth = 0;
     overlay.classList.remove('show');
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) { toast(t('dropNoAssets'), 'err'); return; }
+    if (!file || !/^image\\/(png|jpeg|webp)$/.test(file.type)) { toast(t('dropNoAssets'), 'err'); return; }
     handleAssetDrop(file);
   });
 })();
