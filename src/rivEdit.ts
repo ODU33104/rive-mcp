@@ -7,7 +7,10 @@ import { parseColor, EASING_BEZIER, type EasingName } from "./rivWriter.js";
 export interface KeyframeEditSpec {
   frame: number;
   value?: number;
-  easing?: EasingName;
+  // 名前付きイージングに加え、[x1,y1,x2,y2] のカスタム3次ベジェも直接指定可能
+  // (Studioドープシートのキーフレーム移動/コピペが、プリセットに丸めず既存の正確なカーブ値を
+  // 無損失で複製できるようにするための拡張。rivWriter.ts の KeyframeSpec.easing と同じ形)
+  easing?: EasingName | [number, number, number, number];
 }
 
 export interface EditOp {
@@ -496,22 +499,31 @@ export function editRiv(bytes: Uint8Array, edits: EditOp[]): { bytes: Uint8Array
           return null;
         };
 
-        const neededEasings = new Set<string>();
+        // easing はプリセット名 or カスタム [x1,y1,x2,y2] のどちらも取りうる。
+        // 補間器の再利用/新規作成マップは両方をキーにできるよう文字列キーに正規化する
+        const easingKeyOf = (e: EasingName | [number, number, number, number]): string =>
+          Array.isArray(e) ? `custom:${e.join(",")}` : e;
+        const easingBezierOf = (e: EasingName | [number, number, number, number]): [number, number, number, number] | undefined =>
+          Array.isArray(e) ? e : EASING_BEZIER[e] ?? undefined;
+
+        const neededEasings = new Map<string, [number, number, number, number]>();
         for (const k of kfs) {
-          if (k.easing && EASING_BEZIER[k.easing]) neededEasings.add(k.easing);
+          if (!k.easing) continue;
+          const bez = easingBezierOf(k.easing);
+          if (bez) neededEasings.set(easingKeyOf(k.easing), bez);
         }
         const interpolatorLocal = new Map<string, number>();
         const newInterpObjs: RivObject[] = [];
         let cursor = insertPos - abStartPos;
-        for (const name of neededEasings) {
-          const existing = findInterpolator(EASING_BEZIER[name]!);
+        for (const [key, bez] of neededEasings) {
+          const existing = findInterpolator(bez);
           if (existing !== null) {
-            interpolatorLocal.set(name, existing);
+            interpolatorLocal.set(key, existing);
             continue;
           }
-          const [x1, y1, x2, y2] = EASING_BEZIER[name]!;
+          const [x1, y1, x2, y2] = bez;
           newInterpObjs.push(buildRivObj("CubicEaseInterpolator", { x1, y1, x2, y2 }));
-          interpolatorLocal.set(name, cursor);
+          interpolatorLocal.set(key, cursor);
           cursor++;
         }
 
@@ -520,7 +532,7 @@ export function editRiv(bytes: Uint8Array, edits: EditOp[]): { bytes: Uint8Array
           const interpolationType = easing === "hold" ? 0 : easing === "linear" ? 1 : 2;
           const props: Record<string, unknown> = { interpolationType };
           if (k.frame) props.frame = k.frame;
-          if (interpolationType === 2) props.interpolatorId = interpolatorLocal.get(easing);
+          if (interpolationType === 2) props.interpolatorId = interpolatorLocal.get(easingKeyOf(easing));
           let v = k.value ?? 0;
           if (property === "rotation") v = (v * Math.PI) / 180;
           props.value = v;

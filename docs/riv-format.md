@@ -52,6 +52,34 @@ ToC: varuint propertyKey... 0終端
 - MeshVertex の x/y は keyable。ただし propertyKey は **Vertex.x(24)/y(25)**（Node.x(13)/y(14) と別物）
 - StateTransition の exit time: `flags=4` + `exitTime`（ms）で「遷移元アニメを指定時間再生後に遷移」
 
+## Audio（実装済み・検証済み）
+
+- アセットは画像と同じ規則: **Backboard の直後・Artboard の前**に `AudioAsset`（typeKey 406）+
+  `FileAssetContents`（bytes=WAV/MP3/FLAC生バイト）のペアで書く。**ローカルindexを消費しない**
+  （ファイル内アセット出現順のグローバルカウンタを Font/Image と共有する）
+- `AudioAsset` は `DrawableAsset` ではなく `ExportAudio`（`Asset`直系）を継承するため width/height は無い。
+  name は Asset 基底の propertyKey **203**（ImageAsset/FontAsset と共通。Component.name(4) とは別物）。
+  sampleRate(473)/channels(474)/durationSeconds(475, WAVのfmt/dataチャンクから算出)/formatValue(476) は
+  再生に必須ではない付随メタデータ（デコードは実際のバイト列をランタイム側の音声デコーダが解析する）。
+  非WAV（mp3/ogg/flac等）はこのメタデータを省略しても問題ない
+- `AudioEvent`（typeKey 407）は `Event`（custom_property_group.json 系 = Component 系。
+  name propertyKey は **4**、ImageAsset等の 203 とは別物）を継承するイベントで、
+  `assetId`（propertyKey 408, Id型）に埋め込んだ AudioAsset のグローバル出現順indexを持つ。
+  `OpenUrlEvent` と同じ並びで Artboard内 events に置く（parentId=0固定）
+- **アニメーション中の指定フレームでの発火**: `Event` 基底が持つ `trigger` プロパティ
+  （propertyKey **395**, 型は `callback` — 値を持たない）を `KeyedObject`(objectId=AudioEventのローカルindex)
+  + `KeyedProperty`(propertyKey=395) + `KeyFrameCallback`（1個/発火フレーム）でキーフレーム化する。
+  `KeyFrameCallback`（typeKey 171）は `animation/keyframe.json` 直系で `InterpolatingKeyFrame` を経由しない
+  ため、他の KeyFrame* と異なり **interpolationType/interpolatorId を持たない**（frameのみ）。
+  KeyedObject/KeyedProperty/KeyFrame の帰属規則は他プロパティと同じくストリーム位置依存
+  （直前の LinearAnimation に帰属。「参照 semantics」表を参照）
+- ステートマシンから発火する場合は既存の `StateMachineFireEvent`（state進入時にeventIdを発火）がそのまま使える。
+  AudioEvent もただの Event 派生なので eventId として渡せる
+- **プレビュー非対応**: このサーバーの Canvas2D ベースのプレビューランタイムは音声を再生しない
+  （落とし穴8の Feather と同じ「書き込みは正しいが preview 非対応」パターン）。
+  AudioAsset/AudioEvent の直列化・公式ランタイムでのロード可否は検証済みだが、実際の再生確認は
+  GPU版 Rive Renderer（WebGL/Skia、例: rive.app や本番プレイヤー）でのみ可能
+
 ## ボーン・スキニング（実装済み・検証済み）
 
 - チェーン先頭は `RootBone`（x/y/rotation/length、親は Node）、以降は `Bone`（rotation/length のみ。

@@ -287,8 +287,14 @@ export interface NestedSpec {
 }
 export interface EventSpec {
   id: string;
-  type?: "custom" | "openUrl";
-  url?: string;
+  type?: "custom" | "openUrl" | "audio";
+  url?: string; // type=openUrl
+  audio?: string; // type=audio: audio[].id（再生する埋め込みクリップ）。playback support depends on the runtime — this server's preview (Canvas2D) does not play audio.
+}
+export interface AudioSpec {
+  id: string;
+  path?: string; // ツール層で bytes に解決される（wav/mp3/ogg/flac 等。デコード可否はランタイム依存）
+  bytes?: Uint8Array;
 }
 export interface KeyframeSpec {
   frame: number;
@@ -324,6 +330,8 @@ export interface AnimationSpec {
   duration: number; // フレーム数
   loop?: "oneShot" | "loop" | "pingPong";
   tracks: TrackSpec[];
+  // events[].id をこのアニメーションの指定フレームでトリガー（AudioEvent の再生タイミング等）
+  events?: Array<{ event: string; frame: number }>;
 }
 export interface SMStateSpec {
   name: string;
@@ -370,6 +378,7 @@ export interface ArtboardSpec {
   constraints?: ConstraintSpec[];
   shapes?: ShapeSpec[];
   images?: ImageSpec[];
+  audio?: AudioSpec[];
   texts?: TextSpec[];
   nested?: NestedSpec[];
   events?: EventSpec[];
@@ -421,6 +430,34 @@ export function pngSize(bytes: Uint8Array): { width: number; height: number } {
   }
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return { width: dv.getUint32(16, false), height: dv.getUint32(20, false) };
+}
+
+// WAV(RIFF/WAVE) の fmt/data チャンクから sampleRate/channels/durationSeconds を読む（ベストエフォート、AudioAsset のメタデータ用）。
+// mp3/ogg/flac 等は null を返す（デコードはランタイム側の音声デコーダが担うため、この情報は必須ではない）
+export function wavInfo(bytes: Uint8Array): { sampleRate: number; channels: number; durationSeconds: number } | null {
+  if (
+    bytes.length < 44 ||
+    bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46 || // "RIFF"
+    bytes[8] !== 0x57 || bytes[9] !== 0x41 || bytes[10] !== 0x56 || bytes[11] !== 0x45 // "WAVE"
+  ) return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let pos = 12;
+  let channels = 0, sampleRate = 0, byteRate = 0, dataSize = 0;
+  while (pos + 8 <= bytes.length) {
+    const id = String.fromCharCode(bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]);
+    const size = dv.getUint32(pos + 4, true);
+    const body = pos + 8;
+    if (id === "fmt " && body + 16 <= bytes.length) {
+      channels = dv.getUint16(body + 2, true);
+      sampleRate = dv.getUint32(body + 4, true);
+      byteRate = dv.getUint32(body + 8, true);
+    } else if (id === "data") {
+      dataSize = size;
+    }
+    pos = body + size + (size % 2); // チャンクは偶数境界にパディング
+  }
+  if (!sampleRate || !channels) return null;
+  return { sampleRate, channels, durationSeconds: byteRate ? dataSize / byteRate : 0 };
 }
 
 // #RGB / #RRGGBB / #AARRGGBB → ARGB uint32
@@ -497,6 +534,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       constraints: spec.constraints,
       shapes: spec.shapes,
       images: spec.images,
+      audio: spec.audio,
       texts: spec.texts,
       nested: spec.nested,
       events: spec.events,
@@ -543,6 +581,21 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       assetIndexOf.set(`image:${img.id}`, assetIndexOf.size);
       objects.push({ type: "ImageAsset", props: { name: img.id, width: dims.width, height: dims.height } });
       objects.push({ type: "FileAssetContents", props: { bytes: img.bytes } });
+    }
+  }
+  for (const ab of artboards) {
+    for (const clip of ab.audio ?? []) {
+      if (!clip.bytes) throw new Error(`Audio '${clip.id}' has no bytes (path unresolved?)`);
+      assetIndexOf.set(`audio:${clip.id}`, assetIndexOf.size);
+      const props: Record<string, unknown> = { name: clip.id };
+      const meta = wavInfo(clip.bytes);
+      if (meta) {
+        props.sampleRate = meta.sampleRate;
+        props.channels = meta.channels;
+        props.durationSeconds = meta.durationSeconds;
+      }
+      objects.push({ type: "AudioAsset", props });
+      objects.push({ type: "FileAssetContents", props: { bytes: clip.bytes } });
     }
   }
 
@@ -1055,6 +1108,13 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     for (const ev of ab.events ?? []) {
       if (ev.type === "openUrl") {
         eventIds.set(ev.id, push({ type: "OpenUrlEvent", props: { name: ev.id, parentId: 0, url: ev.url ?? "" } }));
+      } else if (ev.type === "audio") {
+        if (!ev.audio) throw new Error(`Event '${ev.id}' (type=audio) needs 'audio' (audio[].id)`);
+        const audioAssetId = assetIndexOf.get(`audio:${ev.audio}`);
+        if (audioAssetId === undefined) {
+          throw new Error(`Event '${ev.id}': audio '${ev.audio}' not found in audio[] (define artboard audio[] entries before events[])`);
+        }
+        eventIds.set(ev.id, push({ type: "AudioEvent", props: { name: ev.id, parentId: 0, assetId: audioAssetId } }));
       } else {
         eventIds.set(ev.id, push({ type: "Event", props: { name: ev.id, parentId: 0 } }));
       }
@@ -1229,6 +1289,29 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             push({ type: "KeyFrameDouble", props: { ...kfProps, value: v } });
           }
         });
+      }
+
+      // イベント発火（AudioEvent 等を events[].id で参照し、このアニメーションの指定フレームでトリガー）
+      // Event.trigger (callback型プロパティ) を KeyedObject/KeyedProperty/KeyFrameCallback で位置キーする。
+      // KeyFrameCallback は animation/keyframe.json 直系（InterpolatingKeyFrame を経由しない）ため
+      // interpolationType/interpolatorId は持たない
+      if (a.events?.length) {
+        const framesByEvent = new Map<string, number[]>();
+        for (const e of a.events) {
+          if (!framesByEvent.has(e.event)) framesByEvent.set(e.event, []);
+          framesByEvent.get(e.event)!.push(e.frame);
+        }
+        for (const [evName, frames] of framesByEvent) {
+          const evId = eventIds.get(evName);
+          if (evId === undefined) throw new Error(`Animation '${a.name}': event '${evName}' not found in events[]`);
+          push({ type: "KeyedObject", props: { objectId: evId } });
+          push({ type: "KeyedProperty", props: { propertyKey: resolveProp("Event", "trigger").key } });
+          for (const frame of [...frames].sort((x, y) => x - y)) {
+            const kfProps: Record<string, unknown> = {};
+            if (frame) kfProps.frame = frame;
+            push({ type: "KeyFrameCallback", props: kfProps });
+          }
+        }
       }
     }
 

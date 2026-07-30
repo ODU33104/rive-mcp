@@ -980,10 +980,19 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   .tkey { position:absolute; top:50%; width:8px; height:8px; margin:-4px 0 0 -4px; background:var(--text-dim);
     transform:rotate(45deg); cursor:ew-resize; transition:transform .12s ease, background .12s ease; }
   .tkey:hover { transform:rotate(45deg) scale(1.3); background:var(--text); }
-  .tkey.sel { background:var(--accent-2); }
+  .tkey.sel { background:var(--accent-2); box-shadow:0 0 0 2px rgba(255,78,107,.35); }
   .tcur { position:absolute; top:0; bottom:0; width:1px; background:var(--accent-2); pointer-events:none; }
   .phead { position:absolute; top:0; width:9px; height:9px; margin-left:-5px; background:var(--accent-2);
     clip-path:polygon(0 0, 100% 0, 50% 100%); pointer-events:none; }
+  /* ---- ドープシート: 矩形選択 / 複数選択ツールバー ---- */
+  .marquee { position:fixed; z-index:15; border:1px solid var(--accent); background:rgba(91,167,255,.15); pointer-events:none; }
+  .tlToolbar { display:flex; align-items:center; gap:8px; padding:5px 8px; background:var(--panel-2);
+    border-bottom:1px solid var(--border); font-size:11px; color:var(--text-dim); }
+  .tlToolbar b { color:var(--text); font-weight:600; }
+  .tlToolbar input[type=number] { width:56px; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    border-radius:4px; padding:3px 5px; font:11px var(--mono); }
+  .tlToolbar .mini { padding:3px 8px; font-size:11px; }
+  .tlToolbar .spacer { flex:1; }
   /* ---- トースト ---- */
   #toasts { position:fixed; right:16px; bottom:16px; z-index:20; display:flex; flex-direction:column; gap:8px; align-items:flex-end; pointer-events:none; }
   .toast { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--ok); border-radius:var(--radius-s);
@@ -1263,6 +1272,10 @@ const I18N = {
     snapSaved: 'スナップショットを保存しました', snapRestored: 'スナップショットを復元しました', snapDeleted: 'スナップショットを削除しました',
     snapFail: 'スナップショット操作に失敗: ',
     abTabsHint: 'アートボード',
+    kfSelectedSuffix: '個のキーフレームを選択中', kfScaleL: '時間スケール', kfScaleApply: '適用',
+    kfScaleInvalid: '倍率は0より大きい数値で指定してください', kfClearSel: '選択解除',
+    kfCopiedSuffix: '個のキーフレームをコピーしました', kfMoveUnsupportedProp: 'この種類のトラック（色など）はrivのみモードでの一括編集に非対応です',
+    kfMarqueeHint: 'ドラッグで矩形選択、Shift+クリックで追加/除外選択。Ctrl+C/V でコピー&ペースト',
   },
   en: {
     guideTitle: 'New here? 3 steps',
@@ -1341,6 +1354,10 @@ const I18N = {
     snapSaved: 'Snapshot saved', snapRestored: 'Snapshot restored', snapDeleted: 'Snapshot deleted',
     snapFail: 'Snapshot operation failed: ',
     abTabsHint: 'Artboard',
+    kfSelectedSuffix: ' keyframe(s) selected', kfScaleL: 'Time scale', kfScaleApply: 'Apply',
+    kfScaleInvalid: 'Scale factor must be a number greater than 0', kfClearSel: 'Clear selection',
+    kfCopiedSuffix: ' keyframe(s) copied', kfMoveUnsupportedProp: 'This track type (e.g. color) is not supported for bulk edits in riv-only mode',
+    kfMarqueeHint: 'Drag to box-select, Shift+click to add/remove. Ctrl+C/V to copy & paste',
   },
 };
 let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
@@ -1400,7 +1417,9 @@ let graphMode = false;      // 左タブ「SMグラフ」がアクティブか�
 let graphSel = null;        // {kind:'state', layerName, id, s} | {kind:'transition', layerName, tr}
 let graphActiveNames = [];  // SM実行中: StateChangeイベントで報告された現在アクティブなstate名（ハイライト用）
 let sel = null;             // {src:'scene', kind, obj} | {src:'riv', node}
-let keySel = null;          // {tr, k, riv?} 選択中のキーフレーム/区間（タイムライン）。riv:true = rivのみモード
+let keySel = null;          // {tr, k, riv?} 選択中キーフレームの「直近操作した1件」（インスペクタ/カーブエディタが参照）
+let multiSel = [];          // 選択中キーフレーム群（矩形選択/Shift+クリック）。常に keySel を含む（0件ならkeySelもnull）
+let clipboard = null;       // Ctrl+Cでコピーしたキーフレーム群 { riv, items:[...] }（doCopySelection参照）
 let rivAnimData = null;     // rivのみモード: /anim のレスポンス（現在のアートボード/アニメーション）
 // rivのみモードのUndo/Redo: JSONモデルが無いため、ファイル全体のスナップショット（base64）で代用
 let rivUndoStack = [];
@@ -1423,7 +1442,7 @@ function pushHistory() {
   } catch {}
 }
 function afterHistoryChange() {
-  sel = null; keySel = null;
+  sel = null; clearKeySel();
   $('scene').value = JSON.stringify(sceneSpec, null, 2);
   buildTree(); renderInspector(); drawSelBox(); renderTimeline();
   doRebuild();
@@ -1636,7 +1655,7 @@ function renderArtboardTabs(names, active) {
 function switchArtboard(name) {
   if ($('artboardSel').value === name && r && r.activeArtboard === name) return;
   $('artboardSel').value = name;
-  mode = 'sm'; sel = null; keySel = null;
+  mode = 'sm'; sel = null; clearKeySel();
   boot(name);
   renderTimeline();
 }
@@ -1865,8 +1884,8 @@ function buildTree() {
 }
 
 // ---- 選択 & インスペクタ --------------------------------------------------------
-function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; keySel = null; guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
-function selectRiv(node) { sel = { src: 'riv', node }; keySel = null; buildTree(); renderInspector(); drawSelBox(); }
+function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; clearKeySel(); guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
+function selectRiv(node) { sel = { src: 'riv', node }; clearKeySel(); buildTree(); renderInspector(); drawSelBox(); }
 
 let rebuildTimer = null;
 function scheduleRebuild(delay = 300) {
@@ -2239,6 +2258,13 @@ function renderInspector() {
   updateAiContextChip();
   const box = $('inspector');
   box.textContent = '';
+  if (multiSel.length > 1) {
+    const notice = document.createElement('div');
+    notice.className = 'hint';
+    notice.style.cssText = 'margin-bottom:8px;color:var(--accent)';
+    notice.textContent = multiSel.length + t('kfSelectedSuffix') + ' — ' + t('kfMarqueeHint');
+    box.appendChild(notice);
+  }
   if (keySel && keySel.riv) {
     const { tr, k } = keySel;
     const title = document.createElement('div');
@@ -2544,15 +2570,25 @@ function deleteSelectedObject() {
   log(t('objDeleted'));
   toast(t('objDeleted'));
 }
+// 選択中の(複数)キーフレームを削除する。rivのみモードのキーフレーム削除は非対応（追加/削除はスコープ外、
+// riv側エントリはここでは無視する）。トラックにキーフレームが1つも残らなくなる削除はブロックする
 function deleteSelectedKeyframe() {
-  if (!keySel || keySel.riv) return false; // rivのみモードのキーフレーム削除は非対応（追加/削除はスコープ外）
-  const { tr, k } = keySel;
-  if (!tr.keyframes || tr.keyframes.length <= 1) { log(t('kfDeleteMin')); toast(t('kfDeleteMin'), 'err'); return true; }
-  const idx = tr.keyframes.indexOf(k);
-  if (idx < 0) return false;
+  const entries = (multiSel.length ? multiSel : (keySel ? [keySel] : [])).filter((s) => !s.riv);
+  if (!entries.length) return false;
+  const byTrack = new Map();
+  for (const s of entries) { if (!byTrack.has(s.tr)) byTrack.set(s.tr, []); byTrack.get(s.tr).push(s.k); }
+  let blocked = false;
+  const plan = [];
+  for (const [tr, ks] of byTrack) {
+    const remaining = (tr.keyframes ?? []).length - ks.length;
+    if (remaining < 1) { blocked = true; continue; }
+    plan.push([tr, ks]);
+  }
+  if (blocked) { log(t('kfDeleteMin')); toast(t('kfDeleteMin'), 'err'); }
+  if (!plan.length) return true;
   pushHistory();
-  tr.keyframes.splice(idx, 1);
-  keySel = null;
+  for (const [tr, ks] of plan) tr.keyframes = tr.keyframes.filter((k) => !ks.includes(k));
+  clearKeySel();
   renderTimeline();
   renderInspector();
   scheduleRebuild(0);
@@ -2563,6 +2599,8 @@ window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); performUndo(); return; }
   if (mod && ((e.key === 'y' || e.key === 'Y') || (e.shiftKey && (e.key === 'z' || e.key === 'Z')))) { e.preventDefault(); performRedo(); return; }
+  if (mod && !e.shiftKey && (e.key === 'c' || e.key === 'C') && mode === 'anim' && multiSel.length) { e.preventDefault(); doCopySelection(); return; }
+  if (mod && !e.shiftKey && (e.key === 'v' || e.key === 'V') && mode === 'anim' && clipboard) { e.preventDefault(); doPasteAtPlayhead(); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (deleteSelectedKeyframe()) { e.preventDefault(); return; }
     if (sel && sel.src === 'scene') { e.preventDefault(); deleteSelectedObject(); }
@@ -2624,7 +2662,117 @@ function addKeyframeAt(tr, frame) {
   tr.keyframes.sort((a, b) => a.frame - b.frame);
   return tr.keyframes.find((k) => k.frame === frame);
 }
-let kfDrag = null;
+// ---- キーフレーム複数選択 ---------------------------------------------------------
+// multiSel の要素は既存の keySel と同じ形状: {tr, k} (シーンJSON) / {riv:true, tr, k} (rivのみ)。
+// keySel は「直近操作した1件」（インスペクタ/カーブエディタが参照）で、常に multiSel に含まれる。
+function sameKeyEntry(a, b) { return !!a && !!b && a.tr === b.tr && a.k === b.k; }
+function isKeySelected(tr, k) { return multiSel.some((s) => s.tr === tr && s.k === k); }
+function setSingleKeySel(entry) { multiSel = entry ? [entry] : []; keySel = entry; }
+function toggleKeySel(entry) {
+  const i = multiSel.findIndex((s) => sameKeyEntry(s, entry));
+  if (i >= 0) { multiSel.splice(i, 1); keySel = multiSel.length ? multiSel[multiSel.length - 1] : null; }
+  else { multiSel.push(entry); keySel = entry; }
+}
+function clearKeySel() { multiSel = []; keySel = null; }
+
+// ---- フレーム変換の共通ヘルパ（複数移動・タイムスケール・ペーストで共用） -------------------------
+const clampFrame = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+// items: [{k, frame}]（目標フレーム、順不同）。同一トラック内で重複/逆転しないよう最小1フレーム間隔に丸め、
+// 末尾から maxFrame でクランプする（4. タイムスケールの要件と共通化）
+function resolveFrameCollisions(items, maxFrame) {
+  const arr = items.map((it, i) => ({ k: it.k, frame: it.frame, _i: i })).sort((a, b) => (a.frame - b.frame) || (a._i - b._i));
+  for (let i = 1; i < arr.length; i++) {
+    if (arr[i].frame <= arr[i - 1].frame) arr[i].frame = arr[i - 1].frame + 1;
+  }
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i].frame > maxFrame) arr[i].frame = i === arr.length - 1 ? maxFrame : Math.min(arr[i].frame, arr[i + 1].frame - 1);
+  }
+  return arr;
+}
+// items: [{tr, k, startFrame}]。mapFrame(startFrame) で選択キーフレームの新フレームを計算し、
+// トラックごとに衝突解決してから k.frame へ書き戻し、tr.keyframes をフレーム順に並べ直す
+function applyGroupTransform(items, mapFrame, maxFrame) {
+  const byTrack = new Map();
+  for (const it of items) { if (!byTrack.has(it.tr)) byTrack.set(it.tr, []); byTrack.get(it.tr).push(it); }
+  for (const [tr, its] of byTrack) {
+    const selK = new Set(its.map((it) => it.k));
+    const all = (tr.keyframes ?? []).map((k) => {
+      if (!selK.has(k)) return { k, frame: k.frame };
+      const it = its.find((x) => x.k === k);
+      return { k, frame: clampFrame(Math.round(mapFrame(it.startFrame)), 0, maxFrame) };
+    });
+    const resolved = resolveFrameCollisions(all, maxFrame);
+    for (const { k, frame } of resolved) k.frame = frame;
+    tr.keyframes.sort((a, b) => a.frame - b.frame);
+  }
+}
+
+// ---- rivのみモード: 一括編集(移動/ペースト/タイムスケール)で対応するプロパティ ---------------------
+// rivEdit.ts の setKeyframes(KEYFRAME_PROP_MAP) が対応する数値プロパティのみ。色トラック等は対象外
+const RIV_EDITABLE_PROPS = new Set(['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity', 'width', 'height']);
+// buildAnimJson の k.segment（このキーフレームへ「入ってくる」区間の情報。CLAUDE.md落とし穴6の
+// UI向け表現）を rivEdit.ts の KeyframeEditSpec.easing（このキーフレームから次への区間、という
+// バイナリそのままの向き）へ変換する
+function segmentToEasingSpec(segment) {
+  if (!segment) return undefined;
+  const it = segment.interpolationType;
+  if (it === 0) return 'hold';
+  if (it === 1) return 'linear';
+  const interp = segment.interpolator;
+  if (interp && interp.kind === 'cubic') return [interp.x1, interp.y1, interp.x2, interp.y2];
+  console.error('rive-mcp studio: unsupported interpolator kind for bulk keyframe edit (elastic/unknown) — falling back to linear', interp);
+  return 'linear';
+}
+// rivAnimData.tracks の一部（frame/segment がすでに変更/新規作成済みのもの）を setKeyframes(replace)
+// としてまとめて /edit へ送る。カーブ(k.segment)は複製元からそのまま引き継がれている前提
+async function commitRivTrackEdits(tracks) {
+  const ops = [];
+  const skipped = [];
+  for (const tr of tracks) {
+    if (!RIV_EDITABLE_PROPS.has(tr.propertyName)) { skipped.push(tr); continue; }
+    const sorted = tr.keyframes.slice().sort((a, b) => a.frame - b.frame);
+    const keyframes = sorted.map((k, i) => {
+      const easing = i + 1 < sorted.length ? segmentToEasingSpec(sorted[i + 1].segment) : undefined;
+      let value = k.value;
+      if (tr.propertyName === 'rotation' && typeof value === 'number') value = (value * 180) / Math.PI;
+      return { frame: k.frame, value, easing };
+    });
+    ops.push({ op: 'setKeyframes', index: tr.targetIndex, animation: scrubAnim, property: tr.propertyName, mode: 'replace', keyframes });
+  }
+  if (skipped.length) { log(t('kfMoveUnsupportedProp')); toast(t('kfMoveUnsupportedProp'), 'err'); }
+  if (!ops.length) return { ok: true, skipped: true };
+  const res = await (await fetch('/edit', { method: 'POST', body: JSON.stringify(ops) })).json();
+  if (!res.ok) throw new Error(res.error || 'edit failed');
+  return res;
+}
+
+// ---- 複数選択ツールバー: multiSel.length>=2 のときタイムライン先頭行に表示（件数 + タイムスケール入力） --
+function renderSelectionToolbar(tl, applyTimescale) {
+  if (multiSel.length < 2) return;
+  const bar = document.createElement('div'); bar.className = 'tlToolbar';
+  const info = document.createElement('b'); info.textContent = multiSel.length + t('kfSelectedSuffix');
+  bar.appendChild(info);
+  const spacer = document.createElement('span'); spacer.className = 'spacer'; bar.appendChild(spacer);
+  const scaleLabel = document.createElement('span'); scaleLabel.textContent = t('kfScaleL'); bar.appendChild(scaleLabel);
+  const scaleInput = document.createElement('input');
+  scaleInput.type = 'number'; scaleInput.step = '0.1'; scaleInput.min = '0.05'; scaleInput.value = '1';
+  bar.appendChild(scaleInput);
+  const applyBtn = document.createElement('button'); applyBtn.className = 'mini'; applyBtn.textContent = t('kfScaleApply');
+  applyBtn.onclick = () => {
+    const factor = Number(scaleInput.value);
+    if (!isFinite(factor) || factor <= 0) { toast(t('kfScaleInvalid'), 'err'); return; }
+    applyTimescale(factor);
+  };
+  bar.appendChild(applyBtn);
+  const clearBtn = document.createElement('button'); clearBtn.className = 'mini'; clearBtn.textContent = t('kfClearSel');
+  clearBtn.onclick = () => { clearKeySel(); renderTimeline(); renderInspector(); };
+  bar.appendChild(clearBtn);
+  bar.title = t('kfMarqueeHint');
+  tl.appendChild(bar);
+}
+
+let kfDrag = null;    // シーンJSONモード: グループドラッグ { anim, items:[{tr,k,startFrame}], startClientX, laneWidth, moved, historyPushed }
+let rivKfDrag = null; // rivのみモード: グループドラッグ { fps, duration, items, startClientX, laneWidth, moved, snapshotPromise, seekTarget }
 function renderTimeline() {
   const tl = $('timeline');
   tl.textContent = '';
@@ -2632,7 +2780,9 @@ function renderTimeline() {
   if (!sceneSpec) { renderRivTimelineBody(tl); return; }
   renderSceneTimelineBody(tl);
 }
-// rivのみモード: /anim のデータからタイムラインを描画（キーフレームの追加/移動/削除は不可・選択のみ）
+// rivのみモード: /anim のデータからタイムラインを描画。矩形選択/Shift+クリックで複数選択でき、
+// 選択したキーフレーム群はドラッグで一括移動 → ドラッグ終了時に /edit(setKeyframes replace) で
+// サーバーへ1回だけ反映する（カーブエディタの beginDrag/endDrag と同じ「ドラッグ終了時に確定」方式）
 function renderRivTimelineBody(tl) {
   if (!rivAnimData) {
     tl.style.display = 'none';
@@ -2643,6 +2793,20 @@ function renderRivTimelineBody(tl) {
   const { fps, duration, tracks } = rivAnimData;
   const durS = duration / (fps || 60);
   scrubDur = durS;
+  renderSelectionToolbar(tl, async (factor) => {
+    const items = multiSel.filter((s) => s.riv && RIV_EDITABLE_PROPS.has(s.tr.propertyName)).map((s) => ({ tr: s.tr, k: s.k, startFrame: s.k.frame }));
+    if (!items.length) return;
+    const anchor = Math.min(...items.map((it) => it.startFrame));
+    const snap = pushRivUndoSnapshot();
+    applyGroupTransform(items, (f) => anchor + (f - anchor) * factor, duration || 1);
+    renderTimeline(); renderInspector();
+    try {
+      await commitRivTrackEdits([...new Set(items.map((it) => it.tr))]);
+      await snap; await commitRivSnapshot();
+      log(t('editOk') + ': timescale x' + factor);
+    } catch (e2) { log(t('editNg') + e2, 'error'); toast(t('editNg') + e2, 'err'); }
+    renderTimeline();
+  });
   {
     const row = document.createElement('div'); row.className = 'trow';
     const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = scrubAnim + ' · ' + duration + 'f';
@@ -2679,15 +2843,25 @@ function renderRivTimelineBody(tl) {
     const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = (tr.targetName ?? tr.targetType ?? '?') + ' · ' + tr.propertyName;
     const lane = document.createElement('div'); lane.className = 'tlane';
     for (const k of tr.keyframes) {
-      const d = document.createElement('div'); d.className = 'tkey' + (keySel && keySel.riv && keySel.tr === tr && keySel.k === k ? ' sel' : '');
+      const d = document.createElement('div'); d.className = 'tkey' + (isKeySelected(tr, k) ? ' sel' : '');
       d.style.left = (100 * k.frame / (duration || 1)) + '%';
       d.title = 'f' + k.frame + (k.value !== undefined && k.value !== null ? ' = ' + k.value : '');
+      d._tr = tr; d._k = k; d._riv = true;
       d.addEventListener('pointerdown', (ev) => {
         ev.stopPropagation(); ev.preventDefault();
-        keySel = { riv: true, tr, k };
+        const entry = { riv: true, tr, k };
+        if (ev.shiftKey) { toggleKeySel(entry); renderTimeline(); renderInspector(); return; }
+        if (!isKeySelected(tr, k)) setSingleKeySel(entry);
+        else keySel = entry;
+        const laneRect = lane.getBoundingClientRect();
+        const groupEntries = (multiSel.length ? multiSel : [entry]).filter((s) => RIV_EDITABLE_PROPS.has(s.tr.propertyName));
+        rivKfDrag = {
+          fps, duration, startClientX: ev.clientX, laneWidth: laneRect.width, moved: false, snapshotPromise: null,
+          items: groupEntries.map((s) => ({ tr: s.tr, k: s.k, startFrame: s.k.frame })),
+          seekTarget: { k, fps },
+        };
         renderTimeline();
         renderInspector();
-        seekTo(k.frame / (fps || 60));
       });
       lane.appendChild(d);
     }
@@ -2709,6 +2883,15 @@ function renderSceneTimelineBody(tl) {
   tl.style.display = 'block';
   const durS = (anim.duration ?? 60) / (anim.fps ?? 60);
   scrubDur = durS;
+  renderSelectionToolbar(tl, (factor) => {
+    const items = multiSel.filter((s) => !s.riv).map((s) => ({ tr: s.tr, k: s.k, startFrame: s.k.frame }));
+    if (!items.length) return;
+    const anchor = Math.min(...items.map((it) => it.startFrame));
+    pushHistory();
+    applyGroupTransform(items, (f) => anchor + (f - anchor) * factor, anim.duration || 1);
+    renderTimeline(); renderInspector();
+    scheduleRebuild(0);
+  });
   // ルーラー行（フレーム目盛 10刻み + 再生ヘッドつまみ）
   {
     const row = document.createElement('div'); row.className = 'trow';
@@ -2749,13 +2932,24 @@ function renderSceneTimelineBody(tl) {
     const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = tr.target + ' · ' + tr.property;
     const lane = document.createElement('div'); lane.className = 'tlane';
     for (const k of tr.keyframes ?? []) {
-      const d = document.createElement('div'); d.className = 'tkey' + (keySel && keySel.tr === tr && keySel.k === k ? ' sel' : '');
+      const d = document.createElement('div'); d.className = 'tkey' + (isKeySelected(tr, k) ? ' sel' : '');
       d.style.left = (100 * k.frame / (anim.duration || 1)) + '%';
       d.title = 'f' + k.frame + (k.value !== undefined ? ' = ' + k.value : '') + (k.easing ? ' (' + k.easing + ')' : '');
+      d._tr = tr; d._k = k; d._riv = false;
       d.addEventListener('pointerdown', (ev) => {
         ev.stopPropagation(); ev.preventDefault();
+        const entry = { tr, k };
+        if (ev.shiftKey) { toggleKeySel(entry); renderTimeline(); renderInspector(); return; }
+        if (!isKeySelected(tr, k)) setSingleKeySel(entry);
+        else keySel = entry;
         const laneRect = lane.getBoundingClientRect();
-        kfDrag = { tr, k, anim, startClientX: ev.clientX, startFrame: k.frame, laneWidth: laneRect.width, moved: false, historyPushed: false };
+        const groupEntries = multiSel.length ? multiSel : [entry];
+        kfDrag = {
+          anim, startClientX: ev.clientX, laneWidth: laneRect.width, moved: false, historyPushed: false,
+          items: groupEntries.map((s) => ({ tr: s.tr, k: s.k, startFrame: s.k.frame })),
+        };
+        renderTimeline();
+        renderInspector();
       });
       lane.appendChild(d);
     }
@@ -2773,7 +2967,7 @@ function renderSceneTimelineBody(tl) {
       const frame = Math.max(0, Math.min(anim.duration || 0, Math.round(frac * (anim.duration || 1))));
       pushHistory();
       const k = addKeyframeAt(tr, frame);
-      keySel = { tr, k };
+      setSingleKeySel({ tr, k });
       renderTimeline();
       renderInspector();
       seekTo(frame / (anim.fps ?? 60));
@@ -2783,6 +2977,7 @@ function renderSceneTimelineBody(tl) {
     tl.appendChild(row);
   }
 }
+// ---- グループドラッグ: シーンJSONモード（デバウンス再ビルド。単発ドラッグと同じ挙動を維持） -----------
 window.addEventListener('pointermove', (e) => {
   if (!kfDrag) return;
   const dx = e.clientX - kfDrag.startClientX;
@@ -2791,19 +2986,18 @@ window.addEventListener('pointermove', (e) => {
   kfDrag.moved = true;
   const durFrames = kfDrag.anim.duration || 1;
   const deltaFrames = (dx / (kfDrag.laneWidth || 1)) * durFrames;
-  let nf = Math.round(kfDrag.startFrame + deltaFrames);
-  nf = Math.max(0, Math.min(durFrames, nf));
-  kfDrag.k.frame = nf;
+  applyGroupTransform(kfDrag.items, (f) => f + deltaFrames, durFrames);
   renderTimeline();
   scheduleRebuild(160);
 });
 window.addEventListener('pointerup', () => {
   if (!kfDrag) return;
-  const { tr, k, anim, moved } = kfDrag;
-  keySel = { tr, k };
+  const { items, anim, moved } = kfDrag;
+  const last = items[items.length - 1];
+  if (last) keySel = { tr: last.tr, k: last.k };
   renderInspector();
   if (!moved) {
-    seekTo(k.frame / (anim.fps ?? 60));
+    if (last) seekTo(last.k.frame / (anim.fps ?? 60));
     renderTimeline();
   } else {
     scheduleRebuild(0);
@@ -2811,6 +3005,200 @@ window.addEventListener('pointerup', () => {
   }
   kfDrag = null;
 });
+// ---- グループドラッグ: rivのみモード（カーブエディタと同じ「ドラッグ終了時に1回だけ確定」方式。
+// pushRivUndoSnapshot/commitRivSnapshot は既存のUndo機構をそのまま再利用する） -----------------------
+window.addEventListener('pointermove', (e) => {
+  if (!rivKfDrag) return;
+  const dx = e.clientX - rivKfDrag.startClientX;
+  if (!rivKfDrag.moved && Math.abs(dx) < 3) return;
+  if (!rivKfDrag.moved) rivKfDrag.snapshotPromise = pushRivUndoSnapshot();
+  rivKfDrag.moved = true;
+  const durFrames = rivKfDrag.duration || 1;
+  const deltaFrames = (dx / (rivKfDrag.laneWidth || 1)) * durFrames;
+  applyGroupTransform(rivKfDrag.items, (f) => f + deltaFrames, durFrames);
+  renderTimeline();
+});
+window.addEventListener('pointerup', async () => {
+  if (!rivKfDrag) return;
+  const drag = rivKfDrag; rivKfDrag = null;
+  if (!drag.moved) {
+    seekTo(drag.seekTarget.k.frame / (drag.seekTarget.fps || 60));
+    renderTimeline();
+    return;
+  }
+  renderInspector();
+  const tracks = [...new Set(drag.items.map((it) => it.tr))];
+  try {
+    await commitRivTrackEdits(tracks);
+    if (drag.snapshotPromise) await drag.snapshotPromise;
+    await commitRivSnapshot();
+    log(t('editOk') + ': moved ' + drag.items.length + ' keyframe(s)');
+  } catch (e2) {
+    log(t('editNg') + e2, 'error'); toast(t('editNg') + e2, 'err');
+  }
+  renderTimeline();
+});
+
+// ---- 矩形選択（マーキー）: #timeline に1つだけ張るデリゲート pointerdown。
+// キーフレームドット/ルーラーは各自 stopPropagation 済みなので、ここに来るのはレーン背景のみ -------------
+let marqueeState = null;
+function timelineMarqueeInit() {
+  const tl = $('timeline');
+  tl.addEventListener('pointerdown', (ev) => {
+    if (mode !== 'anim' || ev.button !== 0) return;
+    const laneEl = ev.target.closest('.tlane');
+    if (!laneEl || laneEl.classList.contains('ruler')) return;
+    if (ev.target.closest('.tkey')) return;
+    ev.preventDefault();
+    const additive = ev.shiftKey;
+    const el = document.createElement('div');
+    el.className = 'marquee';
+    document.body.appendChild(el);
+    marqueeState = { startX: ev.clientX, startY: ev.clientY, additive, moved: false, baseSel: additive ? multiSel.slice() : [] };
+    const updateRect = (x, y) => {
+      const left = Math.min(x, marqueeState.startX), top = Math.min(y, marqueeState.startY);
+      const w = Math.abs(x - marqueeState.startX), h = Math.abs(y - marqueeState.startY);
+      el.style.left = left + 'px'; el.style.top = top + 'px'; el.style.width = w + 'px'; el.style.height = h + 'px';
+      return { left, top, right: left + w, bottom: top + h };
+    };
+    updateRect(ev.clientX, ev.clientY);
+    const move = (e2) => {
+      if (!marqueeState) return;
+      if (Math.abs(e2.clientX - marqueeState.startX) > 3 || Math.abs(e2.clientY - marqueeState.startY) > 3) marqueeState.moved = true;
+      const rect = updateRect(e2.clientX, e2.clientY);
+      const hits = [];
+      $('timeline').querySelectorAll('.tkey').forEach((dot) => {
+        const r = dot.getBoundingClientRect();
+        const inside = r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
+        const already = marqueeState.additive && marqueeState.baseSel.some((s) => s.tr === dot._tr && s.k === dot._k);
+        const selected = inside || already;
+        dot.classList.toggle('sel', selected);
+        if (selected) hits.push({ tr: dot._tr, k: dot._k, riv: !!dot._riv });
+      });
+      multiSel = hits;
+      keySel = multiSel.length ? multiSel[multiSel.length - 1] : null;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      el.remove();
+      const moved = marqueeState.moved;
+      marqueeState = null;
+      if (moved) { renderTimeline(); renderInspector(); }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
+}
+timelineMarqueeInit();
+
+// ---- コピー&ペースト（Ctrl+C / Ctrl+V）: 選択キーフレーム群を再生ヘッド起点に複製する -------------------
+// riv/シーンモードいずれも、値・補間タイプ・カーブを保ったままコピーする:
+//   - シーンモード: k.easing はそのキーフレーム自身の「入ってくる区間」を表す既存仕様のため、
+//     オブジェクトごとコピーするだけで自動的に正しい形状になる
+//   - rivのみモード: k.segment（buildAnimJson が返す「入ってくる区間」情報）をそのまま複製し、
+//     commitRivTrackEdits が書き込み時に「次のキーフレームへ渡す区間」の向きへ変換する
+function doCopySelection() {
+  if (!multiSel.length) return;
+  const riv = !!multiSel[0].riv;
+  const active = multiSel.filter((s) => !!s.riv === riv);
+  if (!active.length) return;
+  const anchorFrame = Math.min(...active.map((s) => s.k.frame));
+  if (riv) {
+    const skipped = active.filter((s) => !RIV_EDITABLE_PROPS.has(s.tr.propertyName));
+    const usable = active.filter((s) => RIV_EDITABLE_PROPS.has(s.tr.propertyName));
+    if (skipped.length) { log(t('kfMoveUnsupportedProp')); toast(t('kfMoveUnsupportedProp'), 'err'); }
+    if (!usable.length) return;
+    clipboard = {
+      riv: true,
+      items: usable.map((s) => ({
+        trackKey: s.tr.targetIndex + '::' + s.tr.propertyName,
+        relFrame: s.k.frame - anchorFrame,
+        value: s.k.value,
+        segment: s.k.segment ? JSON.parse(JSON.stringify(s.k.segment)) : null,
+      })),
+    };
+    toast(usable.length + t('kfCopiedSuffix'));
+    log('copied ' + usable.length + ' keyframe(s)');
+  } else {
+    clipboard = {
+      riv: false,
+      items: active.map((s) => {
+        const { frame, ...rest } = s.k;
+        return { trackKey: s.tr.target + '::' + s.tr.property, relFrame: frame - anchorFrame, rest: JSON.parse(JSON.stringify(rest)) };
+      }),
+    };
+    toast(active.length + t('kfCopiedSuffix'));
+    log('copied ' + active.length + ' keyframe(s)');
+  }
+}
+// 貼り付け後のトラックを衝突解決してフレーム順に並べ直す共通処理
+function resolveAndSortTrack(tr, maxFrame) {
+  const all = (tr.keyframes ?? []).map((k) => ({ k, frame: k.frame }));
+  const resolved = resolveFrameCollisions(all, maxFrame);
+  for (const { k, frame } of resolved) k.frame = frame;
+  tr.keyframes.sort((a, b) => a.frame - b.frame);
+}
+async function doPasteAtPlayhead() {
+  if (!clipboard || !clipboard.items.length || mode !== 'anim') return;
+  if (clipboard.riv) {
+    if (sceneSpec || !rivAnimData) return;
+    const fps = rivAnimData.fps || 60;
+    const duration = rivAnimData.duration || 0;
+    const baseFrame = Math.round(curTimeSec * fps);
+    const byKey = new Map(rivAnimData.tracks.map((tr) => [tr.targetIndex + '::' + tr.propertyName, tr]));
+    const touched = new Set();
+    const newSel = [];
+    let skipped = 0;
+    for (const item of clipboard.items) {
+      const tr = byKey.get(item.trackKey);
+      if (!tr) { skipped++; continue; }
+      const frame = clampFrame(baseFrame + item.relFrame, 0, duration);
+      const newK = { frame, value: item.value, kind: 'KeyFrameDouble', editTargetIndex: null, segment: item.segment ? JSON.parse(JSON.stringify(item.segment)) : null };
+      tr.keyframes.push(newK);
+      touched.add(tr);
+      newSel.push({ riv: true, tr, k: newK });
+    }
+    if (skipped) log('paste: ' + skipped + ' keyframe(s) skipped (track not found in current animation)', 'error');
+    if (!touched.size) return;
+    for (const tr of touched) resolveAndSortTrack(tr, duration);
+    renderTimeline();
+    const snap = pushRivUndoSnapshot();
+    try {
+      await commitRivTrackEdits([...touched]);
+      await snap; await commitRivSnapshot();
+      multiSel = newSel; keySel = newSel[newSel.length - 1];
+      log(t('editOk') + ': pasted ' + newSel.length + ' keyframe(s)');
+    } catch (e2) { log(t('editNg') + e2, 'error'); toast(t('editNg') + e2, 'err'); }
+    renderTimeline(); renderInspector();
+  } else {
+    if (!sceneSpec) return;
+    const anim = (abSpec()?.animations ?? []).find((a) => a.name === scrubAnim);
+    if (!anim) return;
+    const baseFrame = Math.round(curTimeSec * (anim.fps || 60));
+    const byKey = new Map((anim.tracks ?? []).map((tr) => [tr.target + '::' + tr.property, tr]));
+    const touched = new Set();
+    const newSel = [];
+    let skipped = 0;
+    pushHistory();
+    for (const item of clipboard.items) {
+      const tr = byKey.get(item.trackKey);
+      if (!tr) { skipped++; continue; }
+      const frame = clampFrame(baseFrame + item.relFrame, 0, anim.duration || 0);
+      const newK = { frame, ...JSON.parse(JSON.stringify(item.rest)) };
+      if (!tr.keyframes) tr.keyframes = [];
+      tr.keyframes.push(newK);
+      touched.add(tr);
+      newSel.push({ tr, k: newK });
+    }
+    for (const tr of touched) resolveAndSortTrack(tr, anim.duration || 0);
+    if (skipped) log('paste: ' + skipped + ' keyframe(s) skipped (track not found in current animation)', 'error');
+    multiSel = newSel; keySel = newSel.length ? newSel[newSel.length - 1] : null;
+    renderTimeline(); renderInspector();
+    if (newSel.length) scheduleRebuild(0);
+    log('pasted ' + newSel.length + ' keyframe(s)');
+  }
+}
 let curTimeSec = 0;
 function seekTo(tsec, opts) {
   tsec = Math.max(0, Math.min(scrubDur, tsec));
@@ -3657,39 +4045,45 @@ $('helpWrap').onclick = (e) => { if (e.target.id === 'helpWrap') $('helpWrap').c
 
 // ---- SSE -----------------------------------------------------------------------
 const sse = new EventSource('/events');
-// 選択中キーフレームをid的に記述（再読込でtr/kオブジェクトは作り直されるため、frame+対象で照合し直す）
-function captureKeySelId() {
-  if (!keySel) return null;
-  if (keySel.riv) {
-    return { riv: true, target: keySel.tr.targetName ?? keySel.tr.targetType, property: keySel.tr.propertyName, frame: keySel.k.frame };
-  }
-  return { riv: false, target: keySel.tr.target, property: keySel.tr.property, frame: keySel.k.frame };
+// 選択中キーフレーム群をid的に記述（再読込でtr/kオブジェクトは作り直されるため、frame+対象で照合し直す）。
+// 移動/ペースト/タイムスケール確定直後に呼ばれた場合、multiSel の k.frame はすでに確定後の値を
+// ローカルに保持しているため、ここで捕捉するidはサーバーへ書き込んだ新しい位置と一致する
+function captureMultiSelIds() {
+  return multiSel.map((s) => (s.riv
+    ? { riv: true, target: s.tr.targetName ?? s.tr.targetType, property: s.tr.propertyName, frame: s.k.frame }
+    : { riv: false, target: s.tr.target, property: s.tr.property, frame: s.k.frame }));
 }
-function restoreKeySelId(w) {
-  if (!w) return;
-  if (!w.riv && sceneSpec) {
-    const ab = abSpec();
-    for (const anim of ab.animations ?? []) {
-      for (const tr of anim.tracks ?? []) {
-        if (tr.target !== w.target || tr.property !== w.property) continue;
-        const k = (tr.keyframes ?? []).find((kk) => kk.frame === w.frame);
-        if (k) { keySel = { tr, k }; return; }
+function restoreMultiSelIds(ids) {
+  const found = [];
+  for (const w of ids || []) {
+    if (!w.riv && sceneSpec) {
+      const ab = abSpec();
+      let hit = null;
+      outer: for (const anim of ab.animations ?? []) {
+        for (const tr of anim.tracks ?? []) {
+          if (tr.target !== w.target || tr.property !== w.property) continue;
+          const k = (tr.keyframes ?? []).find((kk) => kk.frame === w.frame);
+          if (k) { hit = { tr, k }; break outer; }
+        }
+      }
+      if (hit) found.push(hit);
+    } else if (w.riv && rivAnimData) {
+      for (const tr of rivAnimData.tracks) {
+        if ((tr.targetName ?? tr.targetType) !== w.target || tr.propertyName !== w.property) continue;
+        const k = tr.keyframes.find((kk) => kk.frame === w.frame);
+        if (k) { found.push({ riv: true, tr, k }); break; }
       }
     }
-  } else if (w.riv && rivAnimData) {
-    for (const tr of rivAnimData.tracks) {
-      if ((tr.targetName ?? tr.targetType) !== w.target || tr.propertyName !== w.property) continue;
-      const k = tr.keyframes.find((kk) => kk.frame === w.frame);
-      if (k) { keySel = { riv: true, tr, k }; return; }
-    }
   }
+  multiSel = found;
+  keySel = found.length ? found[found.length - 1] : null;
 }
 sse.onmessage = (e) => {
   if (e.data === 'reload') {
     log(t('fileUpdated'));
     const wasSel = sel;
-    const wasKeySel = captureKeySelId();
-    keySel = null;
+    const wasMultiSel = captureMultiSelIds();
+    clearKeySel();
     const smv = $('smSel').value;
     if (mode === 'sm') boot($('artboardSel').value, smv && smv !== '-' ? smv : undefined);
     else boot($('artboardSel').value, null, scrubAnim);
@@ -3702,7 +4096,7 @@ sse.onmessage = (e) => {
         if (again) { sel = { src: 'scene', kind: wasSel.kind, obj: again }; }
       }
       if (!sceneSpec && mode === 'anim' && scrubAnim) await loadRivAnim();
-      restoreKeySelId(wasKeySel);
+      restoreMultiSelIds(wasMultiSel);
       buildTree(); renderInspector(); drawSelBox(); renderTimeline();
       renderGraphFindings();
       if (graphMode) renderSmGraph();

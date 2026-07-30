@@ -42,10 +42,12 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const distStudio = pathToFileURL(join(root, "dist", "studio.js")).href;
 const distBinary = pathToFileURL(join(root, "dist", "rivBinary.js")).href;
 const distAssets = pathToFileURL(join(root, "dist", "rivAssets.js")).href;
+const distEdit = pathToFileURL(join(root, "dist", "rivEdit.js")).href;
 
 const { startStudio, stopStudio } = await import(distStudio);
 const { readRiv } = await import(distBinary);
 const { extractAssets } = await import(distAssets);
+const { editRiv } = await import(distEdit);
 
 let failures = 0;
 function check(label, cond, detail = "") {
@@ -150,6 +152,156 @@ try {
   const abNames = (tree.artboards ?? []).map((a) => a.name);
   check("multi-artboard file exposes both artboards via /tree", abNames.includes("Truck") && abNames.includes("Jeep"), JSON.stringify(abNames));
   handle2.close();
+
+  // ---- ドープシート強化: キーフレーム移動/コピペ/タイムスケール(rivのみモード) --------------------
+  // Studio UI(STUDIO_HTML)のクライアントJSはブラウザ専用のためNode側からは直接importできない。
+  // ここではクライアントが行うのと同じ手順(/anim で読み取り→ setKeyframes(replace) で /edit へ送る)を
+  // このテストスクリプト自身が組み立てて実行し、サーバー側(rivEdit.setKeyframes/replace)が
+  // 値・補間タイプ・カーブを無損失に往復させることをエンドポイントレベルで検証する。
+  // segmentToEasingSpec: studio.ts の同名関数と同じ変換(k.segment=「入ってくる区間」→ easing=「次への区間」)
+  function segmentToEasingSpec(segment) {
+    if (!segment) return undefined;
+    if (segment.interpolationType === 0) return "hold";
+    if (segment.interpolationType === 1) return "linear";
+    const interp = segment.interpolator;
+    if (interp && interp.kind === "cubic") return [interp.x1, interp.y1, interp.x2, interp.y2];
+    return "linear";
+  }
+  function trackToKeyframeSpecs(tr, frameOf) {
+    const sorted = tr.keyframes.slice().sort((a, b) => a.frame - b.frame);
+    return sorted.map((k, i) => {
+      const easing = i + 1 < sorted.length ? segmentToEasingSpec(sorted[i + 1].segment) : undefined;
+      let value = k.value;
+      if (tr.propertyName === "rotation" && typeof value === "number") value = (value * 180) / Math.PI;
+      return { frame: frameOf(k, i), value, easing };
+    });
+  }
+
+  const kfWork = join(scratch, "e2e-keyframes.riv");
+  writeFileSync(kfWork, readFileSync(join(root, "samples", "e2e-keyframes.riv")));
+  const PORT3 = PORT + 2;
+  const handle3 = startStudio({ rivPath: kfWork, port: PORT3 });
+  async function api3(path, opts) {
+    const res = await fetch(`http://localhost:${PORT3}${path}`, opts);
+    return { status: res.status, json: await res.json() };
+  }
+
+  const anim1 = await api3("/anim?artboard=Gen&animation=wobble");
+  check("GET /anim returns the wobble animation tracks", Array.isArray(anim1.json.tracks) && anim1.json.tracks.length === 4, JSON.stringify(anim1.json).slice(0, 200));
+  const yTrack = anim1.json.tracks.find((tr) => tr.propertyName === "y");
+  check("y-track found with 3 keyframes (0/30/60)", yTrack && yTrack.keyframes.length === 3, JSON.stringify(yTrack));
+  const rotTrack = anim1.json.tracks.find((tr) => tr.propertyName === "rotation");
+  check("rotation-track found with 2 keyframes (0/60)", rotTrack && rotTrack.keyframes.length === 2, JSON.stringify(rotTrack));
+  const colorTrack = anim1.json.tracks.find((tr) => tr.propertyName && tr.propertyName.toLowerCase().includes("color"));
+  check("color-track exists and is excluded from RIV_EDITABLE_PROPS (bulk-edit unsupported by design)", !!colorTrack, JSON.stringify(colorTrack));
+
+  // ---- 1. 複数移動: y-track の中間キーフレーム(frame30)を frame20 へ ----
+  {
+    const specs = trackToKeyframeSpecs(yTrack, (k) => (k.frame === 30 ? 20 : k.frame));
+    const res = await api3("/edit", {
+      method: "POST",
+      body: JSON.stringify([{ op: "setKeyframes", index: yTrack.targetIndex, animation: "wobble", property: "y", mode: "replace", keyframes: specs }]),
+    });
+    check("move: POST /edit ok", res.json.ok === true, JSON.stringify(res.json));
+    const after = await api3("/anim?artboard=Gen&animation=wobble");
+    const yAfter = after.json.tracks.find((tr) => tr.propertyName === "y");
+    const frames = yAfter.keyframes.map((k) => k.frame).sort((a, b) => a - b);
+    check("move: frames shifted to [0,20,60]", JSON.stringify(frames) === JSON.stringify([0, 20, 60]), JSON.stringify(frames));
+    const values = yAfter.keyframes.map((k) => Math.round(k.value));
+    check("move: values preserved [100,20,100] (order by frame)", JSON.stringify(values) === JSON.stringify([100, 20, 100]), JSON.stringify(values));
+    const midKf = yAfter.keyframes.find((k) => k.frame === 20);
+    const cubicSeg = midKf.segment; // 「frame0→frame20」区間 = 元々の frame0→frame30 と同じ linear のはず
+    check("move: interpolation shape into the moved keyframe preserved (linear)", cubicSeg && cubicSeg.interpolationType === 1, JSON.stringify(cubicSeg));
+    const lastKf = yAfter.keyframes.find((k) => k.frame === 60);
+    const cubicIntoLast = lastKf.segment; // 「frame20→frame60」区間 = 元々の frame30→frame60 と同じcubic(0,0,0.58,1)のはず
+    check(
+      "move: cubic curve control points preserved exactly across the move (not rounded to a preset)",
+      cubicIntoLast?.interpolator?.kind === "cubic" &&
+        Math.abs(cubicIntoLast.interpolator.x1 - 0) < 1e-4 &&
+        Math.abs(cubicIntoLast.interpolator.y1 - 0) < 1e-4 &&
+        Math.abs(cubicIntoLast.interpolator.x2 - 0.58) < 1e-3 &&
+        Math.abs(cubicIntoLast.interpolator.y2 - 1) < 1e-4,
+      JSON.stringify(cubicIntoLast)
+    );
+  }
+
+  // ---- 2. コピー&ペースト: y-track の frame0(100,先頭)/frame20(20) を frame2 起点で複製 ----
+  {
+    const before = await api3("/anim?artboard=Gen&animation=wobble");
+    const yBefore = before.json.tracks.find((tr) => tr.propertyName === "y");
+    const anchor = Math.min(...yBefore.keyframes.map((k) => k.frame)); // 0
+    const copied = yBefore.keyframes.filter((k) => k.frame === 0 || k.frame === 20);
+    const pasteBase = 2; // 貼り付け先の再生ヘッド相当。既存の0/20/60と衝突しない
+    const pastedKfs = copied.map((k) => ({ frame: pasteBase + (k.frame - anchor), value: k.value, segment: k.segment }));
+    // 既存トラックへ新規キーフレームをマージしてから setKeyframes(replace) 用に変換(commitRivTrackEditsと同じ手順)
+    const mergedTr = {
+      propertyName: "y",
+      keyframes: [...yBefore.keyframes, ...pastedKfs.map((p) => ({ frame: p.frame, value: p.value, segment: p.segment }))],
+    };
+    const specs = trackToKeyframeSpecs(mergedTr, (k) => k.frame);
+    const res = await api3("/edit", {
+      method: "POST",
+      body: JSON.stringify([{ op: "setKeyframes", index: yBefore.targetIndex, animation: "wobble", property: "y", mode: "replace", keyframes: specs }]),
+    });
+    check("paste: POST /edit ok", res.json.ok === true, JSON.stringify(res.json));
+    const after = await api3("/anim?artboard=Gen&animation=wobble");
+    const yAfter = after.json.tracks.find((tr) => tr.propertyName === "y");
+    const frames = yAfter.keyframes.map((k) => k.frame).sort((a, b) => a - b);
+    check("paste: track now has 5 keyframes at [0,2,20,22,60]", JSON.stringify(frames) === JSON.stringify([0, 2, 20, 22, 60]), JSON.stringify(frames));
+    const pastedAt2 = yAfter.keyframes.find((k) => k.frame === 2);
+    check("paste: pasted keyframe (from original frame0, value100) has the copied value", pastedAt2 && Math.round(pastedAt2.value) === 100, JSON.stringify(pastedAt2));
+    const originalUntouched = yAfter.keyframes.find((k) => k.frame === 0);
+    check("paste: original source keyframe (frame0) left untouched", originalUntouched && Math.round(originalUntouched.value) === 100);
+  }
+
+  // ---- 3. タイムスケール: rotation-track (frame0=0deg, frame60=360deg) を x0.5 に圧縮(アンカー=frame0) ----
+  {
+    const before = await api3("/anim?artboard=Gen&animation=wobble");
+    const rBefore = before.json.tracks.find((tr) => tr.propertyName === "rotation");
+    const anchor = Math.min(...rBefore.keyframes.map((k) => k.frame));
+    const specs = trackToKeyframeSpecs(rBefore, (k) => Math.round(anchor + (k.frame - anchor) * 0.5));
+    const res = await api3("/edit", {
+      method: "POST",
+      body: JSON.stringify([{ op: "setKeyframes", index: rBefore.targetIndex, animation: "wobble", property: "rotation", mode: "replace", keyframes: specs }]),
+    });
+    check("timescale: POST /edit ok", res.json.ok === true, JSON.stringify(res.json));
+    const after = await api3("/anim?artboard=Gen&animation=wobble");
+    const rAfter = after.json.tracks.find((tr) => tr.propertyName === "rotation");
+    const frames = rAfter.keyframes.map((k) => k.frame).sort((a, b) => a - b);
+    check("timescale: frames scaled from [0,60] to [0,30]", JSON.stringify(frames) === JSON.stringify([0, 30]), JSON.stringify(frames));
+    const endVal = rAfter.keyframes.find((k) => k.frame === 30)?.value;
+    check("timescale: rotation value preserved (~2π rad, degrees round-trip through EditOp intact)", Math.abs((endVal ?? 0) - 2 * Math.PI) < 1e-3, String(endVal));
+  }
+
+  // ---- 4. rivEdit.ts 拡張: setKeyframes の easing に「プリセットに一致しないカスタムベジェ」配列を
+  // 直接渡しても、その正確な制御点で CubicEaseInterpolator が作られること(ドープシートの移動/コピペが
+  // カーブをプリセットへ丸めず無損失で複製できるようにするための拡張。rivEdit.ts KeyframeEditSpec.easing 参照) ----
+  {
+    const bytes = new Uint8Array(readFileSync(kfWork));
+    const dump0 = readRiv(bytes, { tolerant: true });
+    const sqIndex = dump0.objects.find((o) => o.typeName === "Shape" && o.properties.name === "sq").index;
+    const CUSTOM_BEZIER = [0.11, 0.22, 0.33, 0.44]; // どの名前付きプリセットとも一致しない値
+    const { bytes: outBytes } = editRiv(bytes, [
+      {
+        op: "setKeyframes",
+        index: sqIndex,
+        animation: "wobble",
+        property: "rotation",
+        mode: "replace",
+        keyframes: [
+          { frame: 0, value: 0, easing: CUSTOM_BEZIER },
+          { frame: 60, value: 360 },
+        ],
+      },
+    ]);
+    const dump1 = readRiv(outBytes, { tolerant: true });
+    const customInterp = dump1.objects.find(
+      (o) => o.typeName === "CubicEaseInterpolator" && Math.abs((o.properties.x1 ?? -99) - 0.11) < 1e-4 && Math.abs((o.properties.y2 ?? -99) - 0.44) < 1e-4
+    );
+    check("rivEdit.setKeyframes: custom (non-preset) bezier array creates a matching CubicEaseInterpolator", !!customInterp, JSON.stringify(customInterp?.properties));
+  }
+
+  handle3.close();
 } catch (e) {
   console.error(e);
   failures++;

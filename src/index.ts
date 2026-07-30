@@ -832,7 +832,8 @@ Available: fade-in rise-in drop-in slide-in pop-in bounce-in | fade-out sink-out
 Pro features: stroke.trim {start,end,mode} + trimStart/trimEnd tracks (draw-on effect), shapes[].clipBy (mask via an invisible shape), groups[].solo+active + soloActive track with keyframes[].ref (pose/mouth switching), constraints [{type:"followPath",item,path}] + followDistance track 0-1 (motion along a path), open paths (closed:false), multi-contour shapes (subpaths), stroke cap/join.
 "imports":[{"spec":"logo.scene.json","x":200,"y":150,"scale":0.8}] places riv_import_svg / riv_asset_search fragments under a wrapper group (id = file basename) — animate the wrapper or individual shape ids. PREFER imported real vector art over drawing with primitives for anything illustrative.
 Recommended flow: riv_design_tokens → (riv_import_svg / riv_asset_search for artwork) → riv_create (token values + presets + imports) → riv_critique → fix → re-critique.
-Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).`,
+Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).
+Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (path resolved relative to cwd, or pass bytes directly). "events":[{"id":"beepEvent","type":"audio","audio":"beep"}] declares an AudioEvent bound to that clip. Trigger it either from a state machine state ("states":[{"name":"s1","fireEvent":"beepEvent"}]) or at specific frames inside a timeline via animations[].events: {"name":"anim1","duration":60,"tracks":[...],"events":[{"event":"beepEvent","frame":0},{"event":"beepEvent","frame":30}]}. NOTE: playback support depends on the runtime — this server's own preview (a Canvas2D-based renderer) does not play audio, so rendered PNG/GIF/video previews and riv_studio will stay silent even though the AudioAsset/AudioEvent are written correctly and will play in a GPU-backed Rive runtime (WebGL/Skia, e.g. rive.app or the production player).`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
       scene: z.record(z.unknown()).describe("Scene spec (see tool description for schema)"),
@@ -863,13 +864,21 @@ Shape z-order: later in array = on top; images render above shapes. properties f
         }
         delete spec.imports;
       }
-      // pngPath/フォントpath → bytes 解決（cwd 基準）
+      // pngPath/フォントpath/audioPath → bytes 解決（cwd 基準）
       const imageLists = [spec.images ?? [], ...(spec.artboards ?? []).map((a) => a.images ?? [])];
       for (const img of imageLists.flat()) {
         if (!img.bytes && img.pngPath) {
           const p = resolve(img.pngPath);
           if (!existsSync(p)) return err(`Image file not found: ${p}`);
           img.bytes = new Uint8Array(readFileSync(p));
+        }
+      }
+      const audioLists = [spec.audio ?? [], ...(spec.artboards ?? []).map((a) => a.audio ?? [])];
+      for (const clip of audioLists.flat()) {
+        if (!clip.bytes && clip.path) {
+          const p = resolve(clip.path);
+          if (!existsSync(p)) return err(`Audio file not found: ${p}`);
+          clip.bytes = new Uint8Array(readFileSync(p));
         }
       }
       for (const font of spec.fonts ?? []) {

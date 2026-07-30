@@ -351,6 +351,105 @@ try {
     check("riv_extract_assets writes a non-empty PNG file", !!fileOk, JSON.stringify(first));
   }
 
+  // riv_create: 音声対応（AudioAsset埋め込み + AudioEvent、アニメーションフレーム発火 + SM state進入発火）
+  // samples/e2e-assets/ は .gitignore 対象（生成物置き場）なので、tinyPng と同様に音源はここで都度合成する
+  // （固定ファイルをリポジトリに置くとフレッシュcloneでファイル欠落してテストが落ちる）
+  const audioPath = join(root, "samples", "e2e-assets", "beep.wav");
+  {
+    const sampleRate = 8000;
+    const numSamples = Math.floor(sampleRate * 0.3); // 440Hz sine, 0.3s, mono, 16bit PCM
+    const dataSize = numSamples * 2;
+    const wav = Buffer.alloc(44 + dataSize);
+    wav.write("RIFF", 0);
+    wav.writeUInt32LE(36 + dataSize, 4);
+    wav.write("WAVE", 8);
+    wav.write("fmt ", 12);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20); // PCM
+    wav.writeUInt16LE(1, 22); // mono
+    wav.writeUInt32LE(sampleRate, 24);
+    wav.writeUInt32LE(sampleRate * 2, 28); // byteRate
+    wav.writeUInt16LE(2, 32); // blockAlign
+    wav.writeUInt16LE(16, 34); // bitsPerSample
+    wav.write("data", 36);
+    wav.writeUInt32LE(dataSize, 40);
+    for (let i = 0; i < numSamples; i++) {
+      const v = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 0.3 * 32767;
+      wav.writeInt16LE(Math.round(v), 44 + i * 2);
+    }
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    mkdirSync(join(root, "samples", "e2e-assets"), { recursive: true });
+    writeFileSync(audioPath, wav);
+  }
+  const audioOutPath = join(root, "samples", "e2e-audio.riv");
+  const audioCreated = await callTool("riv_create", {
+    outPath: audioOutPath,
+    scene: {
+      artboard: { name: "AudioDemo", width: 300, height: 200 },
+      backgroundColor: "#1a1a2e",
+      shapes: [{ id: "box", type: "rect", x: 150, y: 100, width: 60, height: 60, fill: { color: "#e94560" } }],
+      audio: [{ id: "beep", path: audioPath }],
+      events: [
+        { id: "beepOnFrame", type: "audio", audio: "beep" },
+        { id: "beepOnEnter", type: "audio", audio: "beep" },
+      ],
+      animations: [
+        {
+          name: "spin", fps: 60, duration: 60, loop: "loop",
+          tracks: [{ target: "box", property: "rotation", keyframes: [{ frame: 0, value: 0 }, { frame: 60, value: 360, easing: "linear" }] }],
+          // 指定フレームでのイベント発火（AudioEvent の再生タイミング）
+          events: [{ event: "beepOnFrame", frame: 0 }, { event: "beepOnFrame", frame: 30 }],
+        },
+      ],
+      stateMachine: {
+        name: "SM",
+        states: [{ name: "spinning", animation: "spin", fireEvent: "beepOnEnter" }],
+        transitions: [{ from: "entry", to: "spinning" }],
+      },
+    },
+  });
+  const audioCreatedText = textOf(audioCreated);
+  check(
+    "riv_create embeds audio and validates with official runtime",
+    !audioCreated.isError && audioCreatedText.includes("validated"),
+    audioCreatedText.slice(0, 300)
+  );
+
+  const audioDump = await callTool("riv_dump", { path: audioOutPath, full: true });
+  const audioDumpText = textOf(audioDump);
+  check(
+    "riv_dump shows AudioAsset + FileAssetContents embedded",
+    audioDumpText.includes('"AudioAsset": 1') && audioDumpText.includes('"FileAssetContents"'),
+    audioDumpText.slice(0, 200)
+  );
+  check(
+    "riv_dump shows both AudioEvent instances",
+    audioDumpText.includes('"AudioEvent": 2'),
+    audioDumpText.slice(0, 200)
+  );
+  check(
+    "riv_dump shows KeyFrameCallback keyframes for the animation-frame trigger",
+    audioDumpText.includes('"KeyFrameCallback": 2'),
+    audioDumpText.slice(0, 200)
+  );
+  check(
+    "riv_dump shows StateMachineFireEvent for the SM state-enter trigger",
+    audioDumpText.includes('"StateMachineFireEvent": 1'),
+    audioDumpText.slice(0, 200)
+  );
+
+  // riv_extract_assets: e2e-audio.riv には埋め込みWAV("beep")が1つあるはず
+  const audioExtracted = await callTool("riv_extract_assets", {
+    path: audioOutPath,
+    outDir: join(root, "samples", "e2e-assets"),
+  });
+  const audioExtractedText = textOf(audioExtracted);
+  check(
+    "riv_extract_assets recognizes the embedded AudioAsset",
+    !audioExtracted.isError && audioExtractedText.includes('"type": "AudioAsset"'),
+    audioExtractedText.slice(0, 300)
+  );
+
   // riv_create: ボーン+スキニング（バインド姿勢が壊れていないか = 公式ランタイムで受理+レンダリング）
   const boneCreated = await callTool("riv_create", {
     outPath: join(root, "samples", "e2e-bones.riv"),
