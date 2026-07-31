@@ -8,7 +8,7 @@
     {
       "name": "rive-mcp",
       "source": "./plugin",
-      "description": "Create, edit, lint, render and preview Rive (.riv) animations without the Rive editor — 27 MCP tools plus the design workflow that makes generated motion look professional"
+      "description": "Create, edit, lint, render and preview Rive (.riv) animations without the Rive editor — 30 MCP tools plus the design workflow that makes generated motion look professional"
     }
   ]
 }
