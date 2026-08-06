@@ -19,7 +19,7 @@ import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
 import { optimizeRiv } from "./rivOptimize.js";
 import { extractAssets } from "./rivAssets.js";
-import { startStudio, stopStudio, takeStudioNotes } from "./studio.js";
+import { startStudio, stopStudio, takeStudioNotes, postStudioReply } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, type Mood } from "./designTokens.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
@@ -1585,7 +1585,7 @@ server.registerTool(
     return {
       content: [{
         type: "text",
-        text: `Studio running at ${handle.url}\nwatching: ${resolve(path)}${scenePath ? `\nscene: ${resolve(scenePath)}` : ""}\nブラウザで開いてください。ファイルを riv_create / riv_edit で更新すると即座に反映されます。\nUI右側の「AIへの指示」に書かれた内容は riv_studio_notes で取得できます（ユーザーが「スタジオの指示を確認して」と言ったら呼ぶこと）。`,
+        text: `Studio running at ${handle.url}\nwatching: ${resolve(path)}${scenePath ? `\nscene: ${resolve(scenePath)}` : ""}\nブラウザで開いてください。ファイルを riv_create / riv_edit で更新すると即座に反映されます。\n左パネル下部の「エージェント」はチャットです。ユーザーの発言は riv_studio_notes で取得し、作業が終わったら同ツールの reply 引数で結果を必ず返すこと（返さないとユーザー側は何が起きたか分かりません）。`,
       }],
     };
   })
@@ -1595,16 +1595,33 @@ server.registerTool(
 server.registerTool(
   "riv_studio_notes",
   {
-    title: "Fetch human instructions from the Studio UI",
+    title: "Read the Studio chat and reply into it",
     description:
-      "Fetch pending instructions the user typed into the Studio web UI's 'Instructions for AI' box. Call this when the user says things like 'check the studio notes' / 「スタジオの指示を確認して」, or after opening riv_studio when the user mentions they left notes. Consumes (clears) the queue by default; the Studio UI then shows the notes were picked up. Act on each instruction (usually via riv_edit or riv_create on the watched file — changes hot-reload in the browser).",
+      "The Studio web UI's Agent panel is a two-way chat. Use this tool for both halves of it.\n" +
+      "1) READ: call with no `reply` to fetch the messages the user typed (consumes the queue; the Studio shows them as picked up). Trigger on 'check the studio notes' / 「スタジオの指示を確認して」, or after opening riv_studio when the user mentions they left notes. Act on each instruction — usually riv_edit or riv_create on the watched file, which hot-reloads the browser.\n" +
+      "2) REPLY: after doing the work, call again with `reply` set to a short summary of what you changed (and anything you could not do). It appears as your message in the same chat. ALWAYS reply — otherwise the user is left staring at the Studio with no idea whether you acted. Both can be done in one call: pass `reply` together with the read to answer and pick up anything new at the same time.",
     inputSchema: {
       port: z.number().int().optional().describe("Studio port (default 8787)"),
       peek: z.boolean().optional().describe("Read without consuming"),
+      reply: z.string().optional().describe("Message to post back into the Studio chat as the assistant (what you changed, what you skipped, what you need)"),
     },
   },
-  wrap(async ({ port, peek }: { port?: number; peek?: boolean }) => {
+  wrap(async ({ port, peek, reply }: { port?: number; peek?: boolean; reply?: string }) => {
     const p = port ?? 8787;
+    let replied = false;
+    if (reply && reply.trim()) {
+      try {
+        const res = await fetch(`http://localhost:${p}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({ text: reply.trim(), role: "assistant" }),
+        });
+        replied = res.ok;
+      } catch {
+        replied = postStudioReply(reply.trim());
+      }
+    }
+    const replyNote = reply ? (replied ? "Reply posted to the Studio chat.\n" : "Could not post the reply — the Studio is not reachable.\n") : "";
     let data: { notes: Array<{ text: string; time: string; context?: { selection?: string | null; artboard?: string | null; animation?: string | null; timeSec?: number | null } }> };
     try {
       const res = await fetch(`http://localhost:${p}/notes${peek ? "" : "?consume=1"}`);
@@ -1612,12 +1629,12 @@ server.registerTool(
     } catch {
       const notes = takeStudioNotes();
       if (notes === null) {
-        return { content: [{ type: "text", text: `Studio is not running on port ${p}. Start it with riv_studio first.` }] };
+        return { content: [{ type: "text", text: `${replyNote}Studio is not running on port ${p}. Start it with riv_studio first.` }] };
       }
       data = { notes };
     }
     if (!data.notes.length) {
-      return { content: [{ type: "text", text: "No pending instructions from the Studio UI." }] };
+      return { content: [{ type: "text", text: `${replyNote}No pending instructions from the Studio UI.` }] };
     }
     const lines = data.notes.map((n, i) => {
       const c = n.context;
@@ -1634,7 +1651,7 @@ server.registerTool(
     return {
       content: [{
         type: "text",
-        text: `Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically.`,
+        text: `${replyNote}Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically. When you are done, call riv_studio_notes again with \`reply\` to tell the user in the Studio chat what you changed.`,
       }],
     };
   })

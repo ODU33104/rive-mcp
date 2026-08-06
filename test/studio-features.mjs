@@ -7,7 +7,35 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from "no
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
+import { connect as netConnect } from "node:net";
 import zlib from "node:zlib";
+
+// CP932エンコーダ。Nodeにデコーダはあるがエンコーダが無いので、全2バイト組を
+// デコードして逆引き表を作る(23k回・一瞬)。文字化け回帰テストの入力生成用。
+let cp932Map = null;
+function cp932(str) {
+  if (!cp932Map) {
+    const dec = new TextDecoder("shift_jis", { fatal: true });
+    cp932Map = new Map();
+    for (let lead = 0x81; lead <= 0xfc; lead++) {
+      for (let trail = 0x40; trail <= 0xfc; trail++) {
+        try {
+          const ch = dec.decode(Uint8Array.from([lead, trail]));
+          if (!cp932Map.has(ch)) cp932Map.set(ch, [lead, trail]);
+        } catch { /* 未定義の組み合わせ */ }
+      }
+    }
+  }
+  const out = [];
+  for (const ch of str) {
+    const cp = ch.codePointAt(0);
+    if (cp < 0x80) { out.push(cp); continue; }
+    const b = cp932Map.get(ch);
+    if (!b) throw new Error(`cp932 encode failed for ${JSON.stringify(ch)}`);
+    out.push(...b);
+  }
+  return Buffer.from(out);
+}
 
 // 最小のPNGエンコーダ(単色べた塗り)。差し替え検証用の確実に有効なPNGバイト列を作る。
 function makePng(width, height, [r, g, b, a]) {
@@ -143,6 +171,38 @@ try {
   check("replace-asset with bad index returns ok:false (not a crash)", badAsset.json.ok === false);
   const badRestore = await api("/api/snapshots/restore", { method: "POST", body: JSON.stringify({ id: "nope" }) });
   check("snapshot restore with bad id returns ok:false (not a crash)", badRestore.json.ok === false);
+
+  // ---- POSTボディの文字コード(チャット文字化けの回帰テスト) ----------------
+  // (a) チャンク境界: 生ソケットで1バイトずつ送り、マルチバイト文字を必ず境界で割る。
+  //     旧実装は受信チャンクを文字列として += していたため、ここで U+FFFD に化けた。
+  // (b) CP932: 日本語WindowsのPowerShell等から送られたレガシーエンコーディングを救済する。
+  const JP = "報告の3点、対応しました。ease-in で加速します。";
+  const rawPost = (bodyBuf) =>
+    new Promise((resolve, reject) => {
+      const s = netConnect(PORT, "127.0.0.1", () => {
+        s.write(Buffer.from(
+          `POST /chat HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: ${bodyBuf.length}\r\nConnection: close\r\n\r\n`,
+          "latin1",
+        ));
+        let i = 0;
+        const tick = () => {
+          if (i >= bodyBuf.length) return s.end();
+          s.write(bodyBuf.subarray(i, i + 1));
+          i++;
+          setImmediate(tick);
+        };
+        tick();
+      });
+      s.on("data", () => {});
+      s.on("end", resolve);
+      s.on("error", reject);
+    });
+  await rawPost(Buffer.from(JSON.stringify({ text: "A:" + JP, role: "assistant" }), "utf8"));
+  await rawPost(cp932(JSON.stringify({ text: "B:" + JP, role: "assistant" })));
+  const chatRes = await (await fetch(`http://localhost:${PORT}/chat`)).json();
+  const texts = (chatRes.chat ?? []).map((m) => m.text);
+  check("UTF-8 body split at every byte boundary survives intact", texts.includes("A:" + JP), JSON.stringify(texts[0]));
+  check("CP932 body is recovered instead of becoming mojibake", texts.includes("B:" + JP), JSON.stringify(texts[1]));
 
   // ---- マルチアートボードの下地データ(タブはクライアント側でr.contents.artboardsから描画する。
   // ここではその情報源である /tree が複数アートボードを正しく列挙することだけを確認する) ----

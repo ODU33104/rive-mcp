@@ -21,7 +21,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Losslessly edit existing `.riv`** — change any property, swap text, delete subtrees (references auto-remapped); round-trip verified pixel-perfect
 - **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live. Also includes a **bezier curve editor** for hand-tuning keyframe easing (drag control points, hold/linear/cubic switching, 10 one-click presets), a **state machine graph view** (node graph of layers/states/transitions with lint findings and live-playback state highlighting), and an **onion skin** overlay (0-5 surrounding frames) for checking motion at a glance
 - **Studio keeps growing** — drag-and-drop image replacement for embedded assets (lossless swap), multi-artboard tabs, named snapshot save/restore/delete, dope-sheet marquee/Shift-click multi-select with grouped drag and Ctrl+C/V copy-paste, and a bone overlay with FK drag-to-pose that bakes straight to a keyframe
-- **Human ⇄ AI loop** — an "Instructions for AI" box in the Studio: you type feedback, the AI picks it up via `riv_studio_notes` (now auto-attached with the current selection/artboard/animation/time context) and fixes the file, your browser updates instantly
+- **Human ⇄ AI loop** — a two-way **Agent chat** in the Studio: you type feedback (with the current selection/artboard/animation/time attached), the AI picks it up via `riv_studio_notes`, fixes the file, and replies into the same thread; your browser updates instantly
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Data binding & pipeline tooling** — `riv_inspect` decodes ViewModel definitions, instances (with resolved values), enums, converters and bind wiring — data binding inspection that few tools support yet; `riv_batch_render` exports many files × formats in one glob-aware call for CI, and `riv_ab_compare` composites two files side by side into one labeled GIF/APNG for design review
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
@@ -58,7 +58,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_rig_character` | **Character PNG → fully rigged `.riv` in one call** |
 | `riv_diff` | Structural diff between two `.riv` files |
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, **bezier curve editor** (drag control points, hold/linear/cubic, 10 easing presets), **state machine graph view** (node graph, transition details, lint-highlighted states, live playback highlighting), **onion skin** overlay, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
-| `riv_studio_notes` | Fetch instructions the human typed into the Studio UI, with auto-attached context (current selection, artboard, animation, playback time) |
+| `riv_studio_notes` | Read the Studio's Agent chat (with auto-attached context: selection, artboard, animation, playback time) and post replies back into it |
 | `riv_setup` | **One-call environment setup**: installs the bundled `rive-design-guidelines` skill into `.claude/skills/` (project) or `~/.claude/skills/` (user) so the pro workflow auto-triggers — confirmation happens via the normal tool-permission prompt |
 
 ### Showcases: professional assets in, professional motion out
@@ -126,14 +126,18 @@ Requires Node.js 20+.
 
 1. **Let the AI build** — "create a bouncing-ball riv and open it with riv_studio"
 2. **Touch it** — click/drag objects on the canvas, tweak numbers & colors in the inspector (applies live)
-3. **Ask the AI** — type bigger changes into *Instructions for AI*, then say "check the studio notes" in chat
-4. When the AI edits the file, the browser hot-reloads instantly
+3. **Ask the AI** — type bigger changes into the **Agent** panel, then say "check the studio notes" in chat
+4. When the AI edits the file, the browser hot-reloads instantly — and it writes back what it changed, in the same chat
 
 Works without a scene JSON too: any `.riv` can be edited property-by-property through the hierarchy + inspector.
 
 ![Studio in motion — state machine graph, curve editor, onion skin](docs/media/studio-v04.gif)
 
 ### Feature tour
+
+**Laid out like the editor you already know** — the Studio follows the official Rive editor's operating model: a **Design / Animate** mode switch, a Hierarchy panel with `Expand All` / `Collapse All` / `Deep Expand` / `Deep Collapse` on right-click and a name filter, `Data / Assets / Animations / Agent` accordions along the bottom of the left panel, and a `Console / Problems / Changes` status bar at the very bottom (Problems is wired to the same static checks as `riv_lint`, and clicking a finding jumps to it in the state-machine graph).
+
+**Keys are created where you'd expect them** — in Animate mode every animatable inspector row grows a diamond key button with three states: hollow (no track), outlined blue (animated but no key under the playhead), filled blue (keyed here). Click to key or unkey at the playhead. The dope sheet below is for reading and rearranging what's already there.
 
 **Multiple artboards & snapshots** — switch between a file's artboards with a tab bar, and save, restore or delete named snapshots of your edits — a separate history from undo/redo.
 
@@ -169,7 +173,7 @@ Works without a scene JSON too: any `.riv` can be edited property-by-property th
 
 ![Bone overlay](docs/media/studio-bones-en.png)
 
-**Instructions for AI** — type a change request and it ships with your current selection, artboard, animation and playhead time auto-attached; the AI picks it up via `riv_studio_notes`.
+**Agent chat** — a two-way conversation, not a suggestion box. Your message ships with the current selection, artboard, animation and playhead time attached; the AI picks it up via `riv_studio_notes` and posts its result back into the same thread, so you can see what it changed without leaving the Studio.
 
 ![Instructions for AI](docs/media/studio-notes-en.png)
 

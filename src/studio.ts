@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { createRiv, pngSize, type SceneSpec } from "./rivWriter.js";
-import { readRiv, propInfo, type RivObject } from "./rivBinary.js";
+import { readRiv, propInfo, isLayerStateType, type RivObject } from "./rivBinary.js";
 import { editRiv, setKeyframeCurve, type EditOp } from "./rivEdit.js";
 import { extractAssets, replaceAssetBytes } from "./rivAssets.js";
 import { encodeApng } from "./apng.js";
@@ -43,6 +43,16 @@ export interface StudioNote {
   text: string;
   time: string; // ISO
   context?: StudioNoteContext; // 任意付加情報（後方互換: 既存フィールドはそのまま）
+}
+
+// Studio の Agent パネルは一方通行の投稿箱ではなく会話。
+// user = 人間がUIから書いた指示、assistant = AI が riv_studio_notes(reply) で返した結果、
+// system = 「受け取りました」等のサーバー由来の状態通知。
+export interface StudioChatMessage {
+  role: "user" | "assistant" | "system";
+  text: string;
+  time: string; // ISO
+  context?: StudioNoteContext;
 }
 
 // シーンJSON内の pngPath / fonts[].path を bytes に解決（シーンファイルの場所基準）
@@ -250,8 +260,9 @@ export function buildSmJson(bytes: Uint8Array): unknown {
   const finalizeLayer = () => {
     if (!inLayer) return;
     for (const s of states) {
-      const id = s.id as number;
-      if (id >= 3) s.unreachable = (incoming.get(id) ?? 0) === 0;
+      // Entry は入口・Any は常時有効・Exit は終端なので到達不能判定の対象外
+      if (s.kind === "EntryState" || s.kind === "AnyState" || s.kind === "ExitState") continue;
+      s.unreachable = (incoming.get(s.id as number) ?? 0) === 0;
     }
     for (const tr of transitions) {
       const conds = tr.conditions as unknown[];
@@ -310,12 +321,10 @@ export function buildSmJson(bytes: Uint8Array): unknown {
       layerCounter++;
       layerName = (o.properties.name as string) ?? `Layer ${layerCounter}`;
       inLayer = true;
-      stateCounter = 3;
-      states = [
-        { id: 0, kind: "Entry", name: "Entry" },
-        { id: 1, kind: "Any", name: "Any" },
-        { id: 2, kind: "Exit", name: "Exit" },
-      ];
+      // stateToId は「レイヤー内の出現順」。Entry/Any/Exit も同じ列に並ぶので
+      // 0/1/2 を決め打ちで先頭に置いてはいけない（置くと順序が違うファイルで遷移先が全部ずれる）
+      stateCounter = 0;
+      states = [];
       currentStateIdx = null;
       incoming = new Map();
       transitions = [];
@@ -323,30 +332,18 @@ export function buildSmJson(bytes: Uint8Array): unknown {
       continue;
     }
     if (!inLayer) continue;
-    if (o.typeName === "EntryState") {
-      currentStateIdx = 0;
-      continue;
-    }
-    if (o.typeName === "AnyState") {
-      currentStateIdx = 1;
-      continue;
-    }
-    if (o.typeName === "ExitState") {
-      currentStateIdx = 2;
-      continue;
-    }
-    if (o.typeName === "AnimationState" || o.typeName === "BlendState1DInput") {
-      currentStateIdx = stateCounter;
+    if (isLayerStateType(o.typeName)) {
+      currentStateIdx = stateCounter++;
       let name = `state#${currentStateIdx}`;
       let animationName: string | null = null;
-      if (o.typeName === "AnimationState" && typeof o.properties.animationId === "number") {
+      if (o.typeName === "EntryState") name = "Entry";
+      else if (o.typeName === "AnyState") name = "Any";
+      else if (o.typeName === "ExitState") name = "Exit";
+      else if (o.typeName === "AnimationState" && typeof o.properties.animationId === "number") {
         animationName = animNames[o.properties.animationId as number] ?? null;
         if (animationName) name = animationName;
-      } else if (o.typeName === "BlendState1DInput") {
-        name = `blend#${currentStateIdx}`;
-      }
+      } else if (o.typeName.startsWith("BlendState")) name = `blend#${currentStateIdx}`;
       states.push({ id: currentStateIdx, kind: o.typeName, name, animationName, objectIndex: o.index });
-      stateCounter++;
       continue;
     }
     if (o.typeName === "StateTransition" && currentStateIdx !== null) {
@@ -466,6 +463,7 @@ let current: {
   watchers: FSWatcher[];
   port: number;
   notes: StudioNote[];
+  chat: StudioChatMessage[];
   notify: (msg: string) => void;
   snapDir: string;
   snapshots: StudioSnapshot[];
@@ -484,8 +482,39 @@ export function stopStudio(): void {
 export function takeStudioNotes(): StudioNote[] | null {
   if (!current) return null;
   const out = current.notes.splice(0, current.notes.length);
-  if (out.length) current.notify("notes-taken");
+  if (out.length) {
+    current.chat.push({ role: "system", text: "notes-taken", time: new Date().toISOString() });
+    current.notify("notes-taken");
+  }
   return out;
+}
+
+// AI からの返信を会話に積む（MCPツール用フォールバック。HTTP経路は POST /chat）
+export function postStudioReply(text: string): boolean {
+  if (!current) return false;
+  current.chat.push({ role: "assistant", text, time: new Date().toISOString() });
+  current.notify("chat");
+  return true;
+}
+
+// POSTボディの文字コード復元。正はUTF-8で、strictに通ればそれ以外は絶対に試さない。
+// UTF-8として不正だったときだけ、シェル(日本語WindowsのPowerShell=CP932 等)から
+// 送られたレガシーエンコーディングを救済する。JSONとして成立したものだけ採用する。
+function decodeRequestBody(buf: Buffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    for (const enc of ["shift_jis", "euc-jp", "gbk", "windows-1252"]) {
+      try {
+        const s = new TextDecoder(enc, { fatal: true }).decode(buf);
+        JSON.parse(s);
+        return s;
+      } catch {
+        /* 次の候補へ */
+      }
+    }
+    return buf.toString("utf8");
+  }
 }
 
 export function startStudio(opts: StudioOptions): StudioHandle {
@@ -495,6 +524,7 @@ export function startStudio(opts: StudioOptions): StudioHandle {
   const port = opts.port ?? 8787;
   const sseClients = new Set<import("node:http").ServerResponse>();
   const notes: StudioNote[] = [];
+  const chat: StudioChatMessage[] = [];
   // スナップショット履歴: undoとは別に名前付きで .riv 全体をコピー保存する作業ディレクトリ（セッション終了時にrmSync）
   const snapDir = join(tmpdir(), `rive-mcp-studio-${randomUUID()}`);
   const snapshots: StudioSnapshot[] = [];
@@ -528,10 +558,11 @@ export function startStudio(opts: StudioOptions): StudioHandle {
       res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
       res.end(body);
     };
+    // チャンク境界でマルチバイト文字が割れるので、必ず全部集めてから一度にデコードする
     const readBody = (cb: (body: string) => void) => {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => cb(body));
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer | string) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c, "utf8")));
+      req.on("end", () => cb(decodeRequestBody(Buffer.concat(chunks))));
     };
     try {
       if (url.pathname === "/") {
@@ -618,7 +649,8 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         req.on("close", () => sseClients.delete(res));
         return;
       }
-      // AIへの指示: UIがPOST→積む / MCPツールがGET(consume=1)→取得して消化
+      // AIへの指示: UIがPOST→積む / MCPツールがGET(consume=1)→取得して消化。
+      // 同じ内容は chat にも user 発言として積まれ、Agent パネルに会話として残る。
       if (url.pathname === "/notes") {
         if (req.method === "POST") {
           readBody((body) => {
@@ -628,6 +660,8 @@ export function startStudio(opts: StudioOptions): StudioHandle {
                 const note: StudioNote = { text: text.trim(), time: new Date().toISOString() };
                 if (context && typeof context === "object") note.context = context;
                 notes.push(note);
+                chat.push({ role: "user", text: note.text, time: note.time, context: note.context });
+                notify("chat");
               }
               send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true, pending: notes.length }));
             } catch (e) {
@@ -638,8 +672,35 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         }
         const consume = url.searchParams.get("consume") === "1";
         const out = consume ? notes.splice(0, notes.length) : [...notes];
-        if (consume && out.length) notify("notes-taken");
+        if (consume && out.length) {
+          chat.push({ role: "system", text: "notes-taken", time: new Date().toISOString() });
+          notify("notes-taken");
+        }
         return send(200, "application/json; charset=utf-8", JSON.stringify({ notes: out, pending: notes.length }));
+      }
+      // 会話: UIがGETで履歴を取得 / AI(MCPツール)がPOSTで返信を積む
+      if (url.pathname === "/chat") {
+        if (req.method === "POST") {
+          readBody((body) => {
+            try {
+              const { text, role } = JSON.parse(body) as { text?: string; role?: string };
+              if (typeof text === "string" && text.trim()) {
+                chat.push({
+                  role: role === "system" ? "system" : "assistant",
+                  text: text.trim(),
+                  time: new Date().toISOString(),
+                });
+                notify("chat");
+              }
+              send(200, "application/json; charset=utf-8", JSON.stringify({ ok: true, count: chat.length }));
+            } catch (e) {
+              send(400, "application/json; charset=utf-8", JSON.stringify({ ok: false, error: String(e) }));
+            }
+          });
+          return;
+        }
+        // 履歴は上限を設けて青天井にしない
+        return send(200, "application/json; charset=utf-8", JSON.stringify({ chat: chat.slice(-200), pending: notes.length }));
       }
       // rivのみモードの直接編集（editRiv の set をそのまま通す）
       if (url.pathname === "/edit" && req.method === "POST") {
@@ -851,7 +912,7 @@ export function startStudio(opts: StudioOptions): StudioHandle {
     }
   });
   server.listen(port);
-  current = { server, watchers, port, notes, notify, snapDir, snapshots };
+  current = { server, watchers, port, notes, chat, notify, snapDir, snapshots };
   return { url: `http://localhost:${port}/`, port, close: stopStudio };
 }
 
@@ -863,27 +924,31 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 <style>
   @font-face { font-family:'Inter'; src:url('/inter.ttf') format('truetype'); font-display:swap; }
   :root {
-    --bg:#141419; --panel:#1d1d24; --panel-2:#24242d; --border:#2e2e38;
-    --text:#e8e8ee; --text-dim:#9b9ba6; --text-faint:#5f5f6b;
-    --accent:#5ba7ff; --accent-2:#ff4e6b; --ok:#3ecf8e; --warn:#ffb454;
-    --radius:8px; --radius-s:5px;
+    /* 配色: 公式 Rive エディタに合わせ「無彩色ベース + 青1色」。赤は異常表示にのみ使う */
+    --bg:#0f0f0f; --panel:#1a1a1a; --panel-2:#232323; --panel-3:#2b2b2b; --border:#2e2e2e;
+    --text:#e6e6e6; --text-dim:#8a8a8a; --text-faint:#5c5c5c;
+    --accent:#3d8bfd; --accent-soft:rgba(61,139,253,.16); --accent-2:#e5484d; --ok:#3ecf8e; --warn:#ffb454;
+    /* タイプスケール: 3段に固定（公式はほぼ単一サイズ）。これ以外の数値をCSSに書かない */
+    --fs-body:11px; --fs-head:12px; --fs-small:10px;
+    --row-h:24px;
+    --radius:6px; --radius-s:4px;
     --font:'Inter', system-ui, sans-serif;
     --mono:ui-monospace, 'Cascadia Code', Consolas, monospace;
   }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:12.5px/1.5 var(--font); display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  body { margin:0; background:var(--bg); color:var(--text); font:var(--fs-body)/1.45 var(--font); display:flex; flex-direction:column; height:100vh; overflow:hidden; }
   ::placeholder { color:var(--text-faint); }
   :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
   /* ---- アプリバー (44px) ---- */
-  #appbar { height:44px; flex-shrink:0; display:flex; align-items:center; gap:16px; padding:0 12px;
+  #appbar { height:40px; flex-shrink:0; display:flex; align-items:center; gap:16px; padding:0 12px;
     background:var(--panel); border-bottom:1px solid var(--border); }
   #appbar .ab-left { display:flex; align-items:center; gap:8px; min-width:0; flex:1; }
   #appbar .ab-center { display:flex; align-items:center; gap:4px; }
   #appbar .ab-right { display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end; }
-  #logo { font-size:13px; font-weight:600; letter-spacing:.02em; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  #logo { font-size:var(--fs-head); font-weight:600; letter-spacing:.02em; white-space:nowrap; display:flex; align-items:center; gap:6px; }
   #logo .dot { width:8px; height:8px; border-radius:50%; background:var(--accent-2); display:inline-block; }
-  #fileinfo { font-size:11.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #dirtyBadge { color:var(--warn); font-size:14px; line-height:1; display:none; }
+  #fileinfo { font-size:var(--fs-body); color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #dirtyBadge { color:var(--warn); font-size:var(--fs-head); line-height:1; display:none; }
   #connDot { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; transition:background .12s ease; }
   #connDot.off { background:var(--accent-2); }
   /* ---- アートボードタブ (マルチアートボード切替。2枚以上のときのみ表示) ---- */
@@ -891,32 +956,33 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     overflow-x:auto; flex-shrink:0; }
   #artboardTabs.show { display:flex; }
   .abTab { height:26px; display:inline-flex; align-items:center; gap:6px; padding:0 12px; background:var(--panel-2);
-    border:1px solid var(--border); border-radius:var(--radius-s); color:var(--text-dim); font-size:12px; cursor:pointer;
+    border:1px solid var(--border); border-radius:var(--radius-s); color:var(--text-dim); font-size:var(--fs-body); cursor:pointer;
     white-space:nowrap; flex-shrink:0; transition:border-color .12s ease, color .12s ease, background .12s ease; }
   .abTab:hover { border-color:var(--accent); color:var(--text); }
-  .abTab.on { background:rgba(91,167,255,.16); border-color:var(--accent); color:#fff; }
+  .abTab.on { background:var(--accent-soft); border-color:var(--accent); color:#fff; }
   .abTab .abTabIcon { width:12px; height:12px; flex-shrink:0; opacity:.8; }
   .abTab .abTabIcon svg { width:12px; height:12px; }
   /* ---- レイアウト ---- */
   #main { flex:1; display:flex; min-height:0; }
-  #left { width:240px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
-  #right { width:300px; background:var(--panel); border-left:1px solid var(--border); padding:12px; overflow-y:auto; flex-shrink:0; }
+  #left { width:248px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  #right { width:300px; background:var(--panel); border-left:1px solid var(--border); padding:0; overflow-y:auto; flex-shrink:0; }
+  #inspector, #graphDetails { padding:8px 10px 14px; }
   #center { flex:1; display:flex; flex-direction:column; min-width:0; }
   .gutter { width:5px; margin:0 -2px; cursor:col-resize; flex-shrink:0; z-index:5; }
-  .gutter:hover { background:rgba(91,167,255,.25); }
+  .gutter:hover { background:rgba(61,139,253,.35); }
   #stage { flex:1; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; background:
-    repeating-conic-gradient(#17171c 0 25%, #101014 0 50%) 0 0/32px 32px; position:relative; overflow:hidden; }
+    repeating-conic-gradient(#181818 0 25%, #121212 0 50%) 0 0/32px 32px; position:relative; overflow:hidden; }
   canvas { max-width:92%; max-height:92%; min-width:0; min-height:0; box-shadow:0 8px 24px rgba(0,0,0,.4); border-radius:4px; background:transparent; }
   #onionCv { position:absolute; max-width:none; max-height:none; pointer-events:none; border-radius:4px; box-shadow:none; }
   #boneCv { position:absolute; max-width:none; max-height:none; pointer-events:none; border-radius:4px; box-shadow:none; touch-action:none; }
   #boneCv.editable { pointer-events:auto; cursor:grab; }
   #boneCv.dragging { cursor:grabbing; }
-  button.toggled { border-color:var(--accent); background:rgba(91,167,255,.18); color:#fff; }
+  button.toggled { border-color:var(--accent); background:var(--accent-soft); color:#fff; }
   /* ---- アセットドラッグ&ドロップ ---- */
   #dropOverlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:6;
     background:rgba(20,20,25,.82); border:2px dashed var(--accent); border-radius:4px; pointer-events:none; }
   #dropOverlay.show { display:flex; }
-  #dropOverlay span { font-size:13px; color:var(--accent); font-weight:600; }
+  #dropOverlay span { font-size:var(--fs-head); color:var(--accent); font-weight:600; }
   /* ---- 選択枠 ---- */
   #selBox { position:absolute; border:1px solid var(--accent); border-radius:2px; pointer-events:none; display:none; }
   #selBox.dragging { border-style:dashed; }
@@ -932,49 +998,52 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   body.grabbing, body.grabbing * { cursor:grabbing !important; }
   .toolbarSep { width:1px; height:18px; background:var(--border); margin:0 4px; }
   /* ---- 見出し・ラベル ---- */
-  h2 { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:16px 0 8px; }
+  h2 { font-size:var(--fs-body); font-weight:500; color:var(--text-dim); margin:16px 0 8px; }
   h2:first-child { margin-top:0; }
   /* ---- 入力 ---- */
-  select, input[type=text], input[type=number], textarea { width:100%; height:28px; background:var(--panel-2); color:var(--text);
+  select, input[type=text], input[type=number], textarea { width:100%; height:24px; background:var(--panel-2); color:var(--text);
     border:1px solid var(--border); border-radius:var(--radius-s); padding:4px 8px; font:inherit; transition:border-color .12s ease, box-shadow .12s ease; }
   textarea { height:auto; }
-  select:focus, input:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(91,167,255,.25); }
-  input[type=color] { width:28px; height:28px; background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-s); padding:2px; flex-shrink:0; }
-  textarea { font:11.5px/1.4 var(--mono); resize:vertical; }
+  select:focus, input:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(61,139,253,.35); }
+  input[type=color] { width:24px; height:24px; background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-s); padding:2px; flex-shrink:0; }
+  textarea { font:var(--fs-body)/1.4 var(--mono); resize:vertical; }
   #scene { min-height:140px; }
-  #aiText { min-height:60px; font-family:var(--font); font-size:12.5px; }
+  #aiText { min-height:60px; font-family:var(--font); font-size:var(--fs-body); }
   /* ---- ボタン ---- */
-  button { height:28px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-s);
-    padding:0 12px; font:inherit; font-size:12.5px; cursor:pointer; margin:2px 4px 2px 0;
+  button { height:24px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-s);
+    padding:0 12px; font:inherit; font-size:var(--fs-body); cursor:pointer; margin:2px 4px 2px 0;
     transition:border-color .12s ease, background .12s ease, color .12s ease; }
-  button:hover { border-color:var(--accent); background:rgba(91,167,255,.08); }
+  button:hover { border-color:var(--accent); background:rgba(61,139,253,.10); }
   button:active { transform:translateY(1px); }
   button:disabled { opacity:.45; cursor:default; transform:none; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button.primary:hover { background:#6fb2ff; }
   button.danger { background:transparent; border-color:var(--accent-2); color:var(--accent-2); }
-  button.mini { height:24px; padding:0 8px; font-size:11.5px; }
-  button.icon { width:28px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+  button.mini { height:22px; padding:0 8px; font-size:var(--fs-body); }
+  button.icon { width:24px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
   button.icon svg { width:14px; height:14px; }
   .row { display:flex; align-items:center; gap:8px; margin:6px 0; }
   .row label { flex:1; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* ---- インスペクタ ---- */
-  .isec { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin:16px 0 6px; }
+  .isec { font-size:var(--fs-body); font-weight:500; color:var(--text-dim); margin:16px 0 6px; }
   .isec:first-of-type { margin-top:8px; }
-  .prop { display:grid; grid-template-columns:84px 1fr; align-items:center; gap:8px; margin:4px 0; }
-  .prop > label { color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+  .prop { display:grid; grid-template-columns:68px 1fr auto; align-items:center; gap:6px; margin:3px 0; }
+  .prop > label { color:var(--text-dim); font-size:var(--fs-body);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .prop > label.dragv { cursor:ew-resize; user-select:none; }
-  .prop2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:4px 0; }
-  .pcell { display:flex; align-items:center; gap:6px; }
-  .pcell > label { color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; min-width:14px; }
+  .prop2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:3px 0; }
+  .prop2.titled { grid-template-columns:52px 1fr 1fr; }
+  .prop2 .prowLabel { color:var(--text-dim); font-size:var(--fs-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pcell { display:flex; align-items:center; gap:4px; min-width:0; }
+  .pcell input { min-width:0; }
+  .pcell > label { color:var(--text-dim); font-size:var(--fs-body); min-width:10px; flex-shrink:0; }
   .pcell > label.dragv { cursor:ew-resize; user-select:none; }
   .colorCombo { display:flex; align-items:center; gap:6px; }
-  .colorCombo input[type=text] { font-family:var(--mono); font-size:11.5px; }
+  .colorCombo input[type=text] { font-family:var(--mono); font-size:var(--fs-body); }
   input[type=range] { height:auto; flex:1.4; accent-color:var(--accent); padding:0; border:0; background:transparent; box-shadow:none !important; }
   input[type=checkbox] { width:15px; height:15px; accent-color:var(--accent); }
   /* ---- イベントログ ---- */
-  #log { font:11.5px/1.6 var(--mono); color:var(--text-dim); background:var(--panel-2); border-radius:var(--radius-s); padding:8px; max-height:110px; overflow-y:auto; }
+  #log { font:var(--fs-body)/1.6 var(--mono); color:var(--text-dim); }
   .lrow { display:flex; gap:6px; align-items:baseline; white-space:pre-wrap; word-break:break-all; }
   .ldot { width:6px; height:6px; border-radius:50%; flex-shrink:0; position:relative; top:-1px; background:var(--text-faint); }
   .ldot.state { background:var(--accent); }
@@ -983,16 +1052,16 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   /* ---- ツールバー（再生列） ---- */
   #toolbar { padding:8px 12px; background:var(--panel); border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   #toolbar input[type=range] { flex:1; min-width:110px; }
-  #toolbar select { width:auto; height:24px; padding:0 4px; font-size:11.5px; }
-  .badge { display:inline-block; background:var(--panel-2); border:1px solid var(--border); border-radius:4px; padding:1px 8px; font-size:11px; color:var(--accent); }
+  #toolbar select { width:auto; height:24px; padding:0 4px; font-size:var(--fs-body); }
+  .badge { display:inline-block; background:var(--panel-2); border:1px solid var(--border); border-radius:4px; padding:1px 8px; font-size:var(--fs-body); color:var(--accent); }
   .num { width:64px !important; }
-  .hint { font-size:11.5px; color:var(--text-dim); margin:4px 0; }
+  .hint { font-size:var(--fs-body); color:var(--text-dim); margin:4px 0; }
   /* ---- 階層ツリー ---- */
-  #treeWrap { flex:1; overflow-y:auto; padding:4px 4px 12px; }
-  .tnode { height:26px; display:flex; align-items:center; gap:5px; padding:0 8px; cursor:pointer; white-space:nowrap;
-    overflow:hidden; font-size:12.5px; border-left:3px solid transparent; transition:background .12s ease; }
+  #treeWrap { flex:1; overflow-y:auto; padding:2px 0 8px; min-height:40px; }
+  .tnode { height:var(--row-h); display:flex; align-items:center; gap:5px; padding:0 8px; cursor:pointer; white-space:nowrap;
+    overflow:hidden; font-size:var(--fs-body); border-left:3px solid transparent; transition:background .12s ease; }
   .tnode:hover { background:var(--panel-2); }
-  .tnode.on { border-left-color:var(--accent); background:rgba(91,167,255,.12); color:#fff; }
+  .tnode.on { border-left-color:var(--accent); background:var(--accent-soft); color:#fff; }
   .tnode .chev { width:12px; height:12px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
     color:var(--text-dim); transition:transform .12s ease; transform:rotate(90deg); }
   .tnode .chev.closed { transform:rotate(0deg); }
@@ -1000,28 +1069,24 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   .tnode .ticon { width:14px; height:14px; flex-shrink:0; color:var(--accent); display:inline-flex; }
   .tnode .ticon svg { width:14px; height:14px; }
   .tnode .tname { overflow:hidden; text-overflow:ellipsis; }
-  .tnode .ttype { color:var(--text-dim); font-size:11px; margin-left:auto; padding-left:6px; }
-  #leftTabs { display:flex; gap:4px; padding:8px 8px 0; }
-  #leftTabs button { flex:1; height:26px; background:transparent; border:0; border-radius:var(--radius-s) var(--radius-s) 0 0;
-    margin:0; padding:0 4px; font-size:11.5px; color:var(--text-dim); }
-  #leftTabs button.on { background:var(--panel-2); color:var(--text); }
-  #playPane { display:none; padding:12px; overflow-y:auto; flex:1; }
-  #graphPane { display:none; padding:12px; overflow-y:auto; flex:1; }
-  .legendRow { display:flex; align-items:center; gap:6px; margin:4px 0; font-size:11.5px; color:var(--text-dim); }
+  .tnode .ttype { color:var(--text-dim); font-size:var(--fs-body); margin-left:auto; padding-left:6px; }
+  #graphTools { display:none; align-items:center; gap:8px; }
+  #graphTools.show { display:flex; }
+  .legendRow { display:flex; align-items:center; gap:6px; margin:4px 0; font-size:var(--fs-body); color:var(--text-dim); }
   .legendSwatch { width:12px; height:12px; border-radius:3px; flex-shrink:0; border:1.5px solid var(--border); }
-  .findRow { padding:5px 6px; border-radius:var(--radius-s); font-size:11.5px; cursor:pointer; margin:2px 0; border-left:3px solid transparent; }
+  .findRow { padding:5px 6px; border-radius:var(--radius-s); font-size:var(--fs-body); cursor:pointer; margin:2px 0; border-left:3px solid transparent; }
   .findRow:hover { background:var(--panel-2); }
   .findRow.err { border-left-color:var(--accent-2); color:var(--accent-2); }
   .findRow.warn { border-left-color:var(--warn); color:var(--warn); }
   #graphDetails .gdTitle { font-weight:600; color:var(--accent); margin-bottom:4px; }
   #graphDetails .gdRow { display:flex; justify-content:space-between; gap:8px; padding:2px 0; color:var(--text-dim); }
-  #graphDetails .gdCond { background:var(--panel-2); border-radius:var(--radius-s); padding:4px 6px; margin:3px 0; font-family:var(--mono); font-size:11px; }
+  #graphDetails .gdCond { background:var(--panel-2); border-radius:var(--radius-s); padding:4px 6px; margin:3px 0; font-family:var(--mono); font-size:var(--fs-body); }
   /* ---- SM グラフ (ステージ上のSVGオーバーレイ) ---- */
   #smGraphSvg { position:absolute; inset:0; width:100%; height:100%; display:none; touch-action:none; background:var(--bg); }
   .smNode rect { fill:var(--panel-2); stroke:var(--border); stroke-width:1.5; }
   .smNode.entry rect, .smNode.exit rect, .smNode.any rect { stroke:var(--text-dim); stroke-dasharray:3,2; }
-  .smNode text { fill:var(--text); font:11.5px/1 var(--font); }
-  .smNode .smBadge { fill:var(--text-dim); font:9.5px var(--mono); }
+  .smNode text { fill:var(--text); font:var(--fs-body)/1 var(--font); }
+  .smNode .smBadge { fill:var(--text-dim); font:var(--fs-small) var(--mono); }
   .smNode.unreachable rect { stroke:var(--accent-2); stroke-width:2; }
   .smNode.active rect { stroke:var(--ok); stroke-width:2.5; }
   .smNode.selected rect { stroke:var(--accent); stroke-width:2.5; }
@@ -1031,51 +1096,51 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   .smEdge:hover path { stroke:var(--accent); }
   .smEdge.selfLoopRisk path { stroke:var(--warn); stroke-width:2; }
   .smEdge.selected path { stroke:var(--accent); stroke-width:2.5; }
-  .smLayerLabel { fill:var(--text-dim); font:11px var(--font); text-transform:uppercase; letter-spacing:.06em; }
+  .smLayerLabel { fill:var(--text-dim); font:var(--fs-body) var(--font); letter-spacing:.06em; }
   /* ---- 初回ガイド（右下カード） ---- */
   #guide { position:fixed; right:16px; bottom:16px; z-index:8; width:300px; background:var(--panel);
-    border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:12px;
+    border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:var(--fs-body);
     box-shadow:0 8px 24px rgba(0,0,0,.4); animation:panelIn .15s ease; }
   #guide .ghead { display:flex; align-items:center; margin-bottom:8px; }
-  #guide .ghead b { font-size:13px; }
-  #guideClose { margin-left:auto; width:22px; height:22px; padding:0; border:0; background:transparent; color:var(--text-dim); font-size:14px; }
+  #guide .ghead b { font-size:var(--fs-head); }
+  #guideClose { margin-left:auto; width:22px; height:22px; padding:0; border:0; background:transparent; color:var(--text-dim); font-size:var(--fs-head); }
   #guideClose:hover { color:var(--text); background:transparent; }
   .gstep { display:flex; gap:8px; margin:6px 0; color:var(--text-dim); align-items:baseline; }
   .gstep .gcheck { width:14px; height:14px; flex-shrink:0; border:1px solid var(--border); border-radius:50%;
-    display:inline-flex; align-items:center; justify-content:center; font-size:9px; color:transparent; position:relative; top:2px;
+    display:inline-flex; align-items:center; justify-content:center; font-size:var(--fs-small); color:transparent; position:relative; top:2px;
     transition:background .12s ease, color .12s ease; }
   .gstep.done { color:var(--text); }
   .gstep.done .gcheck { background:var(--ok); border-color:var(--ok); color:#0c2a1c; }
   #notesBadge { background:var(--accent-2); border-color:var(--accent-2); color:#fff; display:none; }
   /* ---- タイムライン ---- */
-  #timeline { background:var(--panel); border-top:1px solid var(--border); height:160px; overflow-y:auto; display:none; flex-shrink:0; }
+  #timeline { background:var(--panel); border-top:1px solid var(--border); height:180px; overflow-y:auto; overflow-x:hidden; display:none; flex-shrink:0; }
   .trow { display:grid; grid-template-columns:150px 1fr; align-items:center; border-bottom:1px solid var(--border); }
-  .trow .tlabel { font-size:11px; color:var(--text-dim); padding:3px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .trow .tlabel { font-size:var(--fs-body); color:var(--text-dim); padding:3px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tlane { position:relative; height:22px; background:var(--bg); transition:background .12s ease; }
-  .trow:hover .tlane { background:#1a1a21; }
+  .trow:hover .tlane { background:#171717; }
   .tlane.ruler { height:20px; background:var(--panel-2); cursor:ew-resize; }
   .rtick { position:absolute; top:0; bottom:0; width:1px; background:var(--border); pointer-events:none; }
-  .rtick span { position:absolute; top:2px; left:3px; font-size:9px; color:var(--text-dim); font-family:var(--mono); }
-  .tkey { position:absolute; top:50%; width:8px; height:8px; margin:-4px 0 0 -4px; background:var(--text-dim);
+  .rtick span { position:absolute; top:2px; left:3px; font-size:var(--fs-small); color:var(--text-dim); font-family:var(--mono); }
+  .tkey { position:absolute; top:50%; width:9px; height:9px; margin:-4.5px 0 0 -4.5px; background:#9a9a9a;
     transform:rotate(45deg); cursor:ew-resize; transition:transform .12s ease, background .12s ease; }
-  .tkey:hover { transform:rotate(45deg) scale(1.3); background:var(--text); }
-  .tkey.sel { background:var(--accent-2); box-shadow:0 0 0 2px rgba(255,78,107,.35); }
-  .tcur { position:absolute; top:0; bottom:0; width:1px; background:var(--accent-2); pointer-events:none; }
-  .phead { position:absolute; top:0; width:9px; height:9px; margin-left:-5px; background:var(--accent-2);
+  .tkey:hover { transform:rotate(45deg) scale(1.25); background:var(--text); }
+  .tkey.sel { background:var(--accent); box-shadow:0 0 0 2px rgba(61,139,253,.35); }
+  .tcur { position:absolute; top:0; bottom:0; width:1px; background:var(--accent); pointer-events:none; }
+  .phead { position:absolute; top:0; width:11px; height:8px; margin-left:-5.5px; background:var(--accent);
     clip-path:polygon(0 0, 100% 0, 50% 100%); pointer-events:none; }
   /* ---- ドープシート: 矩形選択 / 複数選択ツールバー ---- */
-  .marquee { position:fixed; z-index:15; border:1px solid var(--accent); background:rgba(91,167,255,.15); pointer-events:none; }
+  .marquee { position:fixed; z-index:15; border:1px solid var(--accent); background:var(--accent-soft); pointer-events:none; }
   .tlToolbar { display:flex; align-items:center; gap:8px; padding:5px 8px; background:var(--panel-2);
-    border-bottom:1px solid var(--border); font-size:11px; color:var(--text-dim); }
+    border-bottom:1px solid var(--border); font-size:var(--fs-body); color:var(--text-dim); }
   .tlToolbar b { color:var(--text); font-weight:600; }
   .tlToolbar input[type=number] { width:56px; background:var(--bg); border:1px solid var(--border); color:var(--text);
-    border-radius:4px; padding:3px 5px; font:11px var(--mono); }
-  .tlToolbar .mini { padding:3px 8px; font-size:11px; }
+    border-radius:4px; padding:3px 5px; font:var(--fs-body) var(--mono); }
+  .tlToolbar .mini { padding:3px 8px; font-size:var(--fs-body); }
   .tlToolbar .spacer { flex:1; }
   /* ---- トースト ---- */
   #toasts { position:fixed; right:16px; bottom:16px; z-index:20; display:flex; flex-direction:column; gap:8px; align-items:flex-end; pointer-events:none; }
   .toast { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--ok); border-radius:var(--radius-s);
-    padding:8px 14px; font-size:12px; box-shadow:0 8px 24px rgba(0,0,0,.4); animation:panelIn .15s ease; transition:opacity .4s ease; }
+    padding:8px 14px; font-size:var(--fs-body); box-shadow:0 8px 24px rgba(0,0,0,.4); animation:panelIn .15s ease; transition:opacity .4s ease; }
   .toast.err { border-left-color:var(--accent-2); }
   .toast.fade { opacity:0; }
   @keyframes panelIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
@@ -1084,32 +1149,150 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   #helpWrap.open { display:flex; }
   #help { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); max-width:660px; width:92%;
     max-height:86vh; overflow-y:auto; padding:24px; animation:panelIn .15s ease; }
-  #help h3 { color:var(--accent); margin:0 0 8px; font-size:15px; }
-  #help h4 { margin:16px 0 4px; font-size:13px; }
-  #help p, #help li { font-size:12.5px; color:var(--text); }
-  #help code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:11.5px; font-family:var(--mono); color:var(--accent); }
+  #help h3 { color:var(--accent); margin:0 0 8px; font-size:var(--fs-head); }
+  #help h4 { margin:16px 0 4px; font-size:var(--fs-head); }
+  #help p, #help li { font-size:var(--fs-body); color:var(--text); }
+  #help code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:var(--fs-body); font-family:var(--mono); color:var(--accent); }
   /* ---- アセット選択モーダル (差し替え先が複数のとき) ---- */
   #assetPickWrap { position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; z-index:11; }
   #assetPickWrap.open { display:flex; }
   #assetPick { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); max-width:420px; width:92%;
     max-height:80vh; overflow-y:auto; padding:16px; animation:panelIn .15s ease; }
-  #assetPick h3 { color:var(--accent); margin:0 0 4px; font-size:14px; }
+  #assetPick h3 { color:var(--accent); margin:0 0 4px; font-size:var(--fs-head); }
   #assetPick .hint { margin-bottom:10px; }
   #assetPickGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
   .assetPickItem { background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-s); padding:8px;
     cursor:pointer; text-align:center; transition:border-color .12s ease; }
   .assetPickItem:hover { border-color:var(--accent); }
   .assetPickItem img { width:100%; height:56px; object-fit:contain; background:var(--bg); border-radius:4px; margin-bottom:6px; }
-  .assetPickItem .apName { font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .assetPickItem .apName { font-size:var(--fs-body); color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* ---- スナップショット履歴 ---- */
   #snapList { display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
   .snapRow { display:flex; align-items:center; gap:6px; background:var(--panel-2); border:1px solid var(--border);
     border-radius:var(--radius-s); padding:5px 8px; }
   .snapRow .snapInfo { flex:1; min-width:0; }
-  .snapRow .snapName { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .snapRow .snapTime { font-size:10.5px; color:var(--text-faint); }
-  .snapRow.confirming { border-color:var(--accent-2); background:rgba(255,78,107,.08); }
-  .snapConfirmText { font-size:11px; color:var(--accent-2); flex:1; }
+  .snapRow .snapName { font-size:var(--fs-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .snapRow .snapTime { font-size:var(--fs-small); color:var(--text-faint); }
+  .snapRow.confirming { border-color:var(--accent-2); background:rgba(229,72,77,.10); }
+  /* ---- Animate モードのキーボタン（公式: プロパティ横のダイヤ） ---- */
+  .keyBtn { width:16px; height:16px; padding:0; margin:0; border:0; background:transparent; flex-shrink:0;
+    display:inline-flex; align-items:center; justify-content:center; }
+  .keyBtn:hover { background:transparent; border:0; }
+  .keyBtn svg { width:10px; height:10px; fill:none; stroke:#8a8a8a; stroke-width:1.3; }
+  .keyBtn.animated svg { stroke:var(--accent); }
+  .keyBtn.keyed svg { stroke:var(--accent); fill:var(--accent); }
+  .keyBtn:hover svg { stroke:var(--text); }
+  .tlEmpty { display:flex; align-items:center; gap:10px; padding:14px 16px; font-size:var(--fs-body); color:var(--text-dim); }
+  /* ---- タイムラインのツールバー（公式準拠） ---- */
+  .tlBar { display:flex; align-items:center; gap:2px; padding:3px 6px; background:var(--panel-2);
+    border-bottom:1px solid var(--border); position:sticky; top:0; z-index:2; }
+  .tlBar .spacer { flex:1; }
+  .tlIcon { width:22px; height:22px; padding:0; margin:0; border:0; background:transparent; color:var(--text-dim);
+    display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-s); }
+  .tlIcon:hover { background:var(--panel-3); color:var(--text); border:0; }
+  .tlIcon svg { width:13px; height:13px; }
+  .tlTime { height:22px; margin:0 0 0 6px; padding:0 10px; background:var(--panel-3); border:1px solid var(--border);
+    border-radius:var(--radius-s); font:var(--fs-body) var(--mono); color:var(--text); }
+  .tlPop { position:fixed; z-index:30; background:#111; border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px 12px; box-shadow:0 12px 32px rgba(0,0,0,.6); min-width:220px; }
+  .tlPopRow { display:grid; grid-template-columns:1fr 76px 26px; align-items:center; gap:8px; margin:6px 0; }
+  .tlPopRow > span:first-child { color:var(--text-dim); font-size:var(--fs-body); }
+  .tlPopRow input { height:22px; background:transparent; border:0; border-bottom:1px solid var(--border);
+    border-radius:0; font:var(--fs-body) var(--mono); text-align:left; }
+  .tlPopRow input:disabled { color:var(--text-faint); }
+  .tlPopUnit { color:var(--text-faint); font-size:var(--fs-small); }
+  /* ---- Agent パネルの会話 ---- */
+  .accItem.open > #agentBody { display:flex; flex-direction:column; }
+  #chatLog { flex:1; min-height:80px; max-height:260px; overflow-y:auto; margin-bottom:8px;
+    display:flex; flex-direction:column; gap:8px; }
+  .chatMsg { border-radius:var(--radius); padding:6px 8px; background:var(--panel-2); }
+  .chatMsg.assistant { background:rgba(61,139,253,.10); border-left:2px solid var(--accent); }
+  .chatWho { display:flex; align-items:baseline; gap:6px; font-size:var(--fs-small); color:var(--text-dim); margin-bottom:3px; }
+  .chatTime { margin-left:auto; color:var(--text-faint); }
+  .chatBody { font-size:var(--fs-body); color:var(--text); white-space:pre-wrap; word-break:break-word; }
+  .chatCtx { margin-top:4px; font-size:var(--fs-small); color:var(--text-faint); }
+  .chatSys { font-size:var(--fs-small); color:var(--text-faint); text-align:center; }
+  #transportGroup { display:inline-flex; align-items:center; gap:8px; }
+  /* タイムラインのツールバーが再生を握っているときは、下段の再生系を二重に出さない */
+  body.tlHasTransport #transportGroup { display:none; }
+  #toolbar { flex-wrap:nowrap; overflow-x:auto; }
+  #toolbar > *, #transportGroup > * { flex-shrink:0; white-space:nowrap; }
+  #toolbar label, #toolbar .hint { white-space:nowrap; }
+  /* ドープシートのラベル列とレーンの境界（公式は縦の区切り線が入る） */
+  .trow .tlabel { border-right:1px solid var(--border); }
+  /* ---- Design / Animate モード切替（公式: ツールバー右端のセグメント） ---- */
+  #modeSeg { display:flex; background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-s); overflow:hidden; }
+  #modeSeg button { height:22px; margin:0; border:0; border-radius:0; background:transparent; color:var(--text-dim);
+    font-size:var(--fs-body); padding:0 16px; }
+  #modeSeg button:hover { background:var(--panel-3); color:var(--text); }
+  #modeSeg button.on { background:var(--panel-3); color:var(--text); }
+  /* ---- 階層パネルの見出し（公式: Hierarchy ⋯ 🔍 ⤡） ---- */
+  #hierHead { height:26px; display:flex; align-items:center; gap:4px; padding:0 8px; flex-shrink:0;
+    border-bottom:1px solid var(--border); }
+  #hierHead .hTitle { flex:1; font-size:var(--fs-head); color:var(--text); }
+  #hierHead button { width:22px; height:22px; margin:0; padding:0; border:0; background:transparent; color:var(--text-dim);
+    display:inline-flex; align-items:center; justify-content:center; border-radius:var(--radius-s); }
+  #hierHead button:hover { background:var(--panel-2); color:var(--text); }
+  #hierHead button svg { width:12px; height:12px; }
+  #hierSearchWrap { display:none; padding:4px 6px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  #hierSearchWrap.show { display:block; }
+  #hierSearch { height:22px; font-size:var(--fs-body); }
+  /* ---- 左パネル下部アコーディオン（公式: Data / Assets / Animations / Agent） ---- */
+  #leftAcc { flex-shrink:0; display:flex; flex-direction:column; min-height:0; }
+  .accItem { border-top:1px solid var(--border); display:flex; flex-direction:column; min-height:0; }
+  .accItem.open { flex:1; }
+  .accHead { height:26px; display:flex; align-items:center; gap:6px; padding:0 8px; cursor:pointer; flex-shrink:0;
+    font-size:var(--fs-head); color:var(--text-dim); user-select:none; }
+  .accHead:hover { background:var(--panel-2); color:var(--text); }
+  .accItem.open > .accHead { color:var(--text); }
+  .accHead .accChev { width:9px; height:9px; color:var(--text-faint); transition:transform .12s ease; }
+  .accItem.open > .accHead .accChev { transform:rotate(90deg); }
+  .accHead .accBadge { margin-left:auto; font-size:var(--fs-small); color:var(--text-faint); }
+  .accBody { display:none; overflow-y:auto; padding:6px 8px 10px; min-height:0; }
+  .accItem.open > .accBody { display:block; }
+  /* ---- ステージのタブ列（公式: ⌗ Stage ... 107.8%⌄） ---- */
+  #stageTabs { height:28px; display:flex; align-items:center; gap:2px; padding:0 6px; flex-shrink:0;
+    background:var(--panel); border-bottom:1px solid var(--border); }
+  .stTab { height:22px; display:inline-flex; align-items:center; gap:5px; padding:0 10px; border-radius:var(--radius-s);
+    font-size:var(--fs-body); color:var(--text-dim); cursor:pointer; white-space:nowrap; }
+  .stTab:hover { color:var(--text); background:var(--panel-2); }
+  .stTab.on { color:var(--text); background:var(--panel-3); }
+  .stTab svg { width:11px; height:11px; }
+  #stageTabs .stRight { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:var(--fs-body); color:var(--text-dim); }
+  /* ---- 下部ステータスバー（公式: Console / Problems / Changes …） ---- */
+  #statusbar { height:26px; flex-shrink:0; display:flex; align-items:center; gap:2px; padding:0 6px;
+    background:var(--panel); border-top:1px solid var(--border); }
+  .sbTab { height:20px; display:inline-flex; align-items:center; gap:5px; padding:0 9px; border-radius:var(--radius-s);
+    font-size:var(--fs-body); color:var(--text-dim); cursor:pointer; white-space:nowrap; }
+  .sbTab:hover { color:var(--text); background:var(--panel-2); }
+  .sbTab.on { color:var(--text); background:var(--panel-3); }
+  .sbTab svg { width:11px; height:11px; opacity:.85; }
+  .sbCount { font-size:var(--fs-small); color:var(--text-faint); }
+  .sbCount.bad { color:var(--accent-2); }
+  #statusbar .sbRight { margin-left:auto; display:flex; align-items:center; gap:8px; font-size:var(--fs-small); color:var(--text-faint); }
+  /* ---- 下部ドック（ステータスバーのタブで開く） ---- */
+  #dock { display:none; height:180px; flex-shrink:0; background:var(--panel); border-top:1px solid var(--border); overflow:hidden; }
+  #dock.open { display:block; }
+  .dockPane { display:none; height:100%; overflow-y:auto; padding:8px 10px; }
+  .dockPane.on { display:block; }
+  #dockGutter { height:5px; margin-bottom:-5px; cursor:row-resize; position:relative; z-index:5; }
+  #dockGutter:hover { background:var(--accent-soft); }
+  .probRow { display:flex; gap:6px; align-items:baseline; padding:3px 6px; border-radius:var(--radius-s); cursor:pointer;
+    font-size:var(--fs-body); }
+  .probRow:hover { background:var(--panel-2); }
+  .probRow .probSev { flex-shrink:0; width:38px; font-size:var(--fs-small); }
+  .probRow.err .probSev { color:var(--accent-2); }
+  .probRow.warn .probSev { color:var(--warn); }
+  .probRow .probWhere { color:var(--text-faint); font-size:var(--fs-small); margin-left:auto; padding-left:8px; }
+  /* ---- 右クリックメニュー（公式の階層メニューに準拠） ---- */
+  .ctxMenu { position:fixed; z-index:30; min-width:180px; background:var(--panel-2); border:1px solid var(--border);
+    border-radius:var(--radius); padding:4px 0; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  .ctxItem { height:24px; display:flex; align-items:center; padding:0 12px; font-size:var(--fs-body); color:var(--text); cursor:pointer; }
+  .ctxItem:hover { background:var(--accent); color:#fff; }
+  .ctxItem.off { color:var(--text-faint); cursor:default; }
+  .ctxItem.off:hover { background:transparent; color:var(--text-faint); }
+  .ctxSep { height:1px; background:var(--border); margin:4px 0; }
+  .snapConfirmText { font-size:var(--fs-body); color:var(--accent-2); flex:1; }
 </style></head><body>
 <div id="appbar">
   <div class="ab-left">
@@ -1130,47 +1313,82 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <button class="mini" id="langBtn">EN</button>
     <button class="mini icon" id="helpBtn" data-i18n-aria="helpA">?</button>
     <span id="connDot" data-i18n-title="connT"></span>
+    <span class="toolbarSep"></span>
+    <div id="modeSeg">
+      <button id="modeDesign" class="on" data-i18n="modeDesign"></button>
+      <button id="modeAnimate" data-i18n="modeAnimate"></button>
+    </div>
   </div>
 </div>
 <div id="artboardTabs"></div>
 <div id="main">
 <div id="left">
-  <div id="leftTabs">
-    <button id="tabTree" class="on" data-i18n="tabTree"></button>
-    <button id="tabPlay" data-i18n="tabPlay"></button>
-    <button id="tabGraph" data-i18n="tabGraph"></button>
+  <div id="hierHead">
+    <span class="hTitle" data-i18n="hHierarchy"></span>
+    <button id="hierSearchBtn" data-i18n-title="hierSearchT"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg></button>
+    <button id="hierCollapseBtn" data-i18n-title="collapseAll"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6.5 8 3l4 3.5"/><path d="M4 9.5 8 13l4-3.5"/></svg></button>
   </div>
+  <div id="hierSearchWrap"><input type="text" id="hierSearch" data-i18n-ph="hierSearchPh"></div>
   <div id="treeWrap"></div>
-  <div id="playPane">
-    <h2 data-i18n="hArtboard"></h2>
-    <select id="artboardSel"></select>
-    <div style="height:8px"></div>
-    <select id="smSel"></select>
-    <h2 data-i18n="hInputs"></h2>
-    <div id="inputs"><span class="hint">-</span></div>
-    <h2 data-i18n="hAnim"></h2>
-    <select id="animSel"></select>
-    <div class="row">
-      <button id="playAnim" class="primary" data-i18n="play"></button>
-      <button id="backSM" data-i18n="backSM"></button>
+  <div id="leftAcc">
+    <div class="accItem" id="accDataItem">
+      <div class="accHead" data-acc="Data"><svg class="accChev" viewBox="0 0 8 8" fill="currentColor"><path d="M2 0l4 4-4 4z"/></svg><span data-i18n="accData"></span><span class="accBadge" id="accDataBadge"></span></div>
+      <div class="accBody">
+        <div class="hint" data-i18n="accDataHint"></div>
+        <select id="smSel"></select>
+        <div id="inputs"><span class="hint">-</span></div>
+      </div>
     </div>
-  </div>
-  <div id="graphPane">
-    <h2 data-i18n="hGraph"></h2>
-    <div class="hint" data-i18n="graphHint"></div>
-    <div class="row"><button id="graphResetLayout" class="mini" data-i18n="graphReset"></button></div>
-    <div class="legendRow"><span class="legendSwatch" style="border-style:dashed"></span><span data-i18n="graphLegendFixed"></span></div>
-    <div class="legendRow"><span class="legendSwatch" style="border-color:var(--accent-2)"></span><span data-i18n="graphLegendUnreachable"></span></div>
-    <div class="legendRow"><span class="legendSwatch" style="border-color:var(--warn)"></span><span data-i18n="graphLegendSelfLoop"></span></div>
-    <div class="legendRow"><span class="legendSwatch" style="border-color:var(--ok)"></span><span data-i18n="graphLegendActive"></span></div>
-    <h2 data-i18n="hGraphFindings"></h2>
-    <div id="graphFindings"><span class="hint">-</span></div>
-    <h2 data-i18n="hGraphDetails"></h2>
-    <div id="graphDetails"><div class="hint" data-i18n="graphNoSel"></div></div>
+    <div class="accItem" id="accAssetsItem">
+      <div class="accHead" data-acc="Assets"><svg class="accChev" viewBox="0 0 8 8" fill="currentColor"><path d="M2 0l4 4-4 4z"/></svg><span data-i18n="accAssets"></span><span class="accBadge" id="accAssetsBadge"></span></div>
+      <div class="accBody"><div id="assetList"><span class="hint" data-i18n="accAssetsHint"></span></div></div>
+    </div>
+    <div class="accItem" id="accAnimItem">
+      <div class="accHead" data-acc="Animations"><svg class="accChev" viewBox="0 0 8 8" fill="currentColor"><path d="M2 0l4 4-4 4z"/></svg><span data-i18n="accAnimations"></span><span class="accBadge" id="accAnimBadge"></span></div>
+      <div class="accBody">
+        <select id="artboardSel" style="display:none"></select>
+        <select id="animSel"></select>
+        <div class="row">
+          <button id="playAnim" class="primary" data-i18n="play"></button>
+          <button id="backSM" data-i18n="backSM"></button>
+        </div>
+      </div>
+    </div>
+    <div class="accItem" id="accAgentItem">
+      <div class="accHead" data-acc="Agent"><svg class="accChev" viewBox="0 0 8 8" fill="currentColor"><path d="M2 0l4 4-4 4z"/></svg><span data-i18n="accAgent"></span><span class="accBadge" id="notesBadge">0</span></div>
+      <div class="accBody" id="agentBody">
+        <div id="chatLog"></div>
+        <div class="row">
+          <input type="checkbox" id="aiCtxCheck" data-i18n-aria="aiCtxCheckA">
+          <span class="badge" id="aiCtxChip" style="flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-i18n-title="aiCtxChipT"></span>
+        </div>
+        <textarea id="aiText" data-i18n-ph="aiPlaceholder"></textarea>
+        <div class="row">
+          <button id="aiSend" class="primary" data-i18n="aiSend"></button>
+          <span class="hint" id="aiState"></span>
+        </div>
+        <div class="hint" data-i18n="aiHint"></div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="gutter" id="gutterL"></div>
 <div id="center">
+  <div id="stageTabs">
+    <span class="stTab on" id="stTabStage"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 5.5h12M2 10.5h12M5.5 2v12M10.5 2v12"/></svg><span data-i18n="stStage"></span></span>
+    <span class="stTab" id="stTabGraph"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="1.5" width="5" height="4" rx="1"/><rect x="1.5" y="10.5" width="5" height="4" rx="1"/><rect x="9.5" y="10.5" width="5" height="4" rx="1"/><path d="M8 5.5v2M8 7.5H4v3M8 7.5h4v3"/></svg><span data-i18n="stGraph"></span></span>
+    <span id="graphTools">
+      <button id="graphResetLayout" class="mini" data-i18n="graphReset"></button>
+      <span class="legendRow" style="margin:0"><span class="legendSwatch" style="border-color:var(--accent-2)"></span><span data-i18n="graphLegendUnreachable"></span></span>
+      <span class="legendRow" style="margin:0"><span class="legendSwatch" style="border-color:var(--warn)"></span><span data-i18n="graphLegendSelfLoop"></span></span>
+      <span class="legendRow" style="margin:0"><span class="legendSwatch" style="border-color:var(--ok)"></span><span data-i18n="graphLegendActive"></span></span>
+    </span>
+    <span class="stRight">
+      <input type="range" id="zoom" min="0.25" max="3" step="0.05" value="1" style="max-width:90px">
+      <span id="zoomLabel">100%</span>
+      <button id="zoomReset" class="mini">1:1</button>
+    </span>
+  </div>
   <div id="stage"><canvas id="cv" width="800" height="600"></canvas><canvas id="onionCv"></canvas><canvas id="boneCv"></canvas><div id="selBox">
     <div class="rzHandle nw" data-corner="nw"></div>
     <div class="rzHandle ne" data-corner="ne"></div>
@@ -1179,20 +1397,19 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   </div><svg id="smGraphSvg" xmlns="http://www.w3.org/2000/svg"></svg><div id="dropOverlay"><span data-i18n="dropHint"></span></div></div>
   <div id="timeline"></div>
   <div id="toolbar">
-    <button id="pauseBtn" class="mini icon" data-i18n-aria="pauseA">⏸</button>
-    <select id="speedSel" data-i18n-aria="speedL">
-      <option value="0.25">0.25x</option>
-      <option value="0.5">0.5x</option>
-      <option value="1" selected>1x</option>
-      <option value="2">2x</option>
-    </select>
-    <span class="hint" data-i18n="scrubL"></span>
-    <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" disabled>
-    <span id="time" class="badge">0.00s</span>
-    <span class="hint" data-i18n="zoomL"></span>
-    <input type="range" id="zoom" min="0.25" max="3" step="0.05" value="1" style="max-width:110px">
-    <button id="zoomReset" class="mini">1:1</button>
-    <span class="toolbarSep"></span>
+    <span id="transportGroup">
+      <button id="pauseBtn" class="mini icon" data-i18n-aria="pauseA">⏸</button>
+      <select id="speedSel" data-i18n-aria="speedL">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+      </select>
+      <span class="hint" data-i18n="scrubL"></span>
+      <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" disabled>
+      <span id="time" class="badge">0.00s</span>
+      <span class="toolbarSep"></span>
+    </span>
     <button id="onionToggle" class="mini" data-i18n="onionBtn" data-i18n-title="onionBtnT"></button>
     <input type="range" id="onionRange" min="0" max="5" step="1" value="2" style="max-width:70px" data-i18n-aria="onionRangeL">
     <span id="onionRangeVal" class="badge">2</span>
@@ -1211,35 +1428,41 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 </div>
 <div class="gutter" id="gutterR"></div>
 <div id="right">
-  <h2 data-i18n="hInspector"></h2>
   <div id="inspector"><div class="hint" data-i18n="noSel"></div></div>
-  <h2><span data-i18n="hAI"></span> <span class="badge" id="notesBadge">0</span></h2>
-  <div class="row">
-    <input type="checkbox" id="aiCtxCheck" data-i18n-aria="aiCtxCheckA">
-    <span class="badge" id="aiCtxChip" style="flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-i18n-title="aiCtxChipT"></span>
+  <div id="graphDetails" style="display:none"><div class="hint" data-i18n="graphNoSel"></div></div>
+</div>
+</div>
+<div id="dockGutter"></div>
+<div id="dock">
+  <div class="dockPane" id="dockConsole">
+    <div class="row"><span class="hint" style="flex:1" data-i18n="hLog"></span><button class="mini" id="logClear" data-i18n="clear"></button></div>
+    <div id="log"></div>
   </div>
-  <textarea id="aiText" data-i18n-ph="aiPlaceholder"></textarea>
-  <div class="row">
-    <button id="aiSend" class="primary" data-i18n="aiSend"></button>
-    <span class="hint" id="aiState"></span>
+  <div class="dockPane" id="dockProblems">
+    <div id="problems"><span class="hint" data-i18n="probNone"></span></div>
   </div>
-  <div class="hint" data-i18n="aiHint"></div>
-  <h2><span data-i18n="hLog"></span> <button class="mini" id="logClear" data-i18n="clear" style="float:right"></button></h2>
-  <div id="log"></div>
-  <h2 data-i18n="hSnap"></h2>
-  <div class="hint" data-i18n="snapHint"></div>
-  <div id="snapList"><span class="hint">-</span></div>
-  <div class="row">
-    <input type="text" id="snapName" data-i18n-ph="snapNamePh">
-    <button id="snapSave" class="mini" data-i18n="snapSave"></button>
+  <div class="dockPane" id="dockChanges">
+    <div class="hint" data-i18n="snapHint"></div>
+    <div id="snapList"><span class="hint">-</span></div>
+    <div class="row">
+      <input type="text" id="snapName" data-i18n-ph="snapNamePh">
+      <button id="snapSave" class="mini" data-i18n="snapSave"></button>
+    </div>
   </div>
-  <h2 data-i18n="hScene"></h2>
-  <textarea id="scene" spellcheck="false" data-i18n-ph="scenePlaceholder"></textarea>
-  <div class="row">
-    <button id="apply" class="primary" data-i18n="rebuild"></button>
-    <button id="fmt" class="mini" data-i18n="format"></button>
+  <div class="dockPane" id="dockScene">
+    <textarea id="scene" spellcheck="false" data-i18n-ph="scenePlaceholder" style="min-height:96px"></textarea>
+    <div class="row">
+      <button id="apply" class="primary" data-i18n="rebuild"></button>
+      <button id="fmt" class="mini" data-i18n="format"></button>
+    </div>
   </div>
 </div>
+<div id="statusbar">
+  <span class="sbTab" data-dock="Console"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5 6.5 8l-2 1.5M8.5 10h3"/></svg><span data-i18n="dockConsole"></span></span>
+  <span class="sbTab" data-dock="Problems"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.2 14.5 13.5h-13z"/><path d="M8 6.5v3M8 11.4v.1"/></svg><span data-i18n="dockProblems"></span><span class="sbCount" id="probCount"></span></span>
+  <span class="sbTab" data-dock="Changes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="8" r="2"/><path d="M4 6v4M6 4h2a2 2 0 0 1 2 2v0"/></svg><span data-i18n="dockChanges"></span><span class="sbCount" id="snapCount"></span></span>
+  <span class="sbTab" id="sbScene" data-dock="Scene"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 3 3 8l3 5M10 3l3 5-3 5"/></svg><span data-i18n="dockScene"></span></span>
+  <span class="sbRight"><span id="sbInfo"></span></span>
 </div>
 <div id="guide">
   <div class="ghead"><b data-i18n="guideTitle"></b><button id="guideClose" data-i18n-aria="close">×</button></div>
@@ -1283,9 +1506,32 @@ const I18N = {
     guideTitle: 'はじめての方へ — 3ステップ',
     guide1: 'Claude に「〇〇の .riv を作って riv_studio で開いて」と頼む（もう開けています）',
     guide2: 'キャンバスのオブジェクトをクリック/ドラッグ、右のインスペクタで数値・色を微調整',
-    guide3: '大きな修正は右の「AIへの指示」に書いて送信 → Claude に「スタジオの指示を見て」',
+    guide3: '大きな修正は左下の「エージェント」に書いて送信 → Claude に「スタジオの指示を見て」。結果はチャットに返ってきます',
     close: '閉じる', clear: 'クリア',
     tabTree: '階層', tabPlay: '再生 / SM', tabGraph: 'SMグラフ',
+    modeDesign: 'デザイン', modeAnimate: 'アニメート',
+    hHierarchy: '階層', hierSearchT: '名前で絞り込む (Ctrl+F)', hierSearchPh: '名前で絞り込む…',
+    expandAll: 'すべて展開', collapseAll: 'すべて折りたたむ',
+    deepExpand: 'この配下をすべて展開', deepCollapse: 'この配下をすべて折りたたむ',
+    ctxIsolate: 'これだけ表示', ctxCopyName: '名前をコピー',
+    treeNothingToCollapse: '折りたためる階層がありません（子を持つ行がありません）',
+    accData: 'データ', accDataHint: 'ステートマシンの入力', accAssets: 'アセット',
+    accAssetsHint: '埋め込み画像はステージにドロップすると差し替わります', accAnimations: 'アニメーション', accAgent: 'エージェント',
+    stStage: 'ステージ', stGraph: 'ステートマシン',
+    dockConsole: 'コンソール', dockProblems: '問題', dockChanges: '変更', dockScene: 'シーンJSON',
+    probNone: '問題は見つかっていません', probRun: '検査',
+    chatEmpty: 'ここに書いた内容は MCP 接続中の AI が受け取ります。作業結果はこの欄に返ってきます。',
+    chatYou: 'あなた', chatAI: 'AI', chatPending: '未受信', chatTaken: '受信済み',
+    chatNew: 'AI から返信が届きました',
+    keyBtnAddT: '再生ヘッド位置にキーフレームを打つ',
+    keyBtnRemoveT: '再生ヘッド位置のキーフレームを削除',
+    keyBtnRivT: 'このプロパティのキーへ移動',
+    tlPickAnim: 'アニメーションを選ぶとタイムラインが出ます',
+    tlOpenAnims: 'アニメーション一覧を開く',
+    tlUnitFrames: 'フレーム', tlUnitSeconds: '秒',
+    tlCurrent: '現在', tlDuration: '長さ', tlSpeed: '再生速度', tlSnap: 'キーのスナップ',
+    tlToStart: '先頭へ', tlPrevKey: '前のキーへ', tlNextKey: '次のキーへ',
+    ipPosition: '位置', ipSize: 'サイズ', ipScale: 'スケール', ipTransform: 'トランスフォーム', ipFill: '塗り', ipText: 'テキスト', ipEasing: 'イージング',
     hGraph: 'SM グラフ', graphHint: 'ノードをドラッグして配置（自動保存）。エッジ/ノードをクリックすると下に詳細が出ます。',
     graphReset: 'レイアウトをリセット',
     graphLegendFixed: 'Entry / Any / Exit（固定ノード）', graphLegendUnreachable: '到達不能 state',
@@ -1302,7 +1548,7 @@ const I18N = {
     noSel: '未選択 — 左の階層かキャンバスのオブジェクトをクリックすると、ここで位置・サイズ・色などを直接編集できます',
     play: '▶ 再生', backSM: 'SMに戻す', rebuild: '⟳ 再ビルド', format: '整形',
     aiSend: 'AIに送る', aiPlaceholder: '例: しっぽの振りをもっと大きく、まばたきを2秒間隔に',
-    aiHint: '送った指示はMCP接続中のAI（Claude）が riv_studio_notes ツールで受け取ります。チャットで「スタジオの指示を確認して」と伝えてください。',
+    aiHint: 'Ctrl+Enter で送信。AI 側には「スタジオの指示を確認して」と伝えてください（作業結果はこの欄に返ります）。',
     scenePlaceholder: 'riv_studio に scenePath を渡すとここで編集できます',
     scrubL: 'シーク', zoomL: 'ズーム', snapshot: 'PNG保存',
     noInputs: '入力なし — riv_create で stateMachine.inputs を定義するとここに操作パネルが出ます',
@@ -1312,15 +1558,15 @@ const I18N = {
     helpFlowT: '基本の流れ',
     helpFlow1: 'AIに作らせる: チャットで「ボールが跳ねるrivを作って riv_studio で開いて」など',
     helpFlow2: '直接さわる: キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色を変更（即反映）',
-    helpFlow3: 'AIに頼む: 大きな変更は「AIへの指示」に書いて送信 → チャットで「スタジオの指示を確認して」',
+    helpFlow3: 'AIに頼む: 左下「エージェント」に書いて送信 → チャットで「スタジオの指示を確認して」。AIの返事は同じ欄に出ます',
     helpFlow4: 'AIが riv_edit / riv_create で修正すると、この画面は即座に更新されます',
     helpPanelT: '各パネル',
     helpP1: '階層: シーンのオブジェクトツリー。クリックで選択（公式エディタのHierarchy相当）',
     helpP2: 'インスペクタ: 選択オブジェクトの位置・サイズ・回転・不透明度・色・テキストを直接編集',
-    helpP3: '再生/SM: ステートマシン入力（trigger/bool/number）の操作とアニメ単体再生',
-    helpP4: 'タイムライン: アニメ再生中に表示。◆=キーフレーム、クリックでその時刻へジャンプ',
+    helpP3: 'データ/アニメーション: ステートマシン入力（trigger/bool/number）の操作とアニメ単体再生',
+    helpP4: 'タイムライン: 右上「アニメート」に切り替えると出ます。◆=キーフレーム。キーはインスペクタ各行の◇ボタンで打ちます',
     helpP5: 'シーンJSON: riv_create 仕様を直接編集して再ビルド（scenePath 指定時）',
-    helpP6: 'ツールバー: 一時停止 / 速度 / シーク / ズーム / エクスポート（PNG・APNG・GIF・WebM）',
+    helpP6: '最下段: コンソール / 問題（riv_lint の指摘）/ 変更（スナップショット）/ シーンJSON',
     paused: '一時停止', resumed: '再開',
     notesSent: '指示を送信しました', notesTaken: 'AIが指示を受け取りました',
     fileUpdated: 'ファイル更新 → リロード', jsonError: 'JSONエラー: ',
@@ -1369,9 +1615,32 @@ const I18N = {
     guideTitle: 'New here? 3 steps',
     guide1: 'Ask Claude: "create a .riv of ... and open it with riv_studio" (already open)',
     guide2: 'Click / drag objects on the canvas, fine-tune numbers & colors in the Inspector',
-    guide3: 'For bigger changes, write into "Instructions for AI" and tell Claude "check the studio notes"',
+    guide3: 'For bigger changes, write into the Agent panel (bottom left) and tell Claude "check the studio notes" — replies come back in the same panel',
     close: 'Close', clear: 'Clear',
     tabTree: 'Hierarchy', tabPlay: 'Play / SM', tabGraph: 'SM Graph',
+    modeDesign: 'Design', modeAnimate: 'Animate',
+    hHierarchy: 'Hierarchy', hierSearchT: 'Filter by name (Ctrl+F)', hierSearchPh: 'Filter by name…',
+    expandAll: 'Expand All', collapseAll: 'Collapse All',
+    deepExpand: 'Deep Expand', deepCollapse: 'Deep Collapse',
+    ctxIsolate: 'Isolate', ctxCopyName: 'Copy name',
+    treeNothingToCollapse: 'Nothing to collapse — no row here has children',
+    accData: 'Data', accDataHint: 'State machine inputs', accAssets: 'Assets',
+    accAssetsHint: 'Drop an image on the stage to replace an embedded asset', accAnimations: 'Animations', accAgent: 'Agent',
+    stStage: 'Stage', stGraph: 'State Machine',
+    dockConsole: 'Console', dockProblems: 'Problems', dockChanges: 'Changes', dockScene: 'Scene JSON',
+    probNone: 'No problems found', probRun: 'Check',
+    chatEmpty: 'What you write here is picked up by the connected AI. Its results come back in this pane.',
+    chatYou: 'You', chatAI: 'AI', chatPending: 'pending', chatTaken: 'picked up',
+    chatNew: 'The AI replied',
+    keyBtnAddT: 'Key this property at the playhead',
+    keyBtnRemoveT: 'Remove the key at the playhead',
+    keyBtnRivT: 'Jump to this property\\'s key',
+    tlPickAnim: 'Pick an animation to show the timeline',
+    tlOpenAnims: 'Open the animations list',
+    tlUnitFrames: 'Frames', tlUnitSeconds: 'Seconds',
+    tlCurrent: 'Current', tlDuration: 'Duration', tlSpeed: 'Playback Speed', tlSnap: 'Snap Keys',
+    tlToStart: 'Go to start', tlPrevKey: 'Previous key', tlNextKey: 'Next key',
+    ipPosition: 'Position', ipSize: 'Size', ipScale: 'Scale', ipTransform: 'Transform', ipFill: 'Fill', ipText: 'Text', ipEasing: 'Easing',
     hGraph: 'SM Graph', graphHint: 'Drag nodes to arrange them (auto-saved). Click a node/edge for details below.',
     graphReset: 'Reset layout',
     graphLegendFixed: 'Entry / Any / Exit (fixed nodes)', graphLegendUnreachable: 'Unreachable state',
@@ -1388,7 +1657,7 @@ const I18N = {
     noSel: 'Nothing selected — click an object in the hierarchy or on the canvas to edit position, size, colors here',
     play: '▶ Play', backSM: 'Back to SM', rebuild: '⟳ Rebuild', format: 'Format',
     aiSend: 'Send to AI', aiPlaceholder: 'e.g. bigger tail wag, blink every 2 seconds',
-    aiHint: 'The connected AI (Claude) picks these up via the riv_studio_notes tool. Just say "check the studio notes" in chat.',
+    aiHint: 'Ctrl+Enter to send. Say "check the studio notes" in chat — the result comes back here.',
     scenePlaceholder: 'Pass scenePath to riv_studio to edit the scene here',
     scrubL: 'Seek', zoomL: 'Zoom', snapshot: 'Save PNG',
     noInputs: 'No inputs — define stateMachine.inputs in riv_create to get controls here',
@@ -1398,15 +1667,15 @@ const I18N = {
     helpFlowT: 'Basic workflow',
     helpFlow1: 'Let the AI build: "create a bouncing-ball riv and open it with riv_studio"',
     helpFlow2: 'Touch it: click-select and drag objects on the canvas; edit numbers/colors in the Inspector (applies live)',
-    helpFlow3: 'Ask the AI: for bigger changes, use "Instructions for AI", then say "check the studio notes" in chat',
+    helpFlow3: 'Ask the AI: use the Agent panel, then say "check the studio notes" in chat — its reply appears in the same panel',
     helpFlow4: 'When the AI edits via riv_edit / riv_create, this page updates instantly',
     helpPanelT: 'Panels',
     helpP1: 'Hierarchy: the scene object tree; click to select (like the official editor)',
     helpP2: 'Inspector: edit position, size, rotation, opacity, colors, text of the selection',
-    helpP3: 'Play / SM: drive state machine inputs (trigger/bool/number) and solo-play animations',
-    helpP4: 'Timeline: shown while solo-playing. ◆ = keyframe, click to jump to that time',
+    helpP3: 'Data / Animations: drive state machine inputs (trigger/bool/number) and solo-play animations',
+    helpP4: 'Timeline: switch to Animate (top right) to show it. ◆ = keyframe. You create keys with the ◇ button on each inspector row',
     helpP5: 'Scene JSON: edit the riv_create spec directly and rebuild (needs scenePath)',
-    helpP6: 'Toolbar: pause / speed / seek / zoom / export (PNG, APNG, GIF, WebM)',
+    helpP6: 'Status bar: Console / Problems (riv_lint findings) / Changes (snapshots) / Scene JSON',
     paused: 'Paused', resumed: 'Resumed',
     notesSent: 'Instruction queued', notesTaken: 'AI picked up the instructions',
     fileUpdated: 'File changed → reloading', jsonError: 'JSON error: ',
@@ -1895,17 +2164,40 @@ const KIND_ICON = {
   artboard: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4.5 1.5v11M9.5 1.5v11M1.5 4.5h11M1.5 9.5h11"/></svg>',
 };
 const CHEV_SVG = '<svg viewBox="0 0 8 8"><path d="M2 1l4 3-4 3z" fill="currentColor"/></svg>';
+// .riv の typeKey 名からアイコン種別へ。公式は型ごとにアイコンが違うので、
+// 同名の Node と Shape が並んでも見分けが付くようにする
+function rivKindIcon(type) {
+  const ty = String(type || '').toLowerCase();
+  if (ty.includes('bone')) return 'bone';
+  if (ty.includes('text')) return 'text';
+  if (ty.includes('image') || ty.includes('asset')) return 'image';
+  if (ty.includes('nested')) return 'nested';
+  if (ty === 'node' || ty.includes('group') || ty.includes('solo') || ty.includes('layout')) return 'group';
+  return 'shape';
+}
 const collapsedTree = new Set();
+let treeQuery = '';        // 階層の絞り込み文字列
+let treeSeeded = false;    // 既定の折り畳み（アートボード直下まで）を一度だけ適用する
+let treeKeys = [];         // 今回の描画で存在した折り畳みキー（Expand All / Collapse All 用）
+let treeChildKeys = null;  // key -> 子孫キー配列（Deep Expand / Deep Collapse 用）
+let rootKeyForSeed = null; // アートボード行のキー（既定の展開深さを決めるのに使う）
+
+// 公式の階層は「開閉できる木」であることが前提。.riv を直接読んだときも
+// parentId から実際の親子関係を組み立てる（以前は深さだけ計算した平坦なリストだった）。
 function buildTree() {
   const wrap = $('treeWrap');
   wrap.textContent = '';
+  treeKeys = [];
+  treeChildKeys = new Map();
+  const q = treeQuery.trim().toLowerCase();
   const addNode = (label, type, depth, onClick, isOn, kid) => {
     const d = document.createElement('div');
     d.className = 'tnode' + (isOn ? ' on' : '');
-    d.style.paddingLeft = (5 + depth * 14) + 'px';
+    d.style.paddingLeft = (5 + depth * 12) + 'px';
     if (kid && kid.hasKids) {
+      treeKeys.push(kid.key);
       const ch = document.createElement('span');
-      ch.className = 'chev' + (collapsedTree.has(kid.key) ? ' closed' : '');
+      ch.className = 'chev' + (collapsedTree.has(kid.key) && !q ? ' closed' : '');
       ch.innerHTML = CHEV_SVG;
       ch.onclick = (ev) => {
         ev.stopPropagation();
@@ -1919,64 +2211,179 @@ function buildTree() {
     }
     const ic = document.createElement('span'); ic.className = 'ticon'; ic.innerHTML = KIND_ICON[type] ?? KIND_ICON.shape;
     const nm = document.createElement('span'); nm.className = 'tname'; nm.textContent = label;
-    const ty = document.createElement('span'); ty.className = 'ttype'; ty.textContent = type;
-    d.appendChild(ic); d.appendChild(nm); d.appendChild(ty);
+    d.appendChild(ic); d.appendChild(nm);
     d.onclick = onClick;
+    d.oncontextmenu = (ev) => { ev.preventDefault(); openTreeMenu(ev, kid ? kid.key : null); };
     wrap.appendChild(d);
     return d;
   };
+  const hit = (name) => !q || String(name ?? '').toLowerCase().includes(q);
   if (sceneSpec) {
     const ab = abSpec();
     if (!ab) return;
     const abName = ab.name ?? sceneSpec.artboard?.name ?? 'Artboard';
-    addNode(abName, 'artboard', 0, () => selectScene('artboard', ab), sel?.kind === 'artboard');
     // グループ階層（parent チェーン）
     const groups = ab.groups ?? [];
     const hasChildrenOf = (id) =>
       groups.some(x => x.parent === id) ||
       (ab.bones ?? []).some(b => b.parent === id) ||
       [ab.shapes, ab.images, ab.texts, ab.nested].some(list => (list ?? []).some(o => (o.parent ?? null) === id));
-    const emitGroup = (g, depth) => {
-      const kids = hasChildrenOf(g.id);
-      addNode(g.id, 'group', depth, () => selectScene('group', g), sel?.obj === g, { key: 'g:' + g.id, hasKids: kids });
-      if (collapsedTree.has('g:' + g.id)) return;
-      for (const c of groups.filter(x => x.parent === g.id)) emitGroup(c, depth + 1);
-      for (const b of (ab.bones ?? []).filter(b => b.parent === g.id)) emitBone(b, depth + 1);
+    // 絞り込み中は、一致した要素とその祖先だけを残す
+    const leavesOf = (parentId) =>
+      [['shape', ab.shapes], ['image', ab.images], ['text', ab.texts], ['nested', ab.nested]]
+        .flatMap(([kind, list]) => (list ?? []).filter(o => (o.parent ?? null) === parentId).map(o => [kind, o]));
+    const subtreeHit = (id) =>
+      hit(id) ||
+      groups.filter(x => x.parent === id).some(g => subtreeHit(g.id)) ||
+      (ab.bones ?? []).filter(b => b.parent === id).some(b => subtreeHit(b.id)) ||
+      leavesOf(id).some(([, o]) => hit(o.id));
+    const emitGroup = (g, depth, parentKey) => {
+      if (q && !subtreeHit(g.id)) return;
+      const key = 'g:' + g.id;
+      registerChild(parentKey, key);
+      addNode(g.id, 'group', depth, () => selectScene('group', g), sel?.obj === g, { key, hasKids: hasChildrenOf(g.id) });
+      if (collapsedTree.has(key) && !q) return;
+      for (const c of groups.filter(x => x.parent === g.id)) emitGroup(c, depth + 1, key);
+      for (const b of (ab.bones ?? []).filter(b => b.parent === g.id)) emitBone(b, depth + 1, key);
       emitChildren(g.id, depth + 1);
     };
-    const emitBone = (b, depth) => {
-      const kids = hasChildrenOf(b.id);
-      addNode(b.id, 'bone', depth, () => selectScene('bone', b), sel?.obj === b, { key: 'b:' + b.id, hasKids: kids });
-      if (collapsedTree.has('b:' + b.id)) return;
-      for (const c of (ab.bones ?? []).filter(x => x.parent === b.id)) emitBone(c, depth + 1);
+    const emitBone = (b, depth, parentKey) => {
+      if (q && !subtreeHit(b.id)) return;
+      const key = 'b:' + b.id;
+      registerChild(parentKey, key);
+      addNode(b.id, 'bone', depth, () => selectScene('bone', b), sel?.obj === b, { key, hasKids: hasChildrenOf(b.id) });
+      if (collapsedTree.has(key) && !q) return;
+      for (const c of (ab.bones ?? []).filter(x => x.parent === b.id)) emitBone(c, depth + 1, key);
       emitChildren(b.id, depth + 1);
     };
     const emitChildren = (parentId, depth) => {
-      for (const [kind, list] of [['shape', ab.shapes], ['image', ab.images], ['text', ab.texts], ['nested', ab.nested]]) {
-        for (const o of (list ?? []).filter(o => (o.parent ?? null) === parentId)) {
-          addNode(o.id, kind, depth, () => selectScene(kind, o), sel?.obj === o);
-        }
+      for (const [kind, o] of leavesOf(parentId)) {
+        if (q && !hit(o.id)) continue;
+        addNode(o.id, kind, depth, () => selectScene(kind, o), sel?.obj === o);
       }
     };
-    for (const g of groups.filter(g => !g.parent)) emitGroup(g, 1);
-    for (const b of (ab.bones ?? []).filter(b => !groups.some(g => g.id === b.parent) && !(ab.bones ?? []).some(x => x.id === b.parent))) {
-      if (!groups.some(g => g.id === b.parent)) emitBone(b, 1);
+    // アートボード行自身も開閉できるようにする（chevron が無いと、グループを持たない
+    // フラットなシーンでは「折りたためる行が1つも無い」状態になり操作が効かなく見える）
+    const abKey = 'ab:' + abName;
+    const abHasKids = groups.length > 0 || (ab.bones ?? []).length > 0 ||
+      leavesOf(undefined).length > 0 || leavesOf(null).length > 0;
+    addNode(abName, 'artboard', 0, () => selectScene('artboard', ab), sel?.kind === 'artboard',
+      { key: abKey, hasKids: abHasKids });
+    if (!collapsedTree.has(abKey) || q) {
+      for (const g of groups.filter(g => !g.parent)) emitGroup(g, 1, abKey);
+      for (const b of (ab.bones ?? []).filter(b => !groups.some(g => g.id === b.parent) && !(ab.bones ?? []).some(x => x.id === b.parent))) {
+        if (!groups.some(g => g.id === b.parent)) emitBone(b, 1, abKey);
+      }
+      emitChildren(undefined, 1);
+      emitChildren(null, 1);
     }
-    emitChildren(undefined, 1);
-    emitChildren(null, 1);
+    rootKeyForSeed = abKey;
   } else if (gTree) {
     const ab = gTree.artboards.find(a => a.name === $('artboardSel').value) ?? gTree.artboards[0];
     if (!ab) { wrap.textContent = '-'; return; }
-    addNode(ab.name, 'artboard', 0, () => {}, false);
     const byLocal = new Map(ab.nodes.map(n => [n.local, n]));
-    const depthOf = (n) => { let d = 1, cur = n.parentId, guard = 0;
-      while (cur !== null && cur !== undefined && cur !== 0 && guard++ < 30) { const p = byLocal.get(cur); if (!p) break; d++; cur = p.parentId; } return d; };
-    for (const n of ab.nodes.slice(0, 400)) {
-      addNode(n.name ?? n.type, n.type.toLowerCase().includes('bone') ? 'bone' : 'shape', Math.min(depthOf(n), 8),
-        () => selectRiv(n), sel?.node === n);
+    // parentId から本物の親子関係を組み立てる（親が居ないものはアートボード直下）
+    const kidsOf = new Map();
+    const roots = [];
+    for (const n of ab.nodes) {
+      const p = n.parentId;
+      if (p !== null && p !== undefined && p !== 0 && byLocal.has(p)) {
+        if (!kidsOf.has(p)) kidsOf.set(p, []);
+        kidsOf.get(p).push(n);
+      } else roots.push(n);
     }
+    const nameOf = (n) => n.name ?? n.type;
+    const hitCache = new Map();
+    const subtreeHit = (n, guard = 0) => {
+      if (!q) return true;
+      if (hitCache.has(n.local)) return hitCache.get(n.local);
+      let r = hit(nameOf(n));
+      if (!r && guard < 40) r = (kidsOf.get(n.local) ?? []).some(c => subtreeHit(c, guard + 1));
+      hitCache.set(n.local, r);
+      return r;
+    };
+    let emitted = 0;
+    const emit = (n, depth, parentKey) => {
+      if (emitted > 2000) return;
+      if (q && !subtreeHit(n)) return;
+      const kids = kidsOf.get(n.local) ?? [];
+      const key = 'r:' + n.local;
+      registerChild(parentKey, key);
+      emitted++;
+      addNode(nameOf(n), rivKindIcon(n.type), depth,
+        () => selectRiv(n), sel?.node === n, { key, hasKids: kids.length > 0 });
+      if (collapsedTree.has(key) && !q) return;
+      for (const c of kids) emit(c, depth + 1, key);
+    };
+    const abKey = 'ab:' + ab.name;
+    addNode(ab.name, 'artboard', 0, () => {}, false, { key: abKey, hasKids: roots.length > 0 });
+    if (!collapsedTree.has(abKey) || q) for (const n of roots) emit(n, 1, abKey);
+    rootKeyForSeed = abKey;
+  }
+  // 既定は「アートボードとその直下まで開く」。157オブジェクトのファイルを開いた瞬間に破綻させない
+  if (!treeSeeded && treeKeys.length) {
+    treeSeeded = true;
+    // アートボード行自身と、その直下の行は開いたままにする
+    const keep = new Set([rootKeyForSeed, ...(treeChildKeys.get(null) ?? []), ...(treeChildKeys.get(rootKeyForSeed) ?? [])]);
+    for (const k of treeKeys) if (!keep.has(k)) collapsedTree.add(k);
+    if (collapsedTree.size) buildTree();
   }
 }
+function registerChild(parentKey, key) {
+  const k = parentKey ?? null;
+  if (!treeChildKeys.has(k)) treeChildKeys.set(k, []);
+  treeChildKeys.get(k).push(key);
+}
+// ---- 階層の一括操作（公式の右クリックメニュー: Expand All / Collapse All / Deep 版） ----
+function treeExpandAll() { collapsedTree.clear(); buildTree(); }
+function treeCollapseAll() {
+  // 見えている階層を畳む→再構築、を繰り返して全段を閉じる
+  for (let i = 0; i < 12; i++) {
+    const before = collapsedTree.size;
+    for (const k of treeKeys) collapsedTree.add(k);
+    buildTree();
+    if (collapsedTree.size === before) break;
+  }
+}
+function treeDeepSet(key, collapse) {
+  if (!key) return;
+  // 子孫キーを知るには一度すべて展開した状態で構築する必要がある
+  const saved = new Set(collapsedTree);
+  collapsedTree.clear();
+  buildTree();
+  const descendants = [];
+  const collect = (k, guard = 0) => { if (guard > 60) return; descendants.push(k); for (const c of (treeChildKeys.get(k) ?? [])) collect(c, guard + 1); };
+  collect(key);
+  collapsedTree.clear();
+  saved.forEach((k) => collapsedTree.add(k));
+  for (const k of descendants) { if (collapse) collapsedTree.add(k); else collapsedTree.delete(k); }
+  buildTree();
+}
+let treeMenuEl = null;
+function closeTreeMenu() { if (treeMenuEl) { treeMenuEl.remove(); treeMenuEl = null; } }
+function openTreeMenu(ev, key) {
+  closeTreeMenu();
+  const m = document.createElement('div');
+  m.className = 'ctxMenu';
+  const item = (labelKey, enabled, fn) => {
+    const d = document.createElement('div');
+    d.className = 'ctxItem' + (enabled ? '' : ' off');
+    d.textContent = t(labelKey);
+    if (enabled) d.onclick = () => { closeTreeMenu(); fn(); };
+    m.appendChild(d);
+  };
+  item('deepExpand', !!key, () => treeDeepSet(key, false));
+  item('deepCollapse', !!key, () => treeDeepSet(key, true));
+  const sep = document.createElement('div'); sep.className = 'ctxSep'; m.appendChild(sep);
+  item('expandAll', true, treeExpandAll);
+  item('collapseAll', true, treeCollapseAll);
+  document.body.appendChild(m);
+  m.style.left = Math.min(ev.clientX, window.innerWidth - m.offsetWidth - 8) + 'px';
+  m.style.top = Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 8) + 'px';
+  treeMenuEl = m;
+}
+window.addEventListener('click', closeTreeMenu);
+window.addEventListener('blur', closeTreeMenu);
 
 // ---- 選択 & インスペクタ --------------------------------------------------------
 function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; clearKeySel(); guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
@@ -2032,21 +2439,113 @@ function bindLabelDrag(labelEl, input) {
     labelEl.addEventListener('pointerup', up);
   });
 }
+// ---- Animate モード: プロパティ行のキーボタン ------------------------------------
+// 公式 Rive エディタでは、キーフレームはタイムラインからではなく
+// インスペクタの各プロパティ横のダイヤ型ボタンから打つ。「キーの作り方が分からない」を
+// 構造的に潰しているのはこの作法なので、そのまま踏襲する。3状態:
+//   中空グレー = キーなし / 青枠 = アニメ済みだが再生ヘッド上にキーなし / 青塗り = 再生ヘッド上にキーあり
+const ANIMATABLE_PROPS = new Set(['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity', 'width', 'height', 'fillColor']);
+const KEY_SVG = '<svg viewBox="0 0 12 12"><path d="M6 1.2 10.8 6 6 10.8 1.2 6z"/></svg>';
+
+function animKeyContext() {
+  if (editMode !== 'animate' || mode !== 'anim') return null;
+  if (sceneSpec) {
+    const ab = abSpec();
+    const anim = (ab?.animations ?? []).find((a) => a.name === scrubAnim);
+    if (!anim) return null;
+    return { kind: 'scene', anim, fps: anim.fps ?? 60, dur: anim.duration ?? 60 };
+  }
+  if (rivAnimData) return { kind: 'riv', fps: rivAnimData.fps ?? 60, dur: rivAnimData.duration ?? 60 };
+  return null;
+}
+// 再生ヘッドの正本は curTimeSec（animCurT は再生ループ内部のクロック）
+function keyFrameNow(ctx) { return Math.max(0, Math.min(ctx.dur, Math.round(curTimeSec * ctx.fps))); }
+function findKeyTrack(ctx, target, prop) {
+  if (ctx.kind === 'scene') return (ctx.anim.tracks ?? []).find((t2) => t2.target === target && t2.property === prop) ?? null;
+  return (rivAnimData.tracks ?? []).find((t2) => (t2.targetName ?? t2.targetType) === target && t2.propertyName === prop) ?? null;
+}
+function keyBtn(target, prop, read) {
+  const ctx = animKeyContext();
+  if (!ctx) return null;
+  const tr = findKeyTrack(ctx, target, prop);
+  // .riv 直接編集では新規トラックを作れないので、既存トラックがある場所にだけ出す
+  if (ctx.kind === 'riv' && !tr) return null;
+  const f = keyFrameNow(ctx);
+  const at = tr ? (tr.keyframes ?? []).find((k) => k.frame === f) : null;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'keyBtn ' + (at ? 'keyed' : tr ? 'animated' : 'none');
+  b.innerHTML = KEY_SVG;
+  b.title = t(ctx.kind === 'riv' ? 'keyBtnRivT' : at ? 'keyBtnRemoveT' : 'keyBtnAddT');
+  b.onclick = (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    // 再生中に打つと「どのフレームに入ったか」が分からなくなるので、まず止める
+    if (!paused) $('pauseBtn').onclick();
+    if (ctx.kind === 'riv') {
+      if (at) { setSingleKeySel({ riv: true, tr, k: at }); renderTimeline(); renderInspector(); return; }
+      const near = (tr.keyframes ?? []).slice().sort((a, b2) => Math.abs(a.frame - f) - Math.abs(b2.frame - f))[0];
+      if (near) { seekTo(near.frame / (ctx.fps || 60)); setSingleKeySel({ riv: true, tr, k: near }); renderTimeline(); renderInspector(); }
+      return;
+    }
+    toggleSceneKey(ctx, target, prop, read);
+  };
+  return b;
+}
+function toggleSceneKey(ctx, target, prop, read) {
+  const anim = ctx.anim;
+  const f = keyFrameNow(ctx);
+  pushHistory();
+  if (!anim.tracks) anim.tracks = [];
+  let tr = anim.tracks.find((t2) => t2.target === target && t2.property === prop);
+  if (tr) {
+    const i = (tr.keyframes ?? []).findIndex((k) => k.frame === f);
+    if (i >= 0) {
+      tr.keyframes.splice(i, 1);
+      if (!tr.keyframes.length) anim.tracks.splice(anim.tracks.indexOf(tr), 1);
+      clearKeySel(); renderTimeline(); renderInspector(); scheduleRebuild(0);
+      return;
+    }
+  } else {
+    tr = { target, property: prop, keyframes: [] };
+    anim.tracks.push(tr);
+  }
+  if (!tr.keyframes.length) {
+    // 新規トラックの最初のキーは、いま画面に出ている値をそのまま採用する
+    tr.keyframes.push(prop === 'fillColor' ? { frame: f, color: read() } : { frame: f, value: round2(Number(read()) || 0) });
+  } else {
+    addKeyframeAt(tr, f);
+  }
+  // 公式はキーを打ってもインスペクタをそのオブジェクトのまま保つ（キー選択に飛ばさない）
+  renderTimeline(); renderInspector(); scheduleRebuild(0);
+}
+function attachKey(cell, input) {
+  const info = input && input._key;
+  if (!info || !ANIMATABLE_PROPS.has(info.prop)) return;
+  const b = keyBtn(info.target, info.prop, info.read);
+  if (b) cell.appendChild(b);
+}
+
 function propRow(labelText, input) {
   const row = document.createElement('div'); row.className = 'prop';
   const l = document.createElement('label'); l.textContent = labelText;
   bindLabelDrag(l, input);
   row.appendChild(l); row.appendChild(input);
+  attachKey(row, input);
   return row;
 }
-// 2カラム（x/y・w/h 横並び）行
-function pairRow(aLabel, aInput, bLabel, bInput) {
-  const row = document.createElement('div'); row.className = 'prop2';
+// 2カラム（x/y・w/h 横並び）行。rowLabel を渡すと公式と同じ「Position  X … Y …」の形になる
+function pairRow(aLabel, aInput, bLabel, bInput, rowLabel) {
+  const row = document.createElement('div'); row.className = 'prop2' + (rowLabel ? ' titled' : '');
+  if (rowLabel) {
+    const rl = document.createElement('label'); rl.className = 'prowLabel'; rl.textContent = rowLabel;
+    row.appendChild(rl);
+  }
   const mk = (lb, inp) => {
     const c = document.createElement('div'); c.className = 'pcell';
     const l = document.createElement('label'); l.textContent = lb;
     bindLabelDrag(l, inp);
     c.appendChild(l); c.appendChild(inp);
+    attachKey(c, inp);
     return c;
   };
   row.appendChild(mk(aLabel, aInput));
@@ -2196,7 +2695,7 @@ function renderCurvePane(box, model, opts) {
   cv2.style.cssText = 'width:100%;max-width:220px;border-radius:6px;cursor:crosshair;touch-action:none;display:block';
   wrap.appendChild(cv2);
   const nums = document.createElement('div');
-  nums.style.cssText = 'display:flex;gap:10px;margin-top:6px;font:11px var(--mono);color:var(--text-dim)';
+  nums.style.cssText = 'display:flex;gap:10px;margin-top:6px;font:var(--fs-body) var(--mono);color:var(--text-dim)';
   wrap.appendChild(nums);
   const presetsRow = document.createElement('div');
   presetsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:8px';
@@ -2366,7 +2865,7 @@ function renderInspector() {
     title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--accent)';
     title.textContent = (tr.targetName ?? tr.targetType ?? '?') + ' · ' + tr.propertyName + '  (f' + k.frame + ')';
     box.appendChild(title);
-    inspSection(box, 'EASING');
+    inspSection(box, t('ipEasing'));
     renderCurvePane(box, rivCurveModel(tr, k), { showTypeButtons: true });
     return;
   }
@@ -2376,7 +2875,7 @@ function renderInspector() {
     title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--accent)';
     title.textContent = tr.target + ' · ' + tr.property + '  (f' + k.frame + ')';
     box.appendChild(title);
-    inspSection(box, 'EASING');
+    inspSection(box, t('ipEasing'));
     box.appendChild(propRow('easing', selectField(EASING_OPTIONS, () => k.easing ?? 'linear', (v) => {
       if (v === 'linear') { delete k.easing; delete k.amplitude; delete k.period; }
       else {
@@ -2405,32 +2904,43 @@ function renderInspector() {
     title.style.cssText = 'font-weight:600;margin-bottom:6px;color:var(--accent)';
     title.textContent = (o.id ?? o.name ?? kind) + '  (' + kind + ')';
     box.appendChild(title);
-    const NF = (key, step = 1, dflt = 0) => numField(() => o[key] ?? dflt, (v) => { o[key] = v; scheduleRebuild(); }, step);
+    const NF = (key, step = 1, dflt = 0) => {
+      const i = numField(() => o[key] ?? dflt, (v) => { o[key] = v; scheduleRebuild(); }, step);
+      i._key = { target: o.id, prop: key, read: () => o[key] ?? dflt };
+      return i;
+    };
     const N = (label, key, step = 1, dflt = 0) => box.appendChild(propRow(label, NF(key, step, dflt)));
     if (kind === 'artboard') {
       const tgt = sceneSpec.artboard && !sceneSpec.artboards ? sceneSpec.artboard : o;
-      inspSection(box, 'SIZE');
+      inspSection(box, t('ipSize'));
       box.appendChild(pairRow(
         'W', numField(() => tgt.width, (v) => { tgt.width = v; scheduleRebuild(); }),
         'H', numField(() => tgt.height, (v) => { tgt.height = v; scheduleRebuild(); })));
       const bgHolder = sceneSpec.artboards ? o : sceneSpec;
-      inspSection(box, 'FILL');
+      inspSection(box, t('ipFill'));
       box.appendChild(propRow('background', colorField(() => bgHolder.backgroundColor, (v) => { bgHolder.backgroundColor = v; scheduleRebuild(); })));
       return;
     }
-    inspSection(box, 'TRANSFORM');
-    box.appendChild(pairRow('X', NF('x'), 'Y', NF('y')));
+    inspSection(box, t('ipTransform'));
+    box.appendChild(pairRow('X', NF('x'), 'Y', NF('y'), t('ipPosition')));
     if (kind === 'shape') {
       if (o.width !== undefined || o.type !== 'polygon') {
-        box.appendChild(pairRow('W', NF('width'), 'H', NF('height')));
+        box.appendChild(pairRow('W', NF('width'), 'H', NF('height'), t('ipSize')));
       }
+      // 公式と同じく Scale X/Y をペアで置く。アニメーションで最もよく打たれるプロパティなので
+      // ここに行が無いとキーボタンからも辿れない
+      box.appendChild(pairRow('X', NF('scaleX', 0.05, 1), 'Y', NF('scaleY', 0.05, 1), t('ipScale')));
       N('rotation', 'rotation');
       if (o.type === 'rect') N('cornerRadius', 'cornerRadius');
       N('opacity', 'opacity', 0.05, 1);
-      inspSection(box, 'FILL');
+      inspSection(box, t('ipFill'));
       if (o.fill?.color !== undefined || !o.fill?.gradient) {
         if (!o.fill) o.fill = { color: '#ffffff' };
-        if (o.fill.color !== undefined) box.appendChild(propRow('fill', colorField(() => o.fill.color, (v) => { o.fill.color = v; scheduleRebuild(); })));
+        if (o.fill.color !== undefined) {
+          const cf = colorField(() => o.fill.color, (v) => { o.fill.color = v; scheduleRebuild(); });
+          cf._key = { target: o.id, prop: 'fillColor', read: () => o.fill.color };
+          box.appendChild(propRow('fill', cf));
+        }
       }
       if (o.stroke) {
         box.appendChild(propRow('stroke', colorField(() => o.stroke.color, (v) => { o.stroke.color = v; scheduleRebuild(); })));
@@ -2441,7 +2951,7 @@ function renderInspector() {
     } else if (kind === 'text') {
       const run = o.runs?.[0];
       if (run) {
-        inspSection(box, 'TEXT');
+        inspSection(box, t('ipText'));
         box.appendChild(propRow('text', textField(() => run.text, (v) => { run.text = v; scheduleRebuild(); })));
         box.appendChild(propRow('fontSize', numField(() => run.fontSize ?? 32, (v) => { run.fontSize = v; scheduleRebuild(); })));
         box.appendChild(propRow('color', colorField(() => run.color ?? '#000000', (v) => { run.color = v; scheduleRebuild(); })));
@@ -2470,7 +2980,9 @@ function renderInspector() {
       } else if (p.kind === 'string') {
         box.appendChild(propRow(p.name, textField(() => p.value, (v) => { p.value = v; rivEditSet(n.index, p.name, v); })));
       } else {
-        box.appendChild(propRow(p.name, numField(() => Number(p.value), (v) => { p.value = v; rivEditSet(n.index, p.name, v); }, 0.5)));
+        const i = numField(() => Number(p.value), (v) => { p.value = v; rivEditSet(n.index, p.name, v); }, 0.5);
+        i._key = { target: n.name ?? n.type, prop: p.name, read: () => Number(p.value) };
+        box.appendChild(propRow(p.name, i));
       }
     }
   }
@@ -2866,12 +3378,145 @@ function renderSelectionToolbar(tl, applyTimescale) {
   tl.appendChild(bar);
 }
 
+// ---- タイムラインのツールバー（公式: 再生 / 先頭へ / キー移動 / 時刻フィールド） ----------
+let tlUnit = localStorage.getItem('rivestudio.tlUnit') || 'frames';
+function fmtTimecode(frame, fps) {
+  const secs = Math.floor(Math.max(0, frame) / (fps || 60));
+  const rem = Math.round(Math.max(0, frame) % (fps || 60));
+  const p2 = (n) => String(n).padStart(2, '0');
+  return p2(Math.floor(secs / 60)) + ':' + p2(secs % 60) + ':' + p2(rem);
+}
+// ルーラーの目盛。公式は秒表記(00:00s / 2s / 4s)とフレーム表記(5f / 10f)を切り替えられる
+function rulerTicks(durFrames, fps) {
+  const out = [];
+  if (tlUnit === 'seconds') {
+    const durS = durFrames / (fps || 60);
+    const step = durS > 20 ? 5 : durS > 8 ? 2 : 1;
+    for (let s = 0; s <= durS + 0.001; s += step) {
+      out.push({ frame: s * (fps || 60), label: s === 0 ? '00:00s' : s + 's' });
+    }
+  } else {
+    const step = durFrames > 400 ? 60 : durFrames > 150 ? 20 : 10;
+    for (let f = 0; f <= durFrames; f += step) out.push({ frame: f, label: f === 0 ? '0' : f + 'f' });
+  }
+  return out;
+}
+// いま表示中のタイムラインの fps（無ければ 0）
+function animKeyContextFps() {
+  if (sceneSpec) {
+    const ab = abSpec();
+    const anim = (ab?.animations ?? []).find((a) => a.name === scrubAnim);
+    return anim ? (anim.fps ?? 60) : 0;
+  }
+  return rivAnimData ? (rivAnimData.fps ?? 60) : 0;
+}
+function allKeyFrames(ctx) {
+  const tracks = ctx.kind === 'scene' ? (ctx.anim.tracks ?? []) : (rivAnimData?.tracks ?? []);
+  const set = new Set();
+  for (const tr of tracks) for (const k of (tr.keyframes ?? [])) set.add(k.frame);
+  return [...set].sort((a, b) => a - b);
+}
+function renderTimelineToolbar(tl, ctx) {
+  document.body.classList.add('tlHasTransport');
+  const bar = document.createElement('div'); bar.className = 'tlBar';
+  const iconBtn = (svg, title, fn) => {
+    const b = document.createElement('button'); b.className = 'tlIcon'; b.title = title;
+    b.innerHTML = svg; b.onclick = fn; bar.appendChild(b); return b;
+  };
+  const fps = ctx.fps || 60;
+  const curFrame = () => Math.round(curTimeSec * fps);
+  iconBtn('<svg viewBox="0 0 16 16"><path d="M4 3l9 5-9 5z" fill="currentColor"/></svg>',
+    t('play'), () => $('pauseBtn').onclick());
+  iconBtn('<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3h1.6v10H4z"/><path d="M13 3l-6 5 6 5z"/></svg>',
+    t('tlToStart'), () => seekTo(0));
+  iconBtn('<svg viewBox="0 0 16 16" fill="currentColor"><path d="M12 3l-6 5 6 5z"/><path d="M4 3h1.6v10H4z"/></svg>',
+    t('tlPrevKey'), () => {
+      const ks = allKeyFrames(ctx).filter((f) => f < curFrame());
+      if (ks.length) seekTo(ks[ks.length - 1] / fps);
+    });
+  iconBtn('<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l6 5-6 5z"/><path d="M10.4 3H12v10h-1.6z"/></svg>',
+    t('tlNextKey'), () => {
+      const ks = allKeyFrames(ctx).filter((f) => f > curFrame());
+      if (ks.length) seekTo(ks[0] / fps);
+    });
+  // 時刻フィールド + ポップオーバー（公式: Current / Duration / Playback Speed / Snap Keys）
+  const timeBtn = document.createElement('button'); timeBtn.className = 'tlTime';
+  timeBtn.textContent = fmtTimecode(curFrame(), fps);
+  timeBtn.onclick = (ev) => { ev.stopPropagation(); openTimePopover(timeBtn, ctx); };
+  bar.appendChild(timeBtn);
+  const spacer = document.createElement('span'); spacer.className = 'spacer'; bar.appendChild(spacer);
+  const unitBtn = document.createElement('button'); unitBtn.className = 'mini';
+  unitBtn.textContent = tlUnit === 'frames' ? t('tlUnitFrames') : t('tlUnitSeconds');
+  unitBtn.onclick = () => {
+    tlUnit = tlUnit === 'frames' ? 'seconds' : 'frames';
+    localStorage.setItem('rivestudio.tlUnit', tlUnit);
+    renderTimeline();
+  };
+  bar.appendChild(unitBtn);
+  tl.appendChild(bar);
+}
+let timePopEl = null;
+function closeTimePopover() { if (timePopEl) { timePopEl.remove(); timePopEl = null; } }
+function openTimePopover(anchor, ctx) {
+  closeTimePopover();
+  const p = document.createElement('div'); p.className = 'tlPop';
+  const fps = ctx.fps || 60;
+  const row = (label, value, onSet, unit) => {
+    const r2 = document.createElement('div'); r2.className = 'tlPopRow';
+    const l = document.createElement('span'); l.textContent = label;
+    const i = document.createElement('input'); i.type = 'text'; i.value = value;
+    if (!onSet) i.disabled = true;
+    else i.onchange = () => { onSet(i.value); closeTimePopover(); renderTimeline(); };
+    r2.append(l, i);
+    const u = document.createElement('span'); u.className = 'tlPopUnit'; u.textContent = unit || '';
+    r2.appendChild(u);
+    p.appendChild(r2);
+  };
+  row(t('tlCurrent'), String(Math.round(curTimeSec * fps)), (v) => {
+    const f = Number(v);
+    if (isFinite(f)) seekTo(Math.max(0, Math.min(ctx.duration, f)) / fps);
+  }, 'f');
+  row(t('tlDuration'), String(ctx.duration), ctx.kind === 'scene' ? (v) => {
+    const d = Number(v);
+    if (isFinite(d) && d > 0) { pushHistory(); ctx.anim.duration = Math.round(d); scheduleRebuild(0); }
+  } : null, 'f');
+  row(t('tlSpeed'), $('speedSel').value + 'x', (v) => {
+    const n = parseFloat(v);
+    if (isFinite(n) && n > 0) { $('speedSel').value = String(n); if ($('speedSel').onchange) $('speedSel').onchange(); }
+  }, '');
+  row(t('tlSnap'), String(fps), ctx.kind === 'scene' ? (v) => {
+    const n = Number(v);
+    if (isFinite(n) && n > 0) { pushHistory(); ctx.anim.fps = Math.round(n); scheduleRebuild(0); }
+  } : null, 'fps');
+  document.body.appendChild(p);
+  const r = anchor.getBoundingClientRect();
+  p.style.left = Math.min(r.left, window.innerWidth - p.offsetWidth - 8) + 'px';
+  p.style.top = Math.max(8, r.top - p.offsetHeight - 6) + 'px';
+  p.onclick = (e) => e.stopPropagation();
+  timePopEl = p;
+}
+window.addEventListener('click', closeTimePopover);
+
 let kfDrag = null;    // シーンJSONモード: グループドラッグ { anim, items:[{tr,k,startFrame}], startClientX, laneWidth, moved, historyPushed }
 let rivKfDrag = null; // rivのみモード: グループドラッグ { fps, duration, items, startClientX, laneWidth, moved, snapshotPromise, seekTarget }
 function renderTimeline() {
   const tl = $('timeline');
   tl.textContent = '';
-  if (mode !== 'anim') { tl.style.display = 'none'; return; }
+  // 公式と同じく、タイムラインは Animate モードにしか存在しない
+  document.body.classList.remove('tlHasTransport');
+  if (typeof editMode !== 'undefined' && editMode !== 'animate') { tl.style.display = 'none'; return; }
+  if (mode !== 'anim') {
+    // Animate に入ったのにアニメーション未選択 — 「どこから出すのか」を空状態で明示する
+    tl.style.display = 'block';
+    const empty = document.createElement('div');
+    empty.className = 'tlEmpty';
+    const msg = document.createElement('span'); msg.textContent = t('tlPickAnim');
+    const btn = document.createElement('button'); btn.className = 'mini'; btn.textContent = t('tlOpenAnims');
+    btn.onclick = () => { openAcc('Animations'); $('animSel').focus(); };
+    empty.append(msg, btn);
+    tl.appendChild(empty);
+    return;
+  }
   if (!sceneSpec) { renderRivTimelineBody(tl); return; }
   renderSceneTimelineBody(tl);
 }
@@ -2902,14 +3547,15 @@ function renderRivTimelineBody(tl) {
     } catch (e2) { log(t('editNg') + e2, 'error'); toast(t('editNg') + e2, 'err'); }
     renderTimeline();
   });
+  renderTimelineToolbar(tl, { kind: 'riv', fps: fps || 60, duration: duration || 1 });
   {
     const row = document.createElement('div'); row.className = 'trow';
     const lb = document.createElement('div'); lb.className = 'tlabel'; lb.textContent = scrubAnim + ' · ' + duration + 'f';
     const lane = document.createElement('div'); lane.className = 'tlane ruler';
-    for (let f = 0; f <= (duration || 1); f += 10) {
+    for (const tk of rulerTicks(duration || 1, fps || 60)) {
       const tick = document.createElement('div'); tick.className = 'rtick';
-      tick.style.left = (100 * f / (duration || 1)) + '%';
-      const num = document.createElement('span'); num.textContent = f;
+      tick.style.left = (100 * tk.frame / (duration || 1)) + '%';
+      const num = document.createElement('span'); num.textContent = tk.label;
       tick.appendChild(num);
       lane.appendChild(tick);
     }
@@ -2987,17 +3633,18 @@ function renderSceneTimelineBody(tl) {
     renderTimeline(); renderInspector();
     scheduleRebuild(0);
   });
-  // ルーラー行（フレーム目盛 10刻み + 再生ヘッドつまみ）
+  renderTimelineToolbar(tl, { kind: 'scene', anim, fps: anim.fps ?? 60, duration: anim.duration ?? 60 });
+  // ルーラー行（フレーム/秒の目盛 + 再生ヘッドつまみ）
   {
     const row = document.createElement('div'); row.className = 'trow';
     const lb = document.createElement('div'); lb.className = 'tlabel';
     lb.textContent = anim.name + ' · ' + (anim.duration ?? 60) + 'f';
     const lane = document.createElement('div'); lane.className = 'tlane ruler';
     const durF = anim.duration || 1;
-    for (let f = 0; f <= durF; f += 10) {
+    for (const tk of rulerTicks(durF, anim.fps ?? 60)) {
       const tick = document.createElement('div'); tick.className = 'rtick';
-      tick.style.left = (100 * f / durF) + '%';
-      const num = document.createElement('span'); num.textContent = f;
+      tick.style.left = (100 * tk.frame / durF) + '%';
+      const num = document.createElement('span'); num.textContent = tk.label;
       tick.appendChild(num);
       lane.appendChild(tick);
     }
@@ -3303,8 +3950,15 @@ function seekTo(tsec, opts) {
   $('time').textContent = tsec.toFixed(2) + 's';
   const pct = (100 * tsec / scrubDur) + '%';
   document.querySelectorAll('.tcur, .phead').forEach(c => { c.style.left = pct; });
+  // タイムラインの時刻フィールドは再構築せずに追従させる（スクラブ中に古い値が残らないように）
+  const tf = document.querySelector('.tlTime');
+  if (tf && animKeyContextFps()) tf.textContent = fmtTimecode(Math.round(tsec * animKeyContextFps()), animKeyContextFps());
   updateAiContextChip();
-  if (!(opts && opts.fromPlayback)) scheduleOnionRender(tsec);
+  if (!(opts && opts.fromPlayback)) {
+    scheduleOnionRender(tsec);
+    // キーボタンの3状態は再生ヘッド位置に依存するので、スクラブしたら描き直す
+    if (typeof editMode !== 'undefined' && editMode === 'animate' && sel) renderInspector();
+  }
   if (!boneDrag) renderBoneOverlay();
 }
 
@@ -3728,7 +4382,7 @@ function bindGraphNodeDrag(g, smName, layerName, stateId) {
 function renderSmNode(smName, layer, s, layout) {
   const pos = layout.positions.get(s.id) || { x: 20, y: 20 };
   const cls = ['smNode'];
-  if (s.kind === 'Entry') cls.push('entry'); else if (s.kind === 'Any') cls.push('any'); else if (s.kind === 'Exit') cls.push('exit');
+  if (s.kind === 'EntryState') cls.push('entry'); else if (s.kind === 'AnyState') cls.push('any'); else if (s.kind === 'ExitState') cls.push('exit');
   if (s.unreachable) cls.push('unreachable');
   const g = svgEl('g', { class: cls.join(' '), transform: 'translate(' + pos.x + ',' + pos.y + ')' });
   g.dataset.stateId = String(s.id);
@@ -3904,35 +4558,41 @@ function renderGraphDetails() {
     }
   }
 }
+// 静的診断の結果は、公式の「Problems」と同じ最下段のドックに出す。
+// 行をクリックすると SM グラフ側の該当ノード/遷移が選択される。
 function renderGraphFindings() {
-  const box = $('graphFindings');
+  const box = $('problems');
   if (!box) return;
   box.textContent = '';
+  const addRow = (sev, label, where, onClick) => {
+    const row = document.createElement('div'); row.className = 'probRow ' + sev;
+    const s = document.createElement('span'); s.className = 'probSev';
+    s.textContent = sev === 'err' ? 'error' : 'warn';
+    const m = document.createElement('span'); m.textContent = label;
+    const w = document.createElement('span'); w.className = 'probWhere'; w.textContent = where;
+    row.append(s, m, w);
+    row.onclick = onClick;
+    box.appendChild(row);
+  };
+  let n = 0;
   const sm = currentSmEntry().sm;
-  if (!sm) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = '-'; box.appendChild(h); return; }
-  let any = false;
-  for (const layer of sm.layers) {
-    for (const s of layer.states) {
-      if (s.unreachable) {
-        any = true;
-        const row = document.createElement('div'); row.className = 'findRow err';
-        row.textContent = t('graphUnreachable') + ': ' + s.name;
-        row.onclick = () => selectGraphState(sm.name, layer, s);
-        box.appendChild(row);
+  if (sm) {
+    for (const layer of sm.layers) {
+      for (const s of layer.states) {
+        if (s.unreachable) { n++; addRow('err', t('graphUnreachable') + ': ' + s.name, sm.name + ' / ' + layer.name, () => { showStagePane('graph'); selectGraphState(sm.name, layer, s); }); }
       }
-    }
-    for (const tr of layer.transitions) {
-      if (tr.selfLoopRisk) {
-        any = true;
-        const srcState = layer.states.find((s) => s.id === tr.source);
-        const row = document.createElement('div'); row.className = 'findRow warn';
-        row.textContent = t('graphSelfLoopRisk') + ': ' + (srcState ? srcState.name : tr.source);
-        row.onclick = () => selectGraphTransition(sm.name, layer, tr);
-        box.appendChild(row);
+      for (const tr of layer.transitions) {
+        if (tr.selfLoopRisk) {
+          n++;
+          const srcState = layer.states.find((s) => s.id === tr.source);
+          addRow('warn', t('graphSelfLoopRisk') + ': ' + (srcState ? srcState.name : tr.source), sm.name + ' / ' + layer.name, () => { showStagePane('graph'); selectGraphTransition(sm.name, layer, tr); });
+        }
       }
     }
   }
-  if (!any) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = t('graphNoFindings'); box.appendChild(h); }
+  if (!n) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = t('probNone'); box.appendChild(h); }
+  const cnt = $('probCount');
+  if (cnt) { cnt.textContent = n ? String(n) : ''; cnt.classList.toggle('bad', n > 0); }
 }
 $('graphResetLayout').onclick = () => {
   const sm = currentSmEntry().sm;
@@ -3949,21 +4609,93 @@ $('graphResetLayout').onclick = () => {
   renderGraphDetails();
 };
 
-// ---- 操作 ----------------------------------------------------------------------
-function showLeftPane(which) {
-  $('tabTree').classList.toggle('on', which === 'tree');
-  $('tabPlay').classList.toggle('on', which === 'play');
-  $('tabGraph').classList.toggle('on', which === 'graph');
-  $('treeWrap').style.display = which === 'tree' ? 'block' : 'none';
-  $('playPane').style.display = which === 'play' ? 'block' : 'none';
-  $('graphPane').style.display = which === 'graph' ? 'block' : 'none';
+// ---- シェル: モード / ステージタブ / 左アコーディオン / 下部ドック ------------------
+// 公式 Rive エディタの操作モデルに合わせる:
+//   ・Design / Animate のモードで「キーを打てるか」が決まる（キーはAnimateにしか存在しない）
+//   ・左パネルは階層が主役で、Data/Assets/Animations/Agent は下から生えるアコーディオン
+//   ・Console / Problems / Changes は最下段のステータスバーから開く
+let editMode = localStorage.getItem('rivestudio.mode') || 'design';
+
+function applyEditMode() {
+  const anim = editMode === 'animate';
+  $('modeDesign').classList.toggle('on', !anim);
+  $('modeAnimate').classList.toggle('on', anim);
+  document.body.classList.toggle('animateMode', anim);
+  // タイムラインは Animate モードでのみ現れる（公式と同じ）
+  renderTimeline();
+  renderInspector();
+}
+function setEditMode(m) {
+  editMode = m;
+  localStorage.setItem('rivestudio.mode', m);
+  if (m === 'animate') openAcc('Animations');
+  applyEditMode();
+}
+$('modeDesign').onclick = () => setEditMode('design');
+$('modeAnimate').onclick = () => setEditMode('animate');
+
+function showStagePane(which) {
+  $('stTabStage').classList.toggle('on', which === 'stage');
+  $('stTabGraph').classList.toggle('on', which === 'graph');
+  $('graphTools').classList.toggle('show', which === 'graph');
   graphMode = which === 'graph';
   $('smGraphSvg').style.display = graphMode ? 'block' : 'none';
+  $('graphDetails').style.display = graphMode ? 'block' : 'none';
+  $('inspector').style.display = graphMode ? 'none' : 'block';
   if (graphMode) renderSmGraph();
 }
-$('tabTree').onclick = () => showLeftPane('tree');
-$('tabPlay').onclick = () => showLeftPane('play');
-$('tabGraph').onclick = () => showLeftPane('graph');
+$('stTabStage').onclick = () => showStagePane('stage');
+$('stTabGraph').onclick = () => showStagePane('graph');
+
+// 階層パネルの見出し操作
+// 見えている開閉可能ノードが全部閉じているなら開く、そうでなければ全部閉じる
+$('hierCollapseBtn').onclick = () => {
+  if (!treeKeys.length) { toast(t('treeNothingToCollapse')); return; } // 押しても無反応に見えるのを防ぐ
+  const allClosed = treeKeys.every((k) => collapsedTree.has(k));
+  if (allClosed) treeExpandAll(); else treeCollapseAll();
+};
+$('hierCollapseBtn').oncontextmenu = (e) => { e.preventDefault(); openTreeMenu(e, null); };
+$('hierSearchBtn').onclick = () => {
+  const w = $('hierSearchWrap');
+  const show = !w.classList.contains('show');
+  w.classList.toggle('show', show);
+  if (show) $('hierSearch').focus();
+  else { $('hierSearch').value = ''; treeQuery = ''; buildTree(); }
+};
+$('hierSearch').oninput = () => { treeQuery = $('hierSearch').value; buildTree(); };
+$('hierSearch').onkeydown = (e) => { if (e.key === 'Escape') $('hierSearchBtn').onclick(); };
+
+function openAcc(name) {
+  document.querySelectorAll('#leftAcc .accItem').forEach((it) => {
+    const head = it.querySelector('.accHead');
+    it.classList.toggle('open', head && head.dataset.acc === name);
+  });
+}
+document.querySelectorAll('#leftAcc .accHead').forEach((h) => {
+  h.onclick = () => {
+    const item = h.parentElement;
+    if (item.classList.contains('open')) item.classList.remove('open');
+    else openAcc(h.dataset.acc);
+  };
+});
+
+let dockOpen = null;
+function showDock(name) {
+  dockOpen = dockOpen === name ? null : name;
+  $('dock').classList.toggle('open', !!dockOpen);
+  document.querySelectorAll('.dockPane').forEach((p) => p.classList.toggle('on', p.id === 'dock' + dockOpen));
+  document.querySelectorAll('.sbTab').forEach((t) => t.classList.toggle('on', t.dataset.dock === dockOpen));
+}
+document.querySelectorAll('.sbTab').forEach((t) => { t.onclick = () => showDock(t.dataset.dock); });
+// ドックの高さをドラッグで変える
+$('dockGutter').addEventListener('mousedown', (e) => {
+  if (!dockOpen) return;
+  e.preventDefault();
+  const startY = e.clientY, startH = $('dock').offsetHeight;
+  const move = (ev) => { $('dock').style.height = Math.max(80, Math.min(520, startH + (startY - ev.clientY))) + 'px'; };
+  const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+  window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+});
 $('artboardSel').onchange = () => switchArtboard($('artboardSel').value);
 $('smSel').onchange = () => { mode = 'sm'; const v = $('smSel').value; boot($('artboardSel').value, v && v !== '-' ? v : undefined); };
 $('playAnim').onclick = () => {
@@ -3992,8 +4724,9 @@ $('pauseBtn').onclick = () => {
   renderBoneOverlay();
 };
 $('speedSel').onchange = () => { playSpeed = Number($('speedSel').value); };
-$('zoom').oninput = () => { cv.style.transform = 'scale(' + $('zoom').value + ')'; drawSelBox(); };
-$('zoomReset').onclick = () => { $('zoom').value = 1; cv.style.transform = ''; drawSelBox(); };
+const syncZoomLabel = () => { $('zoomLabel').textContent = Math.round(parseFloat($('zoom').value) * 100) + '%'; };
+$('zoom').oninput = () => { cv.style.transform = 'scale(' + $('zoom').value + ')'; syncZoomLabel(); drawSelBox(); };
+$('zoomReset').onclick = () => { $('zoom').value = 1; cv.style.transform = ''; syncZoomLabel(); drawSelBox(); };
 $('snap').onclick = () => {
   const a = document.createElement('a');
   a.download = rivName + '.png';
@@ -4205,11 +4938,69 @@ $('aiSend').onclick = async () => {
     $('aiText').value = '';
     updateNotesBadge(res.pending);
     $('aiState').textContent = t('notesSent') + ' (' + res.pending + ')';
-    log(t('notesSent') + ': ' + text);
     toast(t('notesSent'));
     guideStep(3);
+    loadChat();
   }
 };
+// Ctrl+Enter で送信（チャットの慣習に合わせる。Enter単独は改行）
+$('aiText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('aiSend').onclick(); }
+});
+
+// ---- Agent パネル: 会話の描画 ------------------------------------------------------
+// 以前は「送って終わり」の投稿箱だった。AI 側が riv_studio_notes(reply) で結果を返すと
+// assistant 発言として積まれ、ここに吹き出しとして出る。
+let chatHistory = [];
+async function loadChat() {
+  try {
+    const res = await (await fetch('/chat')).json();
+    chatHistory = res.chat || [];
+    updateNotesBadge(res.pending || 0);
+    renderChat();
+  } catch { /* サーバー未応答時は前回の表示を残す */ }
+}
+function renderChat() {
+  const box = $('chatLog');
+  if (!box) return;
+  box.textContent = '';
+  if (!chatHistory.length) {
+    const h = document.createElement('div'); h.className = 'hint'; h.textContent = t('chatEmpty');
+    box.appendChild(h);
+    return;
+  }
+  for (const m of chatHistory) {
+    if (m.role === 'system') {
+      const s = document.createElement('div'); s.className = 'chatSys';
+      s.textContent = m.text === 'notes-taken' ? t('chatTaken') : m.text;
+      box.appendChild(s);
+      continue;
+    }
+    const row = document.createElement('div'); row.className = 'chatMsg ' + m.role;
+    const who = document.createElement('div'); who.className = 'chatWho';
+    who.textContent = m.role === 'user' ? t('chatYou') : t('chatAI');
+    const time = document.createElement('span'); time.className = 'chatTime';
+    time.textContent = new Date(m.time).toLocaleTimeString();
+    who.appendChild(time);
+    const body = document.createElement('div'); body.className = 'chatBody'; body.textContent = m.text;
+    row.append(who, body);
+    if (m.context) {
+      const parts = [];
+      if (m.context.selection) parts.push(t('ctxSelPrefix') + m.context.selection);
+      if (m.context.artboard) parts.push(m.context.artboard);
+      if (m.context.animation) {
+        parts.push(m.context.animation + (m.context.timeSec != null ? ' @' + Number(m.context.timeSec).toFixed(2) + 's' : ''));
+      }
+      if (parts.length) {
+        const c = document.createElement('div'); c.className = 'chatCtx'; c.textContent = parts.join(' · ');
+        row.appendChild(c);
+      }
+    }
+    box.appendChild(row);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+loadChat();
 
 // ---- アセット差し替え（画像ドラッグ&ドロップ） ---------------------------------------
 // ステージに画像ファイルをドロップ → 埋め込み画像アセット一覧を取得 → 1件なら即差し替え、
@@ -4418,8 +5209,11 @@ sse.onmessage = (e) => {
   } else if (e.data === 'notes-taken') {
     updateNotesBadge(0);
     $('aiState').textContent = t('notesTaken');
-    log(t('notesTaken'));
+    loadChat();
     toast(t('notesTaken'));
+  } else if (e.data === 'chat') {
+    loadChat();
+    if (!$('accAgentItem').classList.contains('open')) toast(t('chatNew'));
   } else { $('status').textContent = 'ready'; }
 };
 sse.onopen = () => { $('connDot').classList.remove('off'); $('connDot').title = t('connT'); };
