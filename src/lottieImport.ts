@@ -178,8 +178,10 @@ function buildColorTrack(kfs: any[], target: string, alpha: number, ctx: Ctx, la
 
 // レイヤー ks / シェイプグループ tr の共通トランスフォーム変換
 interface TransformResult { x: number; y: number; rotation: number; scaleX: number; scaleY: number; opacity: number; ax: number; ay: number }
+// opacityTarget: 不透明度だけを別グループへ逃がしたいときに渡す（Lottie の親子と Rive の
+// グループ継承の違いを吸収するため。processLayers の説明を参照）。省略時は id と同じ。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function processTransform(ksIn: any, id: string, ctx: Ctx): TransformResult {
+function processTransform(ksIn: any, id: string, ctx: Ctx, opacityTarget?: string): TransformResult {
   const ks = ksIn ?? {};
   let x = 0, y = 0;
   const p = ks.p;
@@ -215,7 +217,9 @@ function processTransform(ksIn: any, id: string, ctx: Ctx): TransformResult {
   }
 
   const opacity = staticNum(ks.o, 0, 100) / 100;
-  if (kIsKeyframed(ks.o)) ctx.tracks.push(buildTrack(ks.o.k, id, "opacity", 0, (n) => n / 100, ctx, `${id}.opacity`));
+  if (kIsKeyframed(ks.o)) {
+    ctx.tracks.push(buildTrack(ks.o.k, opacityTarget ?? id, "opacity", 0, (n) => n / 100, ctx, `${id}.opacity`));
+  }
 
   const ax = staticNum(ks.a, 0, 0);
   const ay = staticNum(ks.a, 1, 0);
@@ -756,10 +760,21 @@ function processLayers(layers: any[], parentGroupId: string | undefined, ctx: Ct
     layer: any;
     outer: GroupSpec;
     inner?: GroupSpec;
+    opaque?: GroupSpec; // 自分の中身だけに opacity を掛けるためのグループ（下記参照）
     tag: string;
   }
   const idOf = new Map<number, string>(); // layer.ind → parenting先グループid (anchor補正込み)
   const records: Rec[] = [];
+  // Lottie では「親レイヤーの opacity / 表示区間は子レイヤーに波及しない」（親子は transform だけを継承する）。
+  // 一方 Rive の Group.opacity は子孫に掛かる。そのまま写すと、opacity 0 のヌルレイヤー
+  // （AE で位置合わせ用に置く不可視のコントロール。Noto Animated Emoji などで多用される）を
+  // 親に持つ全レイヤーが消え、ファイル全体が真っ白になる。
+  // 対策: 他レイヤーの親になっているレイヤーは、自分の opacity を専用グループへ逃がす。
+  const usedAsParent = new Set<number>();
+  for (const l of layers) if (typeof l?.parent === "number") usedAsParent.add(l.parent);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const narrowWindow = (layer: any): boolean =>
+    num(layer.ip, compIp) > compIp + 0.01 || num(layer.op, compOp) < compOp - 0.01;
 
   // パス1: 各レイヤーのトランスフォームからグループを作る（親付けはまだ）
   layers.forEach((layer, arrIdx) => {
@@ -773,12 +788,17 @@ function processLayers(layers: any[], parentGroupId: string | undefined, ctx: Ct
     }
     ctx.layerTag = tag;
     const gid = newId(ctx, "grp");
-    const t = processTransform(layer.ks, gid, ctx);
+    const isNull = layer.ty === 3; // ヌルレイヤーは描画されない = 自身の opacity に意味が無い
+    const hasOwnOpacity = kIsKeyframed(layer.ks?.o) || staticNum(layer.ks?.o, 0, 100) !== 100 || narrowWindow(layer);
+    // 他の親になっていて、かつ自分に opacity/表示区間がある場合だけ逃がし用グループを作る
+    const needsOpacityGroup = !isNull && hasOwnOpacity && usedAsParent.has(indKey);
+    const opacityId = needsOpacityGroup ? `${gid}_o` : gid;
+    const t = processTransform(layer.ks, gid, ctx, isNull ? undefined : opacityId);
     const outer: GroupSpec = { id: gid, x: t.x, y: t.y };
     if (t.rotation) outer.rotation = t.rotation;
-    if (t.opacity !== 1) outer.opacity = t.opacity;
     if (t.scaleX !== 1) outer.scaleX = t.scaleX;
     if (t.scaleY !== 1) outer.scaleY = t.scaleY;
+    if (!isNull && !needsOpacityGroup && t.opacity !== 1) outer.opacity = t.opacity;
     ctx.groups.push(outer);
 
     let inner: GroupSpec | undefined;
@@ -786,13 +806,24 @@ function processLayers(layers: any[], parentGroupId: string | undefined, ctx: Ct
       inner = { id: `${gid}_a`, x: -t.ax, y: -t.ay, parent: gid };
       ctx.groups.push(inner);
     }
+    let opaque: GroupSpec | undefined;
+    if (needsOpacityGroup) {
+      opaque = { id: opacityId, x: 0, y: 0, parent: (inner ?? outer).id };
+      if (t.opacity !== 1) opaque.opacity = t.opacity;
+      ctx.groups.push(opaque);
+    }
+    if (isNull && t.opacity !== 1) {
+      // ヌルレイヤーの opacity は捨てる。捨てたことは coverage に残す
+      ctx.warnings.push(`${tag}: null layer opacity (${Math.round(t.opacity * 100)}%) ignored — nulls only pass transform to children in Lottie`);
+    }
+    // 子レイヤーは opacity グループではなく transform 側にぶら下げる（親の不透明度を継承させない）
     idOf.set(indKey, (inner ?? outer).id);
-    records.push({ layer, outer, inner, tag });
+    records.push({ layer, outer, inner, opaque, tag });
   });
 
   // パス2: 親付け解決 + 可視範囲 + コンテンツ生成
   for (const rec of records) {
-    const { layer, outer, inner, tag } = rec;
+    const { layer, outer, inner, opaque, tag } = rec;
     ctx.layerTag = tag;
     outer.parent = typeof layer.parent === "number" && idOf.has(layer.parent) ? idOf.get(layer.parent) : parentGroupId;
     if (layer.masksProperties?.length) {
@@ -803,8 +834,10 @@ function processLayers(layers: any[], parentGroupId: string | undefined, ctx: Ct
       ctx.skip("matte");
       ctx.warnings.push(`${tag}: track matte (tt) not supported`);
     }
-    applyVisibilityWindow(layer, outer, compIp, compOp, ctx);
-    const contentParent = (inner ?? outer).id;
+    // 表示区間(ip/op)も opacity と同じ扱い: 親レイヤーのものは子に波及させない。
+    // ヌルレイヤーは中身が無いので、そもそも適用する対象が無い。
+    if (layer.ty !== 3) applyVisibilityWindow(layer, opaque ?? outer, compIp, compOp, ctx);
+    const contentParent = (opaque ?? inner ?? outer).id;
 
     switch (layer.ty) {
       case 4: // shape

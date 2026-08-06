@@ -545,5 +545,67 @@ try {
   console.log("  skip: npm pack lottie-web unavailable -", e.message.split("\n")[0]);
 }
 
+// ============================================================
+// 7. 回帰: opacity 0 のヌルレイヤーを親に持つ子が消えてはいけない
+// ------------------------------------------------------------
+// Lottie/AE では親レイヤーの opacity は子に波及しない（親子は transform だけを継承する）。
+// 一方 Rive の Group.opacity は子孫に掛かる。AE で位置合わせ用に置く不可視のヌル
+// （ks.o = 0）をそのまま Group.opacity へ写すと、その配下が丸ごと消えてファイルが
+// 真っ白になる。Noto Animated Emoji はこの構造を多用しており、実際に全滅していた。
+// ============================================================
+console.log("7. null parent layer with opacity 0 must not hide its children");
+const nullParentLottie = {
+  v: "5.9.0", fr: 60, ip: 0, op: 60, w: 200, h: 200, nm: "nullparent",
+  layers: [
+    {
+      // AE の「位置合わせ用ヌル」: 描画されないので opacity 0 で置かれるのが定石
+      ddd: 0, ind: 1, ty: 3, nm: "control null", sr: 1,
+      ks: { o: { a: 0, k: 0 }, r: { a: 0, k: 0 }, p: { a: 0, k: [100, 100, 0] }, a: { a: 0, k: [0, 0, 0] }, s: { a: 0, k: [100, 100, 100] } },
+      ao: 0, ip: 0, op: 60, st: 0,
+    },
+    {
+      ddd: 0, ind: 2, ty: 4, nm: "box", sr: 1, parent: 1,
+      ks: { o: { a: 0, k: 100 }, r: { a: 0, k: 0 }, p: { a: 0, k: [0, 0, 0] }, a: { a: 0, k: [0, 0, 0] }, s: { a: 0, k: [100, 100, 100] } },
+      shapes: [
+        { ty: "gr", nm: "g", it: [
+          { ty: "rc", p: { a: 0, k: [0, 0] }, s: { a: 0, k: [80, 80] }, r: { a: 0, k: 0 } },
+          { ty: "fl", c: { a: 0, k: [1, 0, 0, 1] }, o: { a: 0, k: 100 } },
+          { ty: "tr", p: { a: 0, k: [0, 0] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+        ] },
+      ],
+      ao: 0, ip: 0, op: 60, st: 0,
+    },
+  ],
+};
+{
+  const res = importLottie(nullParentLottie, { idPrefix: "np_" });
+  check("the null layer's opacity is NOT copied onto its Rive group", () => {
+    const nullGroup = res.groups.find((g) => !g.parent);
+    assert.ok(nullGroup, "expected a root group for the null layer");
+    assert.ok(nullGroup.opacity === undefined || nullGroup.opacity === 1,
+      `null layer opacity leaked into the group: ${nullGroup.opacity}`);
+  });
+  check("dropping it is reported, not silent", () => {
+    assert.ok(res.warnings.some((w) => /null layer opacity/.test(w)), "expected a warning about the discarded null opacity");
+  });
+  const { bytes } = createRiv({
+    artboard: { name: "NP", width: res.width, height: res.height },
+    backgroundColor: "#00000000",
+    groups: res.groups, shapes: res.shapes, animations: res.animations,
+  });
+  const host = new RiveHost(PAGE_SCRIPT);
+  try {
+    const r = await host.renderFrames(Buffer.from(bytes), { frameCount: 1, fps: 60, width: 200, format: "rgba" });
+    const px = Buffer.from(r.frames[0], "base64");
+    let opaque = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] > 8) opaque++;
+    check("rendered frame is non-empty", () => {
+      assert.ok(opaque > 500, `frame is blank (only ${opaque} opaque pixels) — the null parent hid its children again`);
+    });
+  } finally {
+    await host.close();
+  }
+}
+
 if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
 console.log("\nlottie: all checks passed");
