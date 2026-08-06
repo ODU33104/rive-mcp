@@ -43,3 +43,7 @@ samples/e2e-batch-out/
 samples/test-ab-compare.gif
 samples/*.ab.apng
 samples/*.ab.gif
+
+# DLした第三者アセット(CC BY)。帰属表示なしで公開リポジトリに入れないため除外
+samples/riv.app-marketplace/
+.playwright-mcp/
