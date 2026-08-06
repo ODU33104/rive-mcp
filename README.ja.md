@@ -4,7 +4,7 @@
 
 エディタ不要・完全無料・ローカル完結の Rive (`.riv`) MCP サーバー。
 
-![Studio スクリーンショット](docs/media/studio-overview.png)
+![Studio スクリーンショット](docs/media/studio-overview-v05-ja.jpg)
 
 <p align="center"><img src="docs/media/showcase-weather.gif" width="380" alt="トークン→プロ素材→プリセット→critiqueパイプラインで生成した天気ウィジェット（アートワーク: Twemoji）"></p>
 <p align="center"><i>このアニメーションは <code>riv_create</code> だけで生成（Riveエディタ不使用）</i></p>
@@ -153,7 +153,7 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 3. **AIに頼む** — 大きな変更は左下の「エージェント」に書いて送信（選択中オブジェクト・アートボード・時刻などが自動添付される）→ チャットで「スタジオの指示を確認して」。AI が何を直したかは同じチャットに返ってくる
 4. AIが `riv_edit` / `riv_create` で修正すると、ブラウザは自動で最新状態に更新される
 
-![Studio の新機能 — SMグラフ・カーブエディタ・オニオンスキン](docs/media/studio-v04-ja.gif)
+![Studio が生成するアニメーションプレビュー](docs/media/studio-anim-preview-v05.gif)
 
 ### 機能ツアー
 
@@ -163,47 +163,47 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 
 **複数アートボード & スナップショット** — タブでアートボードを切替、編集内容を名前付きスナップショットとして保存/復元/削除できる（undo/redo とは別枠の履歴）。
 
-![アートボードタブとスナップショット](docs/media/studio-artboards-ja.png)
+![アートボードタブとスナップショット](docs/media/studio-artboards-v05-en.jpg)
 
 **タイムライン / ドープシート** — トラックごとのキーフレームを一覧・シーク。ズームと再生速度切替付き。矩形選択・Shift+クリックで複数キーフレームを選び一括ドラッグ、再生ヘッド起点でCtrl+C/Vコピペ（カーブも保持）。
 
-![タイムライン](docs/media/studio-timeline.png)
+![タイムライン](docs/media/studio-timeline-v05-en.jpg)
 
-![ドープシート複数選択](docs/media/studio-dopesheet-ja.png)
+![ドープシート複数選択](docs/media/studio-dopesheet-v05-en.jpg)
 
 **ベジェカーブエディタ** — キーフレーム区間を選んで制御点をドラッグ。hold / linear / cubic 切替と定番プリセット10種。
 
-![カーブエディタ](docs/media/studio-curve.png)
+![カーブエディタ](docs/media/studio-curve-v05-en.jpg)
 
 **State Machine グラフビュー** — レイヤー・状態・遷移をノードグラフで表示。遷移クリックで duration / exitTime / 条件を確認。リント連動で到達不能 state は赤、条件なし自己遷移は黄、再生中のアクティブ state は緑にハイライト。
 
-![SMグラフビュー](docs/media/studio-smgraph.png)
+![SMグラフビュー](docs/media/studio-smgraph-v05-en.jpg)
 
 **State Machine 実行パネル** — bool の ON/OFF・trigger の発火をブラウザから操作して遷移を確認。
 
-![SM実行パネル](docs/media/studio-sm-inputs.png)
+![SM実行パネル](docs/media/studio-sm-inputs-v05-en.jpg)
 
 **オニオンスキン** — 前後 0〜5 フレームを距離に応じた濃さで重ね表示。動きの軌跡が一目で分かる。
 
-![オニオンスキン](docs/media/studio-onion.png)
+![オニオンスキン](docs/media/studio-onion-v05-en.jpg)
 
 **直接編集** — 階層ツリーやキャンバスで選択し、インスペクタで位置・回転・スケール・色・テキストを即時変更（undo/redo 対応）。
 
-![インスペクタ編集](docs/media/studio-edit.png)
+![インスペクタ編集](docs/media/studio-edit-v05-en.jpg)
 
 **ボーンオーバーレイ & ポージング** — キャンバス上にボーン骨格を表示、一時停止中はドラッグでボーンを回転（FK）、現在のポーズを現在フレームへキーフレーム化できる。
 
-![ボーンオーバーレイ](docs/media/studio-bones-ja.png)
+![ボーンオーバーレイ](docs/media/studio-bones-v05-en.jpg)
 
 **エージェント（チャット）** — 投稿箱ではなく会話。修正依頼を書いて送ると選択中オブジェクト・アートボード・アニメーション・再生時刻が自動で添付され、AI 側が `riv_studio_notes` で受け取り、作業結果を同じスレッドに返す。スタジオを離れずに「何が変わったか」が読める。
 
-![AIへの指示](docs/media/studio-notes.png)
+![エージェントチャット](docs/media/studio-agent-chat-v05-en.jpg)
 
 ## ワンクリック書き出し
 
 Studio のツールバーで PNG / APNG / GIF / WebM を押すだけで、その場でレンダリングして書き出せる。ちょっとしたプレビュー用途なら MCP 経由の往復は不要。
 
-![エクスポートパネル](docs/media/studio-export.png)
+![エクスポートパネル](docs/media/studio-export-v05-en.jpg)
 
 ## 使用例（Claude での指示）
 

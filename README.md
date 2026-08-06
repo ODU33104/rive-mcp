@@ -8,7 +8,7 @@ rive-mcp is a free MCP (Model Context Protocol) server that gives Claude (or any
 
 Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) inside headless Chromium, so what you see is exactly what ships.
 
-![Studio screenshot](docs/media/studio-overview-en.png)
+![Studio screenshot](docs/media/studio-overview-v05-en.jpg)
 
 <p align="center"><img src="docs/media/showcase-weather.gif" width="380" alt="Weather widget built by the tokens → pro-assets → presets → critique pipeline (artwork: Twemoji)"></p>
 <p align="center"><i>This animation was generated entirely by <code>riv_create</code> — no Rive editor involved.</i></p>
@@ -131,7 +131,7 @@ Requires Node.js 20+.
 
 Works without a scene JSON too: any `.riv` can be edited property-by-property through the hierarchy + inspector.
 
-![Studio in motion — state machine graph, curve editor, onion skin](docs/media/studio-v04.gif)
+![Studio-rendered animation preview](docs/media/studio-anim-preview-v05.gif)
 
 ### Feature tour
 
@@ -141,47 +141,47 @@ Works without a scene JSON too: any `.riv` can be edited property-by-property th
 
 **Multiple artboards & snapshots** — switch between a file's artboards with a tab bar, and save, restore or delete named snapshots of your edits — a separate history from undo/redo.
 
-![Artboard tabs and snapshots](docs/media/studio-artboards-en.png)
+![Artboard tabs and snapshots](docs/media/studio-artboards-v05-en.jpg)
 
 **Timeline / dope sheet** — per-track keyframes with seek, zoom and playback-speed control. Marquee- or Shift-click to select across tracks, drag a whole selection of keyframes together, and copy/paste with Ctrl+C/V anchored at the playhead (curves carry over).
 
-![Timeline](docs/media/studio-timeline-en.png)
+![Timeline](docs/media/studio-timeline-v05-en.jpg)
 
-![Dope sheet multi-select](docs/media/studio-dopesheet-en.png)
+![Dope sheet multi-select](docs/media/studio-dopesheet-v05-en.jpg)
 
 **Bezier curve editor** — pick a keyframe span, drag the control points, or apply one of 10 easing presets. Switch any span between hold / linear / cubic.
 
-![Curve editor](docs/media/studio-curve-en.png)
+![Curve editor](docs/media/studio-curve-v05-en.jpg)
 
 **State machine graph view** — layers, states and transitions as a node graph; click a transition to see its duration / exitTime / conditions. Lint-integrated: unreachable states are red, unconditional self-transitions yellow, and the active state glows during playback.
 
-![State machine graph](docs/media/studio-smgraph-en.png)
+![State machine graph](docs/media/studio-smgraph-v05-en.jpg)
 
 **State machine playground** — flip bool inputs and fire triggers from the browser to watch transitions happen.
 
-![State machine inputs](docs/media/studio-sm-inputs-en.png)
+![State machine inputs](docs/media/studio-sm-inputs-v05-en.jpg)
 
 **Onion skinning** — ghost the surrounding 0–5 frames with distance-based opacity to check motion arcs at a glance.
 
-![Onion skin](docs/media/studio-onion-en.png)
+![Onion skin](docs/media/studio-onion-v05-en.jpg)
 
 **Direct editing** — select in the hierarchy or on the canvas, then edit position / rotation / scale / colors / text in the inspector with undo/redo.
 
-![Inspector editing](docs/media/studio-edit-en.png)
+![Inspector editing](docs/media/studio-edit-v05-en.jpg)
 
 **Bone overlay & posing** — see the bone skeleton over the canvas, drag to rotate a bone (FK) while paused, and bake the current pose into a keyframe.
 
-![Bone overlay](docs/media/studio-bones-en.png)
+![Bone overlay](docs/media/studio-bones-v05-en.jpg)
 
 **Agent chat** — a two-way conversation, not a suggestion box. Your message ships with the current selection, artboard, animation and playhead time attached; the AI picks it up via `riv_studio_notes` and posts its result back into the same thread, so you can see what it changed without leaving the Studio.
 
-![Instructions for AI](docs/media/studio-notes-en.png)
+![Agent chat](docs/media/studio-agent-chat-v05-en.jpg)
 
 ## One-click export
 
 Click PNG / APNG / GIF / WebM in the Studio toolbar to render the current animation on the spot — no MCP round-trip needed for a quick preview export.
 
-![Export panel](docs/media/studio-export-en.png)
+![Export panel](docs/media/studio-export-v05-en.jpg)
 
 ## Character animation
 
