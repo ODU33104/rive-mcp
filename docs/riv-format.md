@@ -24,7 +24,7 @@ ToC: varuint propertyKey... 0終端
 |---|---|
 | `parentId` / `objectId` / `interpolatorId` | アートボード内ローカルindex（artboard自身=0、以降ストリーム順） |
 | `animationId` (AnimationState) | アートボード内 LinearAnimation の出現順 (0-based) |
-| `stateToId` (StateTransition) | レイヤー内 state の出現順（書いた順。Entry/Any/Exit含む） |
+| `stateToId` (StateTransition) | レイヤー内 state の出現順（書いた順。**Entry/Any/Exit も同じ列に含まれ、先頭に来るとは限らない**） |
 | KeyedObject/KeyedProperty/KeyFrame | 直前の LinearAnimation に位置で帰属（parentId無し） |
 | StateTransition | **直前に書いた state** に帰属 |
 | TransitionXxxCondition | 直前の StateTransition に帰属 |
@@ -41,6 +41,11 @@ ToC: varuint propertyKey... 0終端
 6. state変化イベントの名前は AnimationState の場合**アニメーション名**が返る
 7. 生成物の検証は必ず公式ランタイム（riveHost.inspect + renderFrames）で行う。
    自己リード(readRiv)だけでは「ランタイムが受理するか」は保証されない
+8. **`stateToId` の解決に Entry=0 / Any=1 / Exit=2 を決め打ちしてはいけない**。
+   実ファイルではレイヤーごとに順序が違う（公式エディタ製のファイルで Entry が index 0/1/2/4 と
+   バラバラだった実例あり）。LayerState を継承する全型を**出現順に**数えること
+   （`isLayerStateType()` を使う）。決め打ちすると遷移先が全部ずれ、実在する state を
+   「到達不能」と誤検出する。**例外は飛ばず、それらしい結果のまま静かに壊れる**タイプのバグ
 
 ## 画像・メッシュ（実装済み・検証済み）
 

@@ -1,7 +1,7 @@
 // .riv の静的診断（壊れた/危険なファイルの検出）。riv_dump の上位互換。
 // アートボードローカルindexの算出式（globalIndex - artboardのglobal index）は
 // rivEdit.ts の delete 実装で検証済みのものと同一。
-import { readRiv, loadDefs, type RivObject } from "./rivBinary.js";
+import { readRiv, loadDefs, isLayerStateType, type RivObject } from "./rivBinary.js";
 
 export interface LintFinding {
   severity: "error" | "warning" | "info";
@@ -262,8 +262,9 @@ function lintStateMachinesAndKeyframes(objects: RivObject[], findings: LintFindi
   let animNames: string[] = [];
 
   let layerOpen = false;
-  let stateCounter = 3;
+  let stateCounter = 0;
   let stateNames: string[] = [];
+  let terminalStates = new Set<number>(); // Entry/Any/Exit の index（到達不能判定の対象外）
   let currentStateIdx: number | null = null;
   let incoming = new Map<number, number>();
   let transitions: Array<{ source: number; target: number; hasCondition: boolean; hasExitTime: boolean }> = [];
@@ -271,7 +272,8 @@ function lintStateMachinesAndKeyframes(objects: RivObject[], findings: LintFindi
 
   const finalizeLayer = () => {
     if (!layerOpen) return;
-    for (let idx = 3; idx < stateCounter; idx++) {
+    for (let idx = 0; idx < stateCounter; idx++) {
+      if (terminalStates.has(idx)) continue;
       if ((incoming.get(idx) ?? 0) === 0) {
         findings.push({
           severity: "warning",
@@ -290,8 +292,9 @@ function lintStateMachinesAndKeyframes(objects: RivObject[], findings: LintFindi
       }
     }
     layerOpen = false;
-    stateCounter = 3;
+    stateCounter = 0;
     stateNames = [];
+    terminalStates = new Set();
     currentStateIdx = null;
     incoming = new Map();
     transitions = [];
@@ -372,8 +375,12 @@ function lintStateMachinesAndKeyframes(objects: RivObject[], findings: LintFindi
       finalizeLayer();
       declaringInputs = false;
       layerOpen = true;
-      stateCounter = 3;
-      stateNames = ["Entry", "Any", "Exit"];
+      // stateToId は「レイヤー内の出現順」で Entry/Any/Exit も同じ列に並ぶ。
+      // 0/1/2 を決め打ちすると順序の違うファイルで遷移先が全部ずれ、
+      // 実在する到達可能な state を unreachable と誤検出する（docs/riv-format.md 参照）
+      stateCounter = 0;
+      stateNames = [];
+      terminalStates = new Set();
       currentStateIdx = null;
       incoming = new Map();
       transitions = [];
@@ -382,28 +389,18 @@ function lintStateMachinesAndKeyframes(objects: RivObject[], findings: LintFindi
     }
     if (!layerOpen) continue;
 
-    if (o.typeName === "EntryState") {
-      currentStateIdx = 0;
-      continue;
-    }
-    if (o.typeName === "AnyState") {
-      currentStateIdx = 1;
-      continue;
-    }
-    if (o.typeName === "ExitState") {
-      currentStateIdx = 2;
-      continue;
-    }
-    if (o.typeName === "AnimationState" || o.typeName === "BlendState1DInput") {
-      currentStateIdx = stateCounter;
-      if (o.typeName === "AnimationState" && typeof o.properties.animationId === "number") {
+    if (isLayerStateType(o.typeName)) {
+      currentStateIdx = stateCounter++;
+      if (o.typeName === "EntryState" || o.typeName === "AnyState" || o.typeName === "ExitState") {
+        stateNames[currentStateIdx] = o.typeName.replace("State", "");
+        terminalStates.add(currentStateIdx); // 到達不能判定の対象外
+      } else if (o.typeName === "AnimationState" && typeof o.properties.animationId === "number") {
         const animName = animNames[o.properties.animationId as number] ?? "?";
         stateNames[currentStateIdx] = `state#${currentStateIdx} (animation "${animName}")`;
       } else {
         stateNames[currentStateIdx] = `state#${currentStateIdx}`;
       }
-      stateCounter++;
-      if (o.typeName === "BlendState1DInput" && typeof o.properties.inputId === "number") {
+      if (typeof o.properties.inputId === "number" && o.typeName.startsWith("BlendState")) {
         usedInputIds.add(o.properties.inputId as number);
       }
       continue;

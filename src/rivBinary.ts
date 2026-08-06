@@ -53,6 +53,37 @@ export function propInfo(key: number): { name: string; type: string; owner: stri
   return propIndex?.get(key) ?? null;
 }
 
+// LayerState を継承する具象型（= ステートマシンのレイヤー内で1つの state を占める型）。
+// StateTransition.stateToId は「レイヤー内でこれらが出現した順番」を指すので、
+// 1つでも取りこぼすと以降の遷移先が全部ずれる（docs/riv-format.md「stateToId」参照）。
+const LAYER_STATE_TYPE_NAMES = new Set([
+  "LayerState", "AdvanceableState", "AnimationState", "AnyState", "EntryState", "ExitState",
+  "BlendState", "BlendState1D", "BlendState1DInput", "BlendState1DViewModel", "BlendStateDirect",
+]);
+let layerStateNames: Set<string> | null = null;
+export function isLayerStateType(name: string): boolean {
+  if (!layerStateNames) {
+    // defs から LayerState 継承チェーンを辿って実際の一覧を作る（将来型が増えても追随する）。
+    // 読めなければ上の固定リストにフォールバックする。
+    const defs = loadDefs();
+    if (!defs) return LAYER_STATE_TYPE_NAMES.has(name);
+    const nameOfFile = new Map<string, string>();
+    for (const [n, d] of Object.entries(defs.types)) nameOfFile.set(d.file, n);
+    const derives = (n: string): boolean => {
+      let cur: string | undefined = n;
+      for (let guard = 0; cur && guard < 12; guard++) {
+        if (cur === "LayerState") return true;
+        const ext: string | null | undefined = defs.types[cur]?.extends;
+        cur = ext ? nameOfFile.get(ext) : undefined;
+      }
+      return false;
+    };
+    layerStateNames = new Set([...LAYER_STATE_TYPE_NAMES]);
+    for (const n of Object.keys(defs.types)) if (derives(n)) layerStateNames.add(n);
+  }
+  return layerStateNames.has(name);
+}
+
 // defs の type 文字列 → バイナリフィールドタイプ
 // uint/bool → varuint系, double → float32, string/bytes → 長さ+データ, color → uint32
 // List<Id>（例: DataBindContext.sourcePathIds）は typeRuntime="Bytes" で CoreBytesType(id=1) 直列化。
