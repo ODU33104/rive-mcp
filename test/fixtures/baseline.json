@@ -1,0 +1,454 @@
+{
+  "generatedAt": "2026-08-20T23:45:19.684Z",
+  "note": "現在(未変更)の検出器のスナップショット。改善の目標値ではなく、後続タスクが自分の変更の効果を測るための固定参照点。このファイル自体は再生成しないこと。",
+  "detectOpts": {
+    "minArea": 576,
+    "workingMax": 1280
+  },
+  "maxElements": 120,
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "summary": {
+    "reconstructionMaeMean": 0.0005594348963157013,
+    "gradientBandScoreMean": 20.5,
+    "elementsPerMegapixelMean": 138.32658569500674,
+    "tinyFractionMean": 0.09091286776190526,
+    "negativeLeakAreaRatioMeanOverall": 0.7001281210986267,
+    "positiveCoverRateMean": 1,
+    "cycleCountTotal": 0
+  },
+  "scenes": [
+    {
+      "seed": 1,
+      "sourceSize": {
+        "width": 760,
+        "height": 520
+      },
+      "elementCount": 63,
+      "reconstructionMae": 0.00041888280278373156,
+      "guardrails": {
+        "elementsPerMegapixel": 159.41295546558703,
+        "dropped": 0,
+        "tinyFraction": 0.09523809523809523,
+        "rasterOverlapAreaRatio": 0.1750657894736842,
+        "highIouDuplicateCount": 0,
+        "gradientBandScore": 22,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 4
+      },
+      "truthAlignment": {
+        "negativeLeakAreaRatioMean": 0.6992172284644195,
+        "negativeLeakCount": 4,
+        "negativeTotal": 4,
+        "positiveCoverCount": 6,
+        "positiveTotal": 6,
+        "perNegative": [
+          {
+            "label": "title-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "number-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "noise-texture",
+            "leakRatio": 0.10866666666666666
+          },
+          {
+            "label": "gradient-band",
+            "leakRatio": 0.6882022471910112
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "header",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card-button",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileA",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileB",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "divider",
+            "bestCoverRatio": 1
+          }
+        ]
+      }
+    },
+    {
+      "seed": 2,
+      "sourceSize": {
+        "width": 760,
+        "height": 520
+      },
+      "elementCount": 54,
+      "reconstructionMae": 0.0005896476674340451,
+      "guardrails": {
+        "elementsPerMegapixel": 136.63967611336034,
+        "dropped": 0,
+        "tinyFraction": 0.12962962962962962,
+        "rasterOverlapAreaRatio": 0.1392586032388664,
+        "highIouDuplicateCount": 0,
+        "gradientBandScore": 22,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 4
+      },
+      "truthAlignment": {
+        "negativeLeakAreaRatioMean": 0.6444091760299625,
+        "negativeLeakCount": 3,
+        "negativeTotal": 4,
+        "positiveCoverCount": 6,
+        "positiveTotal": 6,
+        "perNegative": [
+          {
+            "label": "title-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "number-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "noise-texture",
+            "leakRatio": 0.04533333333333334
+          },
+          {
+            "label": "gradient-band",
+            "leakRatio": 0.5323033707865169
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "header",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card-button",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileA",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileB",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "divider",
+            "bestCoverRatio": 1
+          }
+        ]
+      }
+    },
+    {
+      "seed": 3,
+      "sourceSize": {
+        "width": 760,
+        "height": 520
+      },
+      "elementCount": 47,
+      "reconstructionMae": 0.0005698082876875447,
+      "guardrails": {
+        "elementsPerMegapixel": 118.92712550607287,
+        "dropped": 0,
+        "tinyFraction": 0.1276595744680851,
+        "rasterOverlapAreaRatio": 0.2078997975708502,
+        "highIouDuplicateCount": 0,
+        "gradientBandScore": 10,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 5
+      },
+      "truthAlignment": {
+        "negativeLeakAreaRatioMean": 0.7404541198501873,
+        "negativeLeakCount": 4,
+        "negativeTotal": 4,
+        "positiveCoverCount": 6,
+        "positiveTotal": 6,
+        "perNegative": [
+          {
+            "label": "title-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "number-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "noise-texture",
+            "leakRatio": 0.12333333333333334
+          },
+          {
+            "label": "gradient-band",
+            "leakRatio": 0.8384831460674157
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "header",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card-button",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileA",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileB",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "divider",
+            "bestCoverRatio": 1
+          }
+        ]
+      }
+    },
+    {
+      "seed": 4,
+      "sourceSize": {
+        "width": 760,
+        "height": 520
+      },
+      "elementCount": 49,
+      "reconstructionMae": 0.00045012701436850046,
+      "guardrails": {
+        "elementsPerMegapixel": 123.98785425101215,
+        "dropped": 0,
+        "tinyFraction": 0.04081632653061224,
+        "rasterOverlapAreaRatio": 0.1013006072874494,
+        "highIouDuplicateCount": 0,
+        "gradientBandScore": 24,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 3
+      },
+      "truthAlignment": {
+        "negativeLeakAreaRatioMean": 0.7111779026217229,
+        "negativeLeakCount": 3,
+        "negativeTotal": 4,
+        "positiveCoverCount": 6,
+        "positiveTotal": 6,
+        "perNegative": [
+          {
+            "label": "title-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "number-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "noise-texture",
+            "leakRatio": 0.08066666666666666
+          },
+          {
+            "label": "gradient-band",
+            "leakRatio": 0.7640449438202247
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "header",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card-button",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileA",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileB",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "divider",
+            "bestCoverRatio": 1
+          }
+        ]
+      }
+    },
+    {
+      "seed": 5,
+      "sourceSize": {
+        "width": 760,
+        "height": 520
+      },
+      "elementCount": 49,
+      "reconstructionMae": 0.0005606923606149612,
+      "guardrails": {
+        "elementsPerMegapixel": 123.98785425101215,
+        "dropped": 0,
+        "tinyFraction": 0.061224489795918366,
+        "rasterOverlapAreaRatio": 0.14003542510121458,
+        "highIouDuplicateCount": 0,
+        "gradientBandScore": 14,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 3
+      },
+      "truthAlignment": {
+        "negativeLeakAreaRatioMean": 0.6984260299625469,
+        "negativeLeakCount": 4,
+        "negativeTotal": 4,
+        "positiveCoverCount": 6,
+        "positiveTotal": 6,
+        "perNegative": [
+          {
+            "label": "title-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "number-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "noise-texture",
+            "leakRatio": 0.11533333333333333
+          },
+          {
+            "label": "gradient-band",
+            "leakRatio": 0.6783707865168539
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "header",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card-button",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileA",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileB",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "divider",
+            "bestCoverRatio": 1
+          }
+        ]
+      }
+    },
+    {
+      "seed": 6,
+      "sourceSize": {
+        "width": 760,
+        "height": 520
+      },
+      "elementCount": 66,
+      "reconstructionMae": 0.0007674512450054245,
+      "guardrails": {
+        "elementsPerMegapixel": 167.00404858299595,
+        "dropped": 0,
+        "tinyFraction": 0.09090909090909091,
+        "rasterOverlapAreaRatio": 0.25950910931174087,
+        "highIouDuplicateCount": 0,
+        "gradientBandScore": 31,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 5
+      },
+      "truthAlignment": {
+        "negativeLeakAreaRatioMean": 0.7070842696629214,
+        "negativeLeakCount": 3,
+        "negativeTotal": 4,
+        "positiveCoverCount": 6,
+        "positiveTotal": 6,
+        "perNegative": [
+          {
+            "label": "title-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "number-text",
+            "leakRatio": 1
+          },
+          {
+            "label": "noise-texture",
+            "leakRatio": 0.098
+          },
+          {
+            "label": "gradient-band",
+            "leakRatio": 0.7303370786516854
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "header",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "card-button",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileA",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "tileB",
+            "bestCoverRatio": 1
+          },
+          {
+            "label": "divider",
+            "bestCoverRatio": 1
+          }
+        ]
+      }
+    }
+  ]
+}
