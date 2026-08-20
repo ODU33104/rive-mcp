@@ -143,3 +143,66 @@ export function generateTokens(req: TokenRequest): Record<string, unknown> {
       "text/textMuted for typography. Pick sizes/spacing/radius from layout.*.",
   };
 }
+
+// ---- 実在の色からのパレット抽出 --------------------------------------------
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+/** HSL の S 相当。無彩色(グレー)を accent に選ばないための指標 */
+function saturation(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === min) return 0;
+  const l = (max + min) / 2;
+  return l > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min);
+}
+
+/**
+ * スクリーンショットから拾った色の列を、役割付きパレットに畳む。
+ * generateTokens が「seed から作る」のに対し、こちらは「実在の色から拾う」。
+ */
+export function paletteFromColors(
+  hexes: string[],
+  max = 12
+): {
+  swatches: Array<{ hex: string; usage: number }>;
+  background: string;
+  foreground: string;
+  accent: string;
+} {
+  const counts = new Map<string, number>();
+  for (const raw of hexes) {
+    const hex = raw.toUpperCase();
+    counts.set(hex, (counts.get(hex) ?? 0) + 1);
+  }
+  const swatches = [...counts.entries()]
+    .map(([hex, usage]) => ({ hex, usage }))
+    .sort((a, b) => b.usage - a.usage || a.hex.localeCompare(b.hex))
+    .slice(0, max);
+
+  const background = swatches[0]?.hex ?? "#000000";
+  let foreground = background;
+  let bestContrast = -1;
+  let accent = background;
+  let bestSat = -1;
+  for (const s of swatches) {
+    const c = contrastRatio(s.hex, background);
+    if (c > bestContrast) {
+      bestContrast = c;
+      foreground = s.hex;
+    }
+    const sat = saturation(s.hex);
+    if (sat > bestSat) {
+      bestSat = sat;
+      accent = s.hex;
+    }
+  }
+  return { swatches, background, foreground, accent };
+}

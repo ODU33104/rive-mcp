@@ -1,4 +1,5 @@
 import { buildTree } from "../dist/uiDetect.js";
+import { paletteFromColors } from "../dist/designTokens.js";
 
 let failed = 0;
 function check(label, cond, detail = "") {
@@ -37,6 +38,17 @@ const nested = [
 ];
 const n = buildTree(nested, 120);
 check("最小の親を選ぶ", n.elements[2].parent === 2, String(n.elements[2].parent));
+
+// スクリーンショットからサンプリングした色列を役割付きパレットに畳む
+const p = paletteFromColors(
+  ["#1E1E2E", "#1E1E2E", "#1E1E2E", "#1E1E2E", "#6C7BFF", "#E6E6E6", "#E6E6E6"],
+  8
+);
+check("最頻色が background", p.background === "#1E1E2E", p.background);
+check("背景と最もコントラストが高い色が foreground", p.foreground === "#E6E6E6", p.foreground);
+check("彩度が最も高い色が accent", p.accent === "#6C7BFF", p.accent);
+check("swatches は出現回数の降順", p.swatches[0].usage >= p.swatches[1].usage);
+check("max を超えない", paletteFromColors(["#111111", "#222222", "#333333"], 2).swatches.length === 2);
 
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
