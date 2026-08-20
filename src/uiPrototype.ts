@@ -162,6 +162,10 @@ export function buildPrototypeScene(input: PrototypeInput): {
     const cy = y + h / 2;
     const z = zOf.get(el.id)!;
 
+    // panel/line を塗りつぶした矩形の元画素は base 画像から消さない（raster化するのは
+    // text/image だけ）。今は fill が常に不透明色なので、より高い z の矩形がbase側の
+    // 同じ範囲を完全に隠して問題にならない。もし将来 fill を半透明にするなら、この
+    // 矩形もラスタ削り取り対象に加えないと base の元画素が透けて二重露出する
     if ((el.kind === "panel" || el.kind === "line") && el.fill) {
       const id = `el${el.id}`;
       const shape: ShapeSpec = { id, type: "rect", x: cx, y: cy, width: w, height: h, z, fill: { color: el.fill } };
