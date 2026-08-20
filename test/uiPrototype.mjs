@@ -70,6 +70,26 @@ check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
   check("z: text は祖先cardより厳密に大きい（推移律）", zText > zCard, `${zText} vs ${zCard}`);
 }
 
+// --- z順(逆パターン): image祖先 -> panel子孫。前段のfixtureは祖先が常にshape、子孫が常に
+// imageだったため、「木の順でzを振る」ことと「shapeを全部images(1000+)より前に置く」
+// (rivWriter.tsの既定値そのもの)が同じ結果になり、実装を後者に差し替えても見分けが
+// つかなかった。ここでは祖先をimage、子孫をpanelにして組を逆転させ、両者が一致しない
+// ケースを作る
+{
+  const inverted = [
+    { id: 1, parent: null, children: [2], kind: "image", rect: [0, 0, 300, 200], role: "image" },
+    { id: 2, parent: 1, children: [], kind: "panel", rect: [40, 40, 120, 40], fill: "#6C7BFF", role: "button" },
+  ];
+  const b = buildPrototypeScene({
+    elements: inverted, source: { width: 300, height: 200 }, interactions: false, motion: {},
+  });
+  const zImage = b.spec.images.find((im) => im.id === "el1_image")?.z;
+  const zPanel = b.spec.shapes.find((s) => s.id === "el2")?.z;
+  check("z(逆パターン): image祖先とpanel子孫がすべて見つかる", zImage !== undefined && zPanel !== undefined,
+    `${zImage},${zPanel}`);
+  check("z(逆パターン): panel子孫はimage祖先より厳密に大きい", zPanel > zImage, `${zPanel} vs ${zImage}`);
+}
+
 // --- idle: RoleMotion.idle を持つ要素だけに適用されるフィルタそのものを検証する。
 // 旧テストは json.includes("idle") だけを見ており、アニメーション名が"idle"であれば
 // フィルタを反転/削除しても常に通ってしまっていた（対象0件でもタイムライン自体は作る仕様のため）
