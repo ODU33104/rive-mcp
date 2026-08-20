@@ -162,24 +162,26 @@ export function buildPrototypeScene(input: PrototypeInput): {
     const cy = y + h / 2;
     const z = zOf.get(el.id)!;
 
-    // panel/line を塗りつぶした矩形の元画素は base 画像から消さない（raster化するのは
-    // text/image だけ）。今は fill が常に不透明色なので、より高い z の矩形がbase側の
-    // 同じ範囲を完全に隠して問題にならない。もし将来 fill を半透明にするなら、この
+    // renderMode:"vector-panel" は「ベクター化の資格がある」の意味であって「必ずベクター化
+    // される」ではない。実際にベクター矩形として再構築するのは fill を持つ場合だけ(このガード)。
+    // 塗りつぶした矩形の元画素を base 画像から消さないのは、raster化するのが
+    // renderMode:"raster" 要素だけだから。今は fill が常に不透明色なので、より高い z の矩形が
+    // base側の同じ範囲を完全に隠して問題にならない。もし将来 fill を半透明にするなら、この
     // 矩形もラスタ削り取り対象に加えないと base の元画素が透けて二重露出する
-    if ((el.kind === "panel" || el.kind === "line") && el.fill) {
+    if (el.renderMode === "vector-panel" && el.fill) {
       const id = `el${el.id}`;
       const shape: ShapeSpec = { id, type: "rect", x: cx, y: cy, width: w, height: h, z, fill: { color: el.fill } };
       if (el.cornerRadius) shape.cornerRadius = el.cornerRadius;
       if (el.stroke) shape.stroke = { color: el.stroke.color, thickness: el.stroke.width };
       shapes.push(shape);
       targetIdOf.set(el.id, id);
-    } else if (el.kind === "text" || el.kind === "image") {
+    } else if (el.renderMode === "raster") {
       const name = `el${el.id}_${el.role}`; // id を含むので role が衝突しても一意
       rasterRegions.push({ name, polygon: polygonOf(rect) });
       images.push({ id: name, x: cx, y: cy, scale: 1, z }); // bytes は attachRasterAssets が後で埋める
       targetIdOf.set(el.id, name);
     }
-    // fill の無い panel/line は可視要素を持たない（base 画像側にそのまま残るだけ）
+    // fill の無い vector-panel 要素は可視要素を持たない（base 画像側にそのまま残るだけ）
   }
 
   // 5) entrance タイムライン

@@ -355,12 +355,15 @@ window.riveApi = {
       sampledColors.push({ hex: color, weight: rectW * rectH });
 
       // 充填率で「面」か「非矩形の絵」かを分ける
-      let kind = fillRatio >= 0.85 ? "panel" : "image";
+      let semanticHint = fillRatio >= 0.85 ? "panel" : "image";
       // 細長く薄いものは区切り線
-      if (kind === "panel" && (h <= 3 * scale || w <= 3 * scale)) kind = "line";
+      if (semanticHint === "panel" && (h <= 3 * scale || w <= 3 * scale)) semanticHint = "line";
+      // panel/line はベクター矩形として再構築できる形。renderMode はあくまで「資格」で、
+      // 実際にベクター化されるかは fill の有無で uiPrototype.ts 側が決める
+      const renderMode = (semanticHint === "panel" || semanticHint === "line") ? "vector-panel" : "raster";
 
       let cornerRadius = 0;
-      if (kind === "panel") {
+      if (semanticHint === "panel") {
         // 四隅から対角に走査し、成分に入るまでの距離 d を測る。
         // 半径 r の丸角では中心が (r, r) にあり、対角上の点 (t, t) が図形内に入るのは
         // 中心からの距離² = 2(t-r)² <= r² を解いて t >= r(1 - 1/√2) のとき。
@@ -395,7 +398,8 @@ window.riveApi = {
       }
 
       regions.push({
-        kind,
+        renderMode,
+        semanticHint,
         rect: [Math.round(c.minX * inv), Math.round(c.minY * inv), rectW, rectH],
         cornerRadius,
         fill: color,
@@ -469,7 +473,8 @@ window.riveApi = {
       // 「小さい文字がたくさんある画面」でbackgroundを誤って乗っ取らないようにする。
       sampledColors.push({ hex: color, weight: rectW * rectH });
       regions.push({
-        kind: "text",
+        renderMode: "raster",
+        semanticHint: "text",
         rect: [Math.round(l.minX * inv), Math.round(l.minY * inv), rectW, rectH],
         fill: color,
         fontSizePx: Math.round(h * 1.3),  // 大文字高 ≒ フォントサイズの 0.7〜0.75

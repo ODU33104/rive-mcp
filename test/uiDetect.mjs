@@ -9,8 +9,8 @@ function check(label, cond, detail = "") {
 
 // 外側カード(0,0,200,200) の中にボタン(20,20,60,30) がある
 const regions = [
-  { kind: "panel", rect: [0, 0, 200, 200], fill: "#1E1E2E" },
-  { kind: "panel", rect: [20, 20, 60, 30], fill: "#6C7BFF" },
+  { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 200, 200], fill: "#1E1E2E" },
+  { renderMode: "vector-panel", semanticHint: "panel", rect: [20, 20, 60, 30], fill: "#6C7BFF" },
 ];
 const { elements, dropped } = buildTree(regions, 120);
 
@@ -23,7 +23,7 @@ check("dropped は 0", dropped === 0);
 
 // 面積の大きい順に maxElements で切る。落とした数を必ず返す
 const many = Array.from({ length: 5 }, (_, i) => ({
-  kind: "panel", rect: [0, 0, 10 * (i + 1), 10], fill: "#000000",
+  renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 10 * (i + 1), 10], fill: "#000000",
 }));
 const cut = buildTree(many, 3);
 check("maxElements で 3 件に絞る", cut.elements.length === 3, String(cut.elements.length));
@@ -32,9 +32,9 @@ check("残るのは面積上位", cut.elements.every((e) => e.rect[2] >= 30));
 
 // 親候補が複数あるときは「95%以上含む最小の矩形」を選ぶ
 const nested = [
-  { kind: "panel", rect: [0, 0, 300, 300], fill: "#111111" },
-  { kind: "panel", rect: [0, 0, 200, 200], fill: "#222222" },
-  { kind: "panel", rect: [10, 10, 50, 50], fill: "#333333" },
+  { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 300, 300], fill: "#111111" },
+  { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 200, 200], fill: "#222222" },
+  { renderMode: "vector-panel", semanticHint: "panel", rect: [10, 10, 50, 50], fill: "#333333" },
 ];
 const n = buildTree(nested, 120);
 check("最小の親を選ぶ", n.elements[2].parent === 2, String(n.elements[2].parent));
@@ -96,7 +96,8 @@ try {
     btn && btn.rect.join(","));
   check("矩形の寸法が合う", btn && Math.abs(btn.rect[2] - 120) <= 2 && Math.abs(btn.rect[3] - 48) <= 2,
     btn && btn.rect.join(","));
-  check("kind は panel", btn && btn.kind === "panel", btn && btn.kind);
+  check("renderMode は vector-panel", btn && btn.renderMode === "vector-panel", btn && btn.renderMode);
+  check("semanticHint は panel", btn && btn.semanticHint === "panel", btn && btn.semanticHint);
   check("角Rなしは 0", btn && btn.cornerRadius === 0, btn && String(btn.cornerRadius));
   check("色を収集している", det.sampledColors.length > 0);
 } finally {
@@ -172,9 +173,11 @@ try {
       <text x="20" y="40" font-family="sans-serif" font-size="16" fill="#E6E6E6">Dashboard</text>
     </svg>`);
   const td = await hostText.detectUiRegions(textPng, { minArea: 16, workingMax: 1280 });
-  const textRegion = td.regions.find((r) => r.kind === "text");
-  check("テキストを検出", !!textRegion, td.regions.map((r) => r.kind).join(","));
-  check("1行にまとまる", td.regions.filter((r) => r.kind === "text").length === 1);
+  const textRegion = td.regions.find((r) => r.semanticHint === "text");
+  check("テキストを検出", !!textRegion, td.regions.map((r) => r.semanticHint).join(","));
+  check("1行にまとまる", td.regions.filter((r) => r.semanticHint === "text").length === 1);
+  check("テキストの renderMode は raster", textRegion && textRegion.renderMode === "raster",
+    textRegion && textRegion.renderMode);
   check("fontSize を概算", textRegion && textRegion.fontSizePx >= 10 && textRegion.fontSizePx <= 24,
     textRegion && String(textRegion.fontSizePx));
 } finally {
@@ -200,8 +203,8 @@ function walkParentChain(elements, startId, maxSteps) {
 {
   const dup = buildTree(
     [
-      { kind: "panel", rect: [0, 0, 100, 100], fill: "#111111" },
-      { kind: "panel", rect: [2, 0, 100, 100], fill: "#222222" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 100, 100], fill: "#111111" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [2, 0, 100, 100], fill: "#222222" },
     ],
     120
   );
@@ -215,8 +218,8 @@ function walkParentChain(elements, startId, maxSteps) {
 {
   const eq = buildTree(
     [
-      { kind: "panel", rect: [0, 0, 100, 100], fill: "#111111" },
-      { kind: "panel", rect: [0, 0, 100, 100], fill: "#222222" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 100, 100], fill: "#111111" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 100, 100], fill: "#222222" },
     ],
     120
   );
@@ -233,10 +236,10 @@ function walkParentChain(elements, startId, maxSteps) {
   // (形だけのチェックではなく、実際にリンクを辿るトラバーサル)
   const mixed = buildTree(
     [
-      { kind: "panel", rect: [0, 0, 500, 500], fill: "#0A0A0A" },
-      { kind: "panel", rect: [10, 10, 200, 200], fill: "#111111" },
-      { kind: "panel", rect: [12, 10, 200, 200], fill: "#131313" }, // 重複検出
-      { kind: "panel", rect: [20, 20, 40, 20], fill: "#6C7BFF" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 500, 500], fill: "#0A0A0A" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [10, 10, 200, 200], fill: "#111111" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [12, 10, 200, 200], fill: "#131313" }, // 重複検出
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [20, 20, 40, 20], fill: "#6C7BFF" },
     ],
     120
   );
@@ -251,8 +254,8 @@ function walkParentChain(elements, startId, maxSteps) {
   // 既存の「本物の入れ子」は引き続き機能すること(小さい矩形がはるかに大きい矩形の中にある)
   const nest2 = buildTree(
     [
-      { kind: "panel", rect: [0, 0, 400, 400], fill: "#000000" },
-      { kind: "panel", rect: [50, 50, 20, 20], fill: "#FFFFFF" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 400, 400], fill: "#000000" },
+      { renderMode: "vector-panel", semanticHint: "panel", rect: [50, 50, 20, 20], fill: "#FFFFFF" },
     ],
     120
   );

@@ -27,9 +27,9 @@ check("未知の役割は panel 相当にフォールバック", motionFor("unkn
 import { buildPrototypeScene } from "../dist/uiPrototype.js";
 
 const elements = [
-  { id: 1, parent: null, children: [2, 3], kind: "panel", rect: [0, 0, 400, 300], fill: "#1E1E2E", cornerRadius: 0, role: "background" },
-  { id: 2, parent: 1, children: [], kind: "panel", rect: [20, 20, 120, 40], fill: "#6C7BFF", cornerRadius: 8, role: "button" },
-  { id: 3, parent: 1, children: [], kind: "text",  rect: [20, 80, 200, 18], fill: "#E6E6E6", fontSizePx: 16, role: "text" },
+  { id: 1, parent: null, children: [2, 3], renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 400, 300], fill: "#1E1E2E", cornerRadius: 0, role: "background" },
+  { id: 2, parent: 1, children: [], renderMode: "vector-panel", semanticHint: "panel", rect: [20, 20, 120, 40], fill: "#6C7BFF", cornerRadius: 8, role: "button" },
+  { id: 3, parent: 1, children: [], renderMode: "raster", semanticHint: "text",  rect: [20, 80, 200, 18], fill: "#E6E6E6", fontSizePx: 16, role: "text" },
 ];
 const built = buildPrototypeScene({
   elements,
@@ -53,9 +53,9 @@ check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
 // 変わっても壊れないように）
 {
   const nested = [
-    { id: 1, parent: null, children: [2], kind: "panel", rect: [0, 0, 300, 300], fill: "#111111", role: "card" },
-    { id: 2, parent: 1, children: [3], kind: "panel", rect: [20, 20, 200, 100], fill: "#6C7BFF", role: "button" },
-    { id: 3, parent: 2, children: [], kind: "text", rect: [30, 30, 100, 20], fill: "#FFFFFF", role: "text" },
+    { id: 1, parent: null, children: [2], renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 300, 300], fill: "#111111", role: "card" },
+    { id: 2, parent: 1, children: [3], renderMode: "vector-panel", semanticHint: "panel", rect: [20, 20, 200, 100], fill: "#6C7BFF", role: "button" },
+    { id: 3, parent: 2, children: [], renderMode: "raster", semanticHint: "text", rect: [30, 30, 100, 20], fill: "#FFFFFF", role: "text" },
   ];
   const b = buildPrototypeScene({
     elements: nested, source: { width: 300, height: 300 }, interactions: false, motion: {},
@@ -77,8 +77,8 @@ check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
 // ケースを作る
 {
   const inverted = [
-    { id: 1, parent: null, children: [2], kind: "image", rect: [0, 0, 300, 200], role: "image" },
-    { id: 2, parent: 1, children: [], kind: "panel", rect: [40, 40, 120, 40], fill: "#6C7BFF", role: "button" },
+    { id: 1, parent: null, children: [2], renderMode: "raster", semanticHint: "image", rect: [0, 0, 300, 200], role: "image" },
+    { id: 2, parent: 1, children: [], renderMode: "vector-panel", semanticHint: "panel", rect: [40, 40, 120, 40], fill: "#6C7BFF", role: "button" },
   ];
   const b = buildPrototypeScene({
     elements: inverted, source: { width: 300, height: 200 }, interactions: false, motion: {},
@@ -95,8 +95,8 @@ check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
 // フィルタを反転/削除しても常に通ってしまっていた（対象0件でもタイムライン自体は作る仕様のため）
 {
   const idleFixture = [
-    { id: 1, parent: null, children: [2], kind: "panel", rect: [0, 0, 300, 300], fill: "#111111", role: "card" }, // idle: float を持つ
-    { id: 2, parent: 1, children: [], kind: "text", rect: [20, 20, 100, 20], fill: "#FFFFFF", role: "text" }, // idle を持たない
+    { id: 1, parent: null, children: [2], renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 300, 300], fill: "#111111", role: "card" }, // idle: float を持つ
+    { id: 2, parent: 1, children: [], renderMode: "raster", semanticHint: "text", rect: [20, 20, 100, 20], fill: "#FFFFFF", role: "text" }, // idle を持たない
   ];
   const withAmbient = buildPrototypeScene({
     elements: idleFixture, source: { width: 300, height: 300 }, interactions: false, motion: { ambient: true },
@@ -118,7 +118,7 @@ check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
 // 移してから、グループのscaleYを0→1する構造そのものを検証する
 {
   const chartFixture = [
-    { id: 1, parent: null, children: [], kind: "panel", rect: [40, 60, 80, 120], fill: "#22AA55", role: "chart" },
+    { id: 1, parent: null, children: [], renderMode: "vector-panel", semanticHint: "panel", rect: [40, 60, 80, 120], fill: "#22AA55", role: "chart" },
   ];
   const b = buildPrototypeScene({
     elements: chartFixture, source: { width: 200, height: 200 }, interactions: false, motion: { entranceMs: 800 },
@@ -140,7 +140,7 @@ check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
 
 // 画像外へはみ出す矩形はクランプし、警告に載せる（黙って直さない）
 const over = buildPrototypeScene({
-  elements: [{ id: 1, parent: null, children: [], kind: "panel", rect: [380, 0, 100, 50], fill: "#FFFFFF", role: "panel" }],
+  elements: [{ id: 1, parent: null, children: [], renderMode: "vector-panel", semanticHint: "panel", rect: [380, 0, 100, 50], fill: "#FFFFFF", role: "panel" }],
   source: { width: 400, height: 300 },
   interactions: false,
   motion: {},

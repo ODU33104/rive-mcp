@@ -10,7 +10,10 @@ export interface OverlayLabel {
   color: string;
 }
 
-const KIND_COLOR: Record<string, string> = {
+// semanticHint(panel/text/image/line)で色分けする。オーバーレイは人間が要素にroleを
+// 割り当てるための下見であり、見るべきは「これは意味的に何か」であって「どう描画されるか」
+// (renderMode)ではないため
+const SEMANTIC_COLOR: Record<string, string> = {
   panel: "#3D8BFD",
   text: "#22C55E",
   image: "#F59E0B",
@@ -26,7 +29,7 @@ export function overlayLabels(elements: UiElement[]): OverlayLabel[] {
       // ラベルは枠の左上。画像の外にはみ出すときは内側へ寄せる
       labelX: x + 2,
       labelY: y < 16 ? y + 16 : y - 2,
-      color: KIND_COLOR[e.kind] ?? "#FFFFFF",
+      color: SEMANTIC_COLOR[e.semanticHint] ?? "#FFFFFF",
     };
   });
 }

@@ -1665,7 +1665,7 @@ server.registerTool(
   {
     title: "Detect UI elements in a screenshot",
     description:
-      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with pixel-exact rects, corner radii and fill colours, plus a numbered overlay PNG. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
+      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with pixel-exact rects, corner radii and fill colours, plus a numbered overlay PNG. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
     inputSchema: {
       imagePath: z.string().describe("Screenshot or design comp (PNG/JPEG)"),
       overlayPath: z.string().optional().describe("Where to write the numbered overlay PNG"),

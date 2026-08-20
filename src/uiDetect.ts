@@ -1,10 +1,20 @@
 // スクリーンショット検出結果の型と、bbox の包含関係から親子ツリーを組む純関数。
 // ピクセル処理は pageScript.ts 側（canvas が要るため）。ここは Node 単体でテストできる。
 
-export type UiKind = "panel" | "text" | "image" | "line";
+// 「どう描くか」(renderMode)と「意味的に何か」(semanticHint)は独立した問いなので分けて持つ。
+// 誤ってvector化すると見た目そのものが壊れる(非矩形の絵やグラデーションを直線パスに潰す)一方、
+// 誤ってraster化しても見た目は正しいまま編集性を失うだけ、という失敗コストの非対称性があるため、
+// renderModeの判定は将来「迷ったらraster」に寄せる余地を残す必要がある。semanticHintと1本の
+// kindに統合すると、その判定基準の変更がロール付け(panel/text/image/lineの意味)まで
+// 巻き込んでしまい、両者を同時に動かさざるを得なくなる。
+export type RenderMode = "vector-panel" | "raster";
+export type SemanticHint = "panel" | "text" | "image" | "line";
 
 export interface RawRegion {
-  kind: UiKind;
+  /** vector-panel は「ベクター化の資格がある」の意味であり「必ずベクター化される」ではない。
+   *  実際にベクター化されるかは fill の有無など下流(uiPrototype.ts)の条件次第 */
+  renderMode: RenderMode;
+  semanticHint: SemanticHint;
   /** [x, y, w, h] 元解像度のピクセル座標 */
   rect: [number, number, number, number];
   cornerRadius?: number;
