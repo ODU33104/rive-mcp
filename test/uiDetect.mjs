@@ -126,5 +126,23 @@ try {
   await hostRounded.close();
 }
 
+// 非対称な角R(上だけ丸い)を検証。d=0(直角)を中央値の前に除外していないと、
+// 4値の中央値に直角側の0が混ざって真の半径の半分程度に潰れる(Finding 2 の回帰テスト)
+const hostTopRounded = new RiveHost(PAGE_SCRIPT);
+try {
+  const pngTopRounded = await hostTopRounded.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">
+      <rect width="320" height="240" fill="#1E1E2E"/>
+      <path d="M 52 60 H 148 A 12 12 0 0 1 160 72 V 108 H 40 V 72 A 12 12 0 0 1 52 60 Z" fill="#6C7BFF"/>
+    </svg>`);
+  const detTopRounded = await hostTopRounded.detectUiRegions(pngTopRounded, { minArea: 576, workingMax: 1280 });
+  const btnTopRounded = detTopRounded.regions.find((r) => r.fill === "#6C7BFF");
+  check("上だけ丸い矩形を検出", !!btnTopRounded);
+  check("角Rが直角側に引きずられず真の半径(12px)の近傍", btnTopRounded && Math.abs(btnTopRounded.cornerRadius - 12) <= 3,
+    btnTopRounded && String(btnTopRounded.cornerRadius));
+} finally {
+  await hostTopRounded.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
