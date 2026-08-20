@@ -345,7 +345,14 @@ window.riveApi = {
       if (w * h * inv * inv < minArea) continue;
       const fillRatio = c.count / (w * h);
       const color = hex(c.r, c.g, c.b);
-      sampledColors.push(color);
+      // usage は出現回数ではなく面積(元解像度ピクセル数)で重み付けする(designTokens.ts
+      // paletteFromColors 参照)。画面全体を覆う背景1件と小さいボタン20件を同じ「1票」で
+      // 数えると、面積では劣勢のボタン色がbackground(最頻色)に選ばれてしまう。
+      // ここでの面積は regions.rect と同じ丸め後・元解像度の値を使う(workingMax縮小時の
+      // scale混入を避けるため。rect算出前のw*h*inv*invではなく、後で使うのと同じ値を使う)。
+      const rectW = Math.round(w * inv);
+      const rectH = Math.round(h * inv);
+      sampledColors.push({ hex: color, weight: rectW * rectH });
 
       // 充填率で「面」か「非矩形の絵」かを分ける
       let kind = fillRatio >= 0.85 ? "panel" : "image";
@@ -389,12 +396,7 @@ window.riveApi = {
 
       regions.push({
         kind,
-        rect: [
-          Math.round(c.minX * inv),
-          Math.round(c.minY * inv),
-          Math.round(w * inv),
-          Math.round(h * inv),
-        ],
+        rect: [Math.round(c.minX * inv), Math.round(c.minY * inv), rectW, rectH],
         cornerRadius,
         fill: color,
       });
@@ -460,10 +462,15 @@ window.riveApi = {
       const h = (l.maxY - l.minY + 1) * inv;
       if (w < 8 || h < 6) continue;   // ノイズ 1 粒を「文字」と言わない
       const color = hex(l.r / l.n, l.g / l.n, l.b / l.n);
-      sampledColors.push(color);
+      const rectW = Math.round(w);
+      const rectH = Math.round(h);
+      // panel/image と同じ理由(designTokens.ts paletteFromColors参照)で面積weightを渡す。
+      // テキスト行は面積が小さいことが多いが、件数(=行の本数)ではなく面積で数えることで
+      // 「小さい文字がたくさんある画面」でbackgroundを誤って乗っ取らないようにする。
+      sampledColors.push({ hex: color, weight: rectW * rectH });
       regions.push({
         kind: "text",
-        rect: [Math.round(l.minX * inv), Math.round(l.minY * inv), Math.round(w), Math.round(h)],
+        rect: [Math.round(l.minX * inv), Math.round(l.minY * inv), rectW, rectH],
         fill: color,
         fontSizePx: Math.round(h * 1.3),  // 大文字高 ≒ フォントサイズの 0.7〜0.75
       });

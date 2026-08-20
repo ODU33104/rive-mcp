@@ -146,12 +146,26 @@ export function generateTokens(req: TokenRequest): Record<string, unknown> {
 
 // ---- 実在の色からのパレット抽出 --------------------------------------------
 
+/** 面積つきの色サンプル。ピクセル数(元解像度)を weight として渡す */
+export interface WeightedColor {
+  hex: string;
+  weight: number;
+}
+/** 呼び出し元が面積を持たない場合は bare string で渡せる(weight=1 として扱う) */
+export type ColorSample = string | WeightedColor;
+
 /**
  * スクリーンショットから拾った色の列を、役割付きパレットに畳む。
  * generateTokens が「seed から作る」のに対し、こちらは「実在の色から拾う」。
+ *
+ * usage は「出現回数」ではなく「面積(weight)の合計」で決める。画面全体を覆う
+ * 1枚の背景パネルと、20個の小さいボタンでは、背景は検出成分としては1件しか
+ * 出現しないがボタンは20件出現する。件数で数えると面積では圧倒的少数派の
+ * ボタン色が background(最頻色)に選ばれてしまう(実測でこの誤りが起きていた)。
+ * 面積で重み付けすれば、画面に占める実際の存在感どおりに色が選ばれる。
  */
 export function paletteFromColors(
-  hexes: string[],
+  colors: ColorSample[],
   max = 12
 ): {
   swatches: Array<{ hex: string; usage: number }>;
@@ -160,9 +174,11 @@ export function paletteFromColors(
   accent: string;
 } {
   const counts = new Map<string, number>();
-  for (const raw of hexes) {
-    const hex = raw.toUpperCase();
-    counts.set(hex, (counts.get(hex) ?? 0) + 1);
+  for (const sample of colors) {
+    const { hex: rawHex, weight } =
+      typeof sample === "string" ? { hex: sample, weight: 1 } : sample;
+    const hex = rawHex.toUpperCase();
+    counts.set(hex, (counts.get(hex) ?? 0) + weight);
   }
   const swatches = [...counts.entries()]
     .map(([hex, usage]) => ({ hex, usage }))

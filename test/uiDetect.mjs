@@ -58,6 +58,25 @@ const near = paletteFromColors(
 );
 check("色味付きの黒より本物のaccentが勝つ", near.accent === "#6C7BFF", near.accent);
 
+// 回帰(Bug 2・Important): usage は「出現回数」ではなく「面積」で重み付けする。
+// 画面全体を覆う白い1領域 vs 20個の小さい青いボタンでは、面積では白が圧倒的優位でも
+// 出現回数では青が20対1で勝ってしまい、background(最頻色)が青になる誤りが実際に起きていた。
+const weighted = paletteFromColors(
+  [
+    { hex: "#FFFFFF", weight: 200000 }, // 画面全体を覆う白背景1領域
+    ...Array.from({ length: 20 }, () => ({ hex: "#3D8BFD", weight: 400 })), // 小さい青ボタン20個
+  ],
+  8
+);
+check("面積の大きい白がbackground(件数では青が20対1で勝つが面積では白が勝つ)",
+  weighted.background === "#FFFFFF", weighted.background);
+check("面積の小さい青がaccent", weighted.accent === "#3D8BFD", weighted.accent);
+
+// bare string も従来通り weight=1 として扱えること(既存呼び出し元との後方互換)
+const bareString = paletteFromColors(["#1E1E2E", "#1E1E2E", "#6C7BFF"], 8);
+check("bare stringはweight=1として集計される(後方互換)",
+  bareString.swatches.find((s) => s.hex === "#1E1E2E").usage === 2);
+
 // ブラウザ内ピクセル検出: 合成SVGを既知の矩形として描き、検出結果が元解像度で戻ることを確認
 import { RiveHost } from "../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../dist/pageScript.js";

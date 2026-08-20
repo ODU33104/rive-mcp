@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type Page } from "playwright-core";
 import type { RawRegion } from "./uiDetect.js";
 import type { OverlayLabel } from "./uiOverlay.js";
+import type { WeightedColor } from "./designTokens.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 const ORIGIN = "http://rive-mcp.local";
@@ -221,7 +222,7 @@ export class RiveHost {
     width: number;
     height: number;
     regions: RawRegion[];
-    sampledColors: string[];
+    sampledColors: WeightedColor[];
   }> {
     return this.call("detectUiRegions", pngBytes.toString("base64"), opts);
   }
