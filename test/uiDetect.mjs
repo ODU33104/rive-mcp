@@ -84,5 +84,28 @@ try {
   await host.close();
 }
 
+// 縮小パス(workingMax超過時)の座標復元を検証。同じ固定具を workingMax=160 で強制的に
+// scale=0.5 にかけ、inv(=1/scale)を掛け忘れる/二重に掛けるとここで壊れることを確認する
+const hostDown = new RiveHost(PAGE_SCRIPT);
+try {
+  const pngDown = await hostDown.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">
+      <rect width="320" height="240" fill="#1E1E2E"/>
+      <rect x="40" y="60" width="120" height="48" fill="#6C7BFF"/>
+    </svg>`);
+  const detDown = await hostDown.detectUiRegions(pngDown, { minArea: 576, workingMax: 160 });
+  check("縮小時も元解像度を返す", detDown.width === 320 && detDown.height === 240,
+    `${detDown.width}x${detDown.height}`);
+  const btnDown = detDown.regions.find((r) => r.fill === "#6C7BFF");
+  check("縮小時も矩形を検出", !!btnDown);
+  check("縮小時の位置が元解像度に復元される", btnDown && Math.abs(btnDown.rect[0] - 40) <= 4 && Math.abs(btnDown.rect[1] - 60) <= 4,
+    btnDown && btnDown.rect.join(","));
+  check("縮小時の寸法が元解像度に復元される", btnDown && Math.abs(btnDown.rect[2] - 120) <= 4 && Math.abs(btnDown.rect[3] - 48) <= 4,
+    btnDown && btnDown.rect.join(","));
+  check("縮小時も角Rなしは 0", btnDown && btnDown.cornerRadius === 0, btnDown && String(btnDown.cornerRadius));
+} finally {
+  await hostDown.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
