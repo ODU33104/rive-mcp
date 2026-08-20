@@ -107,5 +107,24 @@ try {
   await hostDown.close();
 }
 
+// 角Rの逆算係数を検証。真の半径12pxの丸角矩形で cornerRadius が概ね一致することを確認する。
+// 直角矩形の "=== 0" だけだと係数を何倍にしても通ってしまう（d=0 は係数に関係なく0のため）ので、
+// 実際に丸い矩形を検出させないと係数の誤りを検出できない
+const hostRounded = new RiveHost(PAGE_SCRIPT);
+try {
+  const pngRounded = await hostRounded.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">
+      <rect width="320" height="240" fill="#1E1E2E"/>
+      <rect x="40" y="60" width="120" height="48" rx="12" fill="#6C7BFF"/>
+    </svg>`);
+  const detRounded = await hostRounded.detectUiRegions(pngRounded, { minArea: 576, workingMax: 1280 });
+  const btnRounded = detRounded.regions.find((r) => r.fill === "#6C7BFF");
+  check("丸角矩形を検出", !!btnRounded);
+  check("角Rが真の半径(12px)の近傍", btnRounded && Math.abs(btnRounded.cornerRadius - 12) <= 3,
+    btnRounded && String(btnRounded.cornerRadius));
+} finally {
+  await hostRounded.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

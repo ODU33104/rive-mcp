@@ -354,7 +354,13 @@ window.riveApi = {
 
       let cornerRadius = 0;
       if (kind === "panel") {
-        // 四隅から対角に走査し、成分に入るまでの距離を測る。中央値 × √2 が角R
+        // 四隅から対角に走査し、成分に入るまでの距離 d を測る。
+        // 半径 r の丸角では中心が (r, r) にあり、対角上の点 (t, t) が図形内に入るのは
+        // 中心からの距離² = 2(t-r)² <= r² を解いて t >= r(1 - 1/√2) のとき。
+        // つまり最初にヒットする d ≈ 0.2929r なので、r に戻す係数は 1/(1 - 1/√2) = 2+√2 ≈ 3.414
+        // であって √2 ではない（誤って √2 に「簡略化」しないこと。過去に係数を取り違えて
+        // 真の半径の 41% しか報告できていなかった実績あり）。
+        // 整数格子の probe は d を切り上げて返すため、-0.5 の半格子補正を掛けてから係数を掛ける。
         const probe = (cx, cy, dx, dy) => {
           for (let d = 0; d < Math.min(w, h) / 2; d++) {
             const x = cx + dx * d, y = cy + dy * d;
@@ -368,10 +374,17 @@ window.riveApi = {
           probe(c.maxX, c.minY, -1, 1),
           probe(c.minX, c.maxY, 1, -1),
           probe(c.maxX, c.maxY, -1, -1),
-        ].sort((a, b) => a - b);
-        const median = (ds[1] + ds[2]) / 2;
-        cornerRadius = Math.round(Math.min(24, Math.max(0, median * Math.SQRT2 * inv)));
-        if (cornerRadius < 2) cornerRadius = 0;
+        ];
+        // d=0（直角の角）は「半径0のサンプル」ではなく「丸くない角」の意味。
+        // 上だけ丸い等の非対称な角Rでは直角側の0が中央値を押し下げるので、中央値の前に除外する
+        const rounded = ds.filter((d) => d > 0).sort((a, b) => a - b);
+        if (rounded.length > 0) {
+          const mid = rounded.length >> 1;
+          const median =
+            rounded.length % 2 === 1 ? rounded[mid] : (rounded[mid - 1] + rounded[mid]) / 2;
+          cornerRadius = Math.round(Math.min(24, Math.max(0, median - 0.5) * (2 + Math.SQRT2) * inv));
+          if (cornerRadius < 2) cornerRadius = 0;
+        }
       }
 
       regions.push({
