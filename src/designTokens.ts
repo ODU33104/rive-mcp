@@ -145,24 +145,6 @@ export function generateTokens(req: TokenRequest): Record<string, unknown> {
 }
 
 // ---- 実在の色からのパレット抽出 --------------------------------------------
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace("#", "");
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
-}
-
-/** HSL の S 相当。無彩色(グレー)を accent に選ばないための指標 */
-function saturation(hex: string): number {
-  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  if (max === min) return 0;
-  const l = (max + min) / 2;
-  return l > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min);
-}
 
 /**
  * スクリーンショットから拾った色の列を、役割付きパレットに畳む。
@@ -191,16 +173,19 @@ export function paletteFromColors(
   let foreground = background;
   let bestContrast = -1;
   let accent = background;
-  let bestSat = -1;
+  let bestChroma = -1;
   for (const s of swatches) {
     const c = contrastRatio(s.hex, background);
     if (c > bestContrast) {
       bestContrast = c;
       foreground = s.hex;
     }
-    const sat = saturation(s.hex);
-    if (sat > bestSat) {
-      bestSat = sat;
+    // HSL彩度は暗い色でも最小チャンネルが0なら1.0を返すため、圧縮ノイズで生じる
+    // 「色味のついた黒に近い画素」を誤ってaccentに選んでしまう(実測済み)。
+    // OKLCHのchromaは明度0付近で0に収束するのでこの誤検出が起きない。
+    const chroma = hexToOklch(s.hex).c;
+    if (chroma > bestChroma) {
+      bestChroma = chroma;
       accent = s.hex;
     }
   }

@@ -50,5 +50,13 @@ check("彩度が最も高い色が accent", p.accent === "#6C7BFF", p.accent);
 check("swatches は出現回数の降順", p.swatches[0].usage >= p.swatches[1].usage);
 check("max を超えない", paletteFromColors(["#111111", "#222222", "#333333"], 2).swatches.length === 2);
 
+// 回帰: 色味付きの黒に近い画素(圧縮ノイズ等)がHSL彩度では1.0になり、
+// 本物のaccentより優先されてしまわないこと(OKLCHのchromaで選ぶ)
+const near = paletteFromColors(
+  ["#1E1E2E", "#1E1E2E", "#1E1E2E", "#020100", "#6C7BFF"],
+  8
+);
+check("色味付きの黒より本物のaccentが勝つ", near.accent === "#6C7BFF", near.accent);
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
