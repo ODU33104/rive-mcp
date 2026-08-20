@@ -144,5 +144,23 @@ try {
   await hostTopRounded.close();
 }
 
+// テキストは量子化で細かい成分に散り minArea 未満で捨てられる。水平に束ねて1行のtext regionにする
+const hostText = new RiveHost(PAGE_SCRIPT);
+try {
+  const textPng = await hostText.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="120">
+      <rect width="320" height="120" fill="#1E1E2E"/>
+      <text x="20" y="40" font-family="sans-serif" font-size="16" fill="#E6E6E6">Dashboard</text>
+    </svg>`);
+  const td = await hostText.detectUiRegions(textPng, { minArea: 16, workingMax: 1280 });
+  const textRegion = td.regions.find((r) => r.kind === "text");
+  check("テキストを検出", !!textRegion, td.regions.map((r) => r.kind).join(","));
+  check("1行にまとまる", td.regions.filter((r) => r.kind === "text").length === 1);
+  check("fontSize を概算", textRegion && textRegion.fontSizePx >= 10 && textRegion.fontSizePx <= 24,
+    textRegion && String(textRegion.fontSizePx));
+} finally {
+  await hostText.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

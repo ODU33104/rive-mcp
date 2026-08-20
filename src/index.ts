@@ -21,7 +21,9 @@ import { optimizeRiv } from "./rivOptimize.js";
 import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes, postStudioReply } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
-import { generateTokens, type Mood } from "./designTokens.js";
+import { generateTokens, paletteFromColors, type Mood } from "./designTokens.js";
+import { buildTree } from "./uiDetect.js";
+import { overlayLabels } from "./uiOverlay.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
 import { importSvg } from "./svgImport.js";
 import { importLottie } from "./lottieImport.js";
@@ -1652,6 +1654,54 @@ server.registerTool(
       content: [{
         type: "text",
         text: `${replyNote}Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically. When you are done, call riv_studio_notes again with \`reply\` to tell the user in the Studio chat what you changed.`,
+      }],
+    };
+  })
+);
+
+// ---- riv_ui_detect -------------------------------------------------------
+server.registerTool(
+  "riv_ui_detect",
+  {
+    title: "Detect UI elements in a screenshot",
+    description:
+      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with pixel-exact rects, corner radii and fill colours, plus a numbered overlay PNG. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
+    inputSchema: {
+      imagePath: z.string().describe("Screenshot or design comp (PNG/JPEG)"),
+      overlayPath: z.string().optional().describe("Where to write the numbered overlay PNG"),
+      minArea: z.number().optional().describe("Ignore regions smaller than this many pixels (default 576)"),
+      maxElements: z.number().optional().describe("Keep at most this many elements, largest first (default 120)"),
+    },
+  },
+  wrap(async (a: { imagePath: string; overlayPath?: string; minArea?: number; maxElements?: number }) => {
+    const src = resolve(a.imagePath);
+    if (!existsSync(src)) return err(`Image not found: ${src}`);
+    const png = readFileSync(src);
+    const det = await host.detectUiRegions(png, { minArea: a.minArea ?? 576, workingMax: 1280 });
+    if (!det.regions.length) {
+      return err(
+        `No UI elements detected in ${src}. The image may be a photograph, a gradient, or too small. ` +
+          `Try lowering minArea (current ${a.minArea ?? 576}).`
+      );
+    }
+    const { elements, dropped } = buildTree(det.regions, a.maxElements ?? 120);
+    const palette = paletteFromColors(det.sampledColors);
+    let overlayPath: string | undefined;
+    if (a.overlayPath) {
+      overlayPath = resolve(a.overlayPath);
+      writeFileSync(overlayPath, await host.drawOverlay(png, overlayLabels(elements)));
+    }
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          source: { width: det.width, height: det.height },
+          elements,
+          palette,
+          overlayPath,
+          dropped,
+          next: "Assign a role to each element, then call riv_ui_prototype.",
+        }, null, 1),
       }],
     };
   })

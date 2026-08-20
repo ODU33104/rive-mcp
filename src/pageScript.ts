@@ -399,7 +399,88 @@ window.riveApi = {
         fill: color,
       });
     }
+
+    // 文字は minArea 未満に量子化で散った成分の集まりになる。行として束ねて拾い直す
+    const glyphs = [];
+    for (const c of comps) {
+      const w = c.maxX - c.minX + 1;
+      const h = c.maxY - c.minY + 1;
+      if (w * h * inv * inv >= minArea) continue;
+      if (h < 4 || h > 40 * scale) continue;          // 行として無理のない高さだけ
+      if (w > 60 * scale) continue;                    // 1文字にしては横長すぎる
+      glyphs.push({ ...c, w, h });
+    }
+    // 読み順(x昇順)で束ねる。y優先でソートすると同じ単語内の断片が処理順で入れ違い、
+    // 1回のみの前方マージでは正しい行に戻れず分裂したまま残る（実測: "Dashboard"がminY優先だと
+    // 7断片→2行にしか収束しなかったが、x優先では1行に収束する）
+    glyphs.sort((a, b) => a.minX - b.minX || a.minY - b.minY);
+    const lines = [];
+    for (const g of glyphs) {
+      const line = lines.find((l) => {
+        const lh = l.maxY - l.minY + 1;
+        // 量子化された文字は丸い/曲線の文字(o,bなど)がまるごと背景の連結成分に呑まれて
+        // 断片が1つも残らないことがある。断片自身のgより、既に確定した行の高さlhの方が
+        // フォントの実際のcap-heightを表す。しきい値はどちらか大きい方を使う
+        const H = Math.max(g.h, lh);
+        return (
+          Math.abs((l.minY + l.maxY) / 2 - (g.minY + g.maxY) / 2) <= Math.max(4, H * 0.6) &&
+          // 係数2.0: "Dashboard"実測で o+b の2文字がまるごと欠落し、隣接断片間のgapが
+          // 23px(cap-height 13pxの1.77倍)まで開いた。1.2倍では全く届かず、1.8倍がぎりぎり
+          // 閾値だったため安全マージンを見て2.0とした（要出典: 実測フィクスチャのみ。他の
+          // フォント/サイズでの妥当性は未検証 — Task 8で実写真に対して要再検証）
+          g.minX - l.maxX <= Math.max(8, H * 2.0) &&
+          g.minX >= l.minX - H
+        );
+      });
+      if (line) {
+        line.minX = Math.min(line.minX, g.minX);
+        line.minY = Math.min(line.minY, g.minY);
+        line.maxX = Math.max(line.maxX, g.maxX);
+        line.maxY = Math.max(line.maxY, g.maxY);
+        line.r += g.r; line.g += g.g; line.b += g.b; line.n++;
+      } else {
+        lines.push({ minX: g.minX, minY: g.minY, maxX: g.maxX, maxY: g.maxY,
+                     r: g.r, g: g.g, b: g.b, n: 1 });
+      }
+    }
+    for (const l of lines) {
+      const w = (l.maxX - l.minX + 1) * inv;
+      const h = (l.maxY - l.minY + 1) * inv;
+      if (w < 8 || h < 6) continue;   // ノイズ 1 粒を「文字」と言わない
+      const color = hex(l.r / l.n, l.g / l.n, l.b / l.n);
+      sampledColors.push(color);
+      regions.push({
+        kind: "text",
+        rect: [Math.round(l.minX * inv), Math.round(l.minY * inv), Math.round(w), Math.round(h)],
+        fill: color,
+        fontSizePx: Math.round(h * 1.3),  // 大文字高 ≒ フォントサイズの 0.7〜0.75
+      });
+    }
+
     return { width: W0, height: H0, regions, sampledColors };
+  },
+
+  // 検出結果に通し番号を焼き込む。ラベル位置は uiOverlay.ts（Node側の純関数）が決める
+  async drawOverlay(b64, opts) {
+    const bitmap = await createImageBitmap(new Blob([b64ToBytes(b64)], { type: "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width; canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.lineWidth = 2;
+    ctx.font = "bold 13px sans-serif";
+    ctx.textBaseline = "bottom";
+    for (const l of opts.labels) {
+      ctx.strokeStyle = l.color;
+      ctx.strokeRect(l.box[0] + 1, l.box[1] + 1, l.box[2] - 2, l.box[3] - 2);
+      const text = String(l.id);
+      const w = ctx.measureText(text).width + 6;
+      ctx.fillStyle = l.color;
+      ctx.fillRect(l.labelX, l.labelY - 14, w, 15);
+      ctx.fillStyle = "#000000";
+      ctx.fillText(text, l.labelX + 3, l.labelY);
+    }
+    return canvas.toDataURL("image/png").split(",")[1];
   },
 
   // テスト用: SVG 文字列を PNG にする

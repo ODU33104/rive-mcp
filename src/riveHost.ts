@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type Page } from "playwright-core";
 import type { RawRegion } from "./uiDetect.js";
+import type { OverlayLabel } from "./uiOverlay.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 const ORIGIN = "http://rive-mcp.local";
@@ -223,6 +224,11 @@ export class RiveHost {
     sampledColors: string[];
   }> {
     return this.call("detectUiRegions", pngBytes.toString("base64"), opts);
+  }
+
+  async drawOverlay(pngBytes: Buffer, labels: OverlayLabel[]): Promise<Buffer> {
+    const b64 = await this.call<string>("drawOverlay", pngBytes.toString("base64"), { labels });
+    return Buffer.from(b64, "base64");
   }
 
   /** テスト用。SVG 文字列を PNG バイト列にする */
