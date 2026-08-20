@@ -279,6 +279,128 @@ window.riveApi = {
     return { width: W, height: H, parts, base: baseCanvas.toDataURL("image/png").split(",")[1] };
   },
 
+  // スクリーンショットから UI 要素の矩形を拾う。
+  // UI は「平坦塗り + 軸に揃った矩形」が支配的なので、色量子化 + 連結成分で素直に取れる。
+  async detectUiRegions(b64, opts) {
+    const minArea = opts?.minArea ?? 576;
+    const workingMax = opts?.workingMax ?? 1280;
+    const bitmap = await createImageBitmap(new Blob([b64ToBytes(b64)], { type: "image/png" }));
+    const W0 = bitmap.width, H0 = bitmap.height;
+    const scale = Math.min(1, workingMax / Math.max(W0, H0));
+    const W = Math.max(1, Math.round(W0 * scale));
+    const H = Math.max(1, Math.round(H0 * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0, W, H);
+    const data = ctx.getImageData(0, 0, W, H).data;
+
+    // 5bit 量子化。UI の平坦塗りは同じバケットに落ちる
+    const q = new Int32Array(W * H);
+    for (let i = 0, p = 0; i < q.length; i++, p += 4) {
+      q[i] = ((data[p] >> 3) << 10) | ((data[p + 1] >> 3) << 5) | (data[p + 2] >> 3);
+    }
+
+    // 4近傍 BFS で連結成分。stack は明示的に持つ（再帰だと深さで死ぬ）
+    const label = new Int32Array(W * H).fill(-1);
+    const comps = [];
+    const stack = new Int32Array(W * H);
+    for (let start = 0; start < q.length; start++) {
+      if (label[start] !== -1) continue;
+      const id = comps.length;
+      const color = q[start];
+      let sp = 0, count = 0;
+      let minX = W, minY = H, maxX = -1, maxY = -1;
+      let sr = 0, sg = 0, sb = 0;
+      stack[sp++] = start;
+      label[start] = id;
+      while (sp > 0) {
+        const idx = stack[--sp];
+        const x = idx % W, y = (idx / W) | 0;
+        count++;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        const p = idx * 4;
+        sr += data[p]; sg += data[p + 1]; sb += data[p + 2];
+        if (x > 0 && label[idx - 1] === -1 && q[idx - 1] === color) { label[idx - 1] = id; stack[sp++] = idx - 1; }
+        if (x < W - 1 && label[idx + 1] === -1 && q[idx + 1] === color) { label[idx + 1] = id; stack[sp++] = idx + 1; }
+        if (y > 0 && label[idx - W] === -1 && q[idx - W] === color) { label[idx - W] = id; stack[sp++] = idx - W; }
+        if (y < H - 1 && label[idx + W] === -1 && q[idx + W] === color) { label[idx + W] = id; stack[sp++] = idx + W; }
+      }
+      comps.push({ id, count, minX, minY, maxX, maxY, r: sr / count, g: sg / count, b: sb / count });
+    }
+
+    const inv = scale === 0 ? 1 : 1 / scale;
+    const hex = (r, g, b) =>
+      "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase();
+
+    const regions = [];
+    const sampledColors = [];
+    for (const c of comps) {
+      const w = c.maxX - c.minX + 1;
+      const h = c.maxY - c.minY + 1;
+      if (w * h * inv * inv < minArea) continue;
+      const fillRatio = c.count / (w * h);
+      const color = hex(c.r, c.g, c.b);
+      sampledColors.push(color);
+
+      // 充填率で「面」か「非矩形の絵」かを分ける
+      let kind = fillRatio >= 0.85 ? "panel" : "image";
+      // 細長く薄いものは区切り線
+      if (kind === "panel" && (h <= 3 * scale || w <= 3 * scale)) kind = "line";
+
+      let cornerRadius = 0;
+      if (kind === "panel") {
+        // 四隅から対角に走査し、成分に入るまでの距離を測る。中央値 × √2 が角R
+        const probe = (cx, cy, dx, dy) => {
+          for (let d = 0; d < Math.min(w, h) / 2; d++) {
+            const x = cx + dx * d, y = cy + dy * d;
+            if (x < 0 || y < 0 || x >= W || y >= H) return 0;
+            if (label[y * W + x] === c.id) return d;
+          }
+          return 0;
+        };
+        const ds = [
+          probe(c.minX, c.minY, 1, 1),
+          probe(c.maxX, c.minY, -1, 1),
+          probe(c.minX, c.maxY, 1, -1),
+          probe(c.maxX, c.maxY, -1, -1),
+        ].sort((a, b) => a - b);
+        const median = (ds[1] + ds[2]) / 2;
+        cornerRadius = Math.round(Math.min(24, Math.max(0, median * Math.SQRT2 * inv)));
+        if (cornerRadius < 2) cornerRadius = 0;
+      }
+
+      regions.push({
+        kind,
+        rect: [
+          Math.round(c.minX * inv),
+          Math.round(c.minY * inv),
+          Math.round(w * inv),
+          Math.round(h * inv),
+        ],
+        cornerRadius,
+        fill: color,
+      });
+    }
+    return { width: W0, height: H0, regions, sampledColors };
+  },
+
+  // テスト用: SVG 文字列を PNG にする
+  async rasterize(b64) {
+    const svg = new TextDecoder().decode(b64ToBytes(b64));
+    const url = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.getContext("2d").drawImage(img, 0, 0);
+    return canvas.toDataURL("image/png").split(",")[1];
+  },
+
   // .riv の全メタデータを抽出する
   async inspect(b64) {
     return withFile(b64, (file) => {

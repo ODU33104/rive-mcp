@@ -4,6 +4,7 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type Page } from "playwright-core";
+import type { RawRegion } from "./uiDetect.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 const ORIGIN = "http://rive-mcp.local";
@@ -210,6 +211,24 @@ export class RiveHost {
     base: string;
   }> {
     return this.call("sliceImage", pngBytes.toString("base64"), { regions });
+  }
+
+  detectUiRegions(
+    pngBytes: Buffer,
+    opts: { minArea?: number; workingMax?: number }
+  ): Promise<{
+    width: number;
+    height: number;
+    regions: RawRegion[];
+    sampledColors: string[];
+  }> {
+    return this.call("detectUiRegions", pngBytes.toString("base64"), opts);
+  }
+
+  /** テスト用。SVG 文字列を PNG バイト列にする */
+  async rasterize(svg: string): Promise<Buffer> {
+    const b64 = await this.call<string>("rasterize", Buffer.from(svg, "utf8").toString("base64"), {});
+    return Buffer.from(b64, "base64");
   }
 
   renderVideo(rivBytes: Buffer, opts: Record<string, unknown>): Promise<VideoResult> {

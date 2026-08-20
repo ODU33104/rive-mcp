@@ -58,5 +58,31 @@ const near = paletteFromColors(
 );
 check("色味付きの黒より本物のaccentが勝つ", near.accent === "#6C7BFF", near.accent);
 
+// ブラウザ内ピクセル検出: 合成SVGを既知の矩形として描き、検出結果が元解像度で戻ることを確認
+import { RiveHost } from "../dist/riveHost.js";
+import { PAGE_SCRIPT } from "../dist/pageScript.js";
+
+const host = new RiveHost(PAGE_SCRIPT);
+try {
+  const png = await host.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">
+      <rect width="320" height="240" fill="#1E1E2E"/>
+      <rect x="40" y="60" width="120" height="48" fill="#6C7BFF"/>
+    </svg>`);
+  const det = await host.detectUiRegions(png, { minArea: 576, workingMax: 1280 });
+  check("元解像度を返す", det.width === 320 && det.height === 240, `${det.width}x${det.height}`);
+  const btn = det.regions.find((r) => r.fill === "#6C7BFF");
+  check("明るい矩形を検出", !!btn);
+  check("矩形の位置が合う", btn && Math.abs(btn.rect[0] - 40) <= 2 && Math.abs(btn.rect[1] - 60) <= 2,
+    btn && btn.rect.join(","));
+  check("矩形の寸法が合う", btn && Math.abs(btn.rect[2] - 120) <= 2 && Math.abs(btn.rect[3] - 48) <= 2,
+    btn && btn.rect.join(","));
+  check("kind は panel", btn && btn.kind === "panel", btn && btn.kind);
+  check("角Rなしは 0", btn && btn.cornerRadius === 0, btn && String(btn.cornerRadius));
+  check("色を収集している", det.sampledColors.length > 0);
+} finally {
+  await host.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
