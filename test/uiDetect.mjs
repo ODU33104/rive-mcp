@@ -162,5 +162,84 @@ try {
   await hostText.close();
 }
 
+// 回帰(Bug 1・Critical): ほぼ同一・大きく重なる2枚のpanelは互いを95%以上「含む」ため、
+// 大きさで区別しないと双方が相手を親に選び parent 循環(1↔2)ができる。
+// buildPrototypeScene は parent===null の要素から木を辿るため、循環があるとルートが
+// 0件になり出力が空になる(またはロジックによっては無限に辿り続ける)。
+function walkParentChain(elements, startId, maxSteps) {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  let cur = byId.get(startId);
+  let steps = 0;
+  while (cur && cur.parent !== null) {
+    steps++;
+    if (steps > maxSteps) return { terminated: false, steps };
+    cur = byId.get(cur.parent);
+  }
+  return { terminated: true, steps };
+}
+
+{
+  const dup = buildTree(
+    [
+      { kind: "panel", rect: [0, 0, 100, 100], fill: "#111111" },
+      { kind: "panel", rect: [2, 0, 100, 100], fill: "#222222" },
+    ],
+    120
+  );
+  check("ほぼ同一矩形2枚: 循環なし(1が2の親かつ2が1の親、は起きない)",
+    !(dup.elements[0].parent === dup.elements[1].id && dup.elements[1].parent === dup.elements[0].id));
+  check("ほぼ同一矩形2枚: ルート(parent===null)が1件以上ある",
+    dup.elements.some((e) => e.parent === null),
+    dup.elements.map((e) => `${e.id}:${e.parent}`).join(","));
+}
+
+{
+  const eq = buildTree(
+    [
+      { kind: "panel", rect: [0, 0, 100, 100], fill: "#111111" },
+      { kind: "panel", rect: [0, 0, 100, 100], fill: "#222222" },
+    ],
+    120
+  );
+  check("完全に同一の矩形2枚: 循環なし",
+    !(eq.elements[0].parent === eq.elements[1].id && eq.elements[1].parent === eq.elements[0].id));
+  check("完全に同一の矩形2枚: ルートが1件以上ある",
+    eq.elements.some((e) => e.parent === null),
+    eq.elements.map((e) => `${e.id}:${e.parent}`).join(","));
+}
+
+{
+  // 大きい背景・ほぼ同一の重複パネル2枚・その中の小さいボタンが混在する具体例で、
+  // 全要素について parent チェーンが有限ステップで null に到達することを確認する
+  // (形だけのチェックではなく、実際にリンクを辿るトラバーサル)
+  const mixed = buildTree(
+    [
+      { kind: "panel", rect: [0, 0, 500, 500], fill: "#0A0A0A" },
+      { kind: "panel", rect: [10, 10, 200, 200], fill: "#111111" },
+      { kind: "panel", rect: [12, 10, 200, 200], fill: "#131313" }, // 重複検出
+      { kind: "panel", rect: [20, 20, 40, 20], fill: "#6C7BFF" },
+    ],
+    120
+  );
+  for (const e of mixed.elements) {
+    const { terminated, steps } = walkParentChain(mixed.elements, e.id, mixed.elements.length + 1);
+    check(`要素${e.id}のparentチェーンがN歩以内でnullに到達`, terminated, `steps=${steps}`);
+  }
+  check("混在フィクスチャ: ルートが1件以上ある", mixed.elements.some((e) => e.parent === null));
+}
+
+{
+  // 既存の「本物の入れ子」は引き続き機能すること(小さい矩形がはるかに大きい矩形の中にある)
+  const nest2 = buildTree(
+    [
+      { kind: "panel", rect: [0, 0, 400, 400], fill: "#000000" },
+      { kind: "panel", rect: [50, 50, 20, 20], fill: "#FFFFFF" },
+    ],
+    120
+  );
+  check("本物の入れ子は引き続き親子になる", nest2.elements[1].parent === nest2.elements[0].id,
+    String(nest2.elements[1].parent));
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

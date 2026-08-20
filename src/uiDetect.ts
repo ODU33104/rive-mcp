@@ -45,11 +45,26 @@ export function buildTree(
     children: [],
   }));
 
+  // EPSILON: 親候補は子より面積が2%より大きくないと「意味のある包含」とみなさない。
+  // 検出器はカードの縁とわずかに内側にずれたパネルを別要素として二重検出することがあり、
+  // その2枚は互いを95%以上「含む」。面積がほぼ同じ（=どちらが親でもおかしくない）ペアを
+  // 親子と認めると、後段のロジックが「大きい方が親」という前提で作られていても実質
+  // 同格の2枚を無理やり親子にしてしまう。2%は実測の検出ノイズ（数px四方のずれ）を
+  // 吸収しつつ、意図的な入れ子（通常もっと大きな余白差がある）は弾かない値として選んだ。
+  const EPSILON = 0.02;
+
   for (const child of elements) {
     let best: UiElement | null = null;
     for (const cand of elements) {
-      if (cand.id === child.id) continue;
+      // sorted は面積降順で並べてから id を振っているので、id が子より小さい候補は
+      // 「面積が子以上（同着含む）」であることが id の割り当てだけから保証される。
+      // 親候補をこの範囲に限定すると、parent は必ず自分より小さい id を指すことになり、
+      // parent を辿るたびに id が単調に減少する（正の整数なので無限には減れない）。
+      // 循環が起きるには id がどこかで増加して元に戻る必要があるが、この条件下ではそれが
+      // 構造的に不可能なので、95%包含の判定が多少ブレても親子グラフは必ず非巡回になる。
+      if (cand.id >= child.id) continue;
       if (!contains(cand, child)) continue;
+      if (area(cand) <= area(child) * (1 + EPSILON)) continue;
       // 「含む最小の矩形」が親。同面積なら先に来たほう（= 面積降順で安定）
       if (!best || area(cand) < area(best)) best = cand;
     }
