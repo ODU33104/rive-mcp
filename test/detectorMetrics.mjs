@@ -650,10 +650,15 @@ export function truthAlignment(elements, truth) {
   const perNegative = [];
   for (const neg of negatives) {
     const [x, y, w, h] = neg.rect;
-    const x0 = Math.max(0, Math.round(x));
-    const y0 = Math.max(0, Math.round(y));
-    const x1 = Math.min(size.width, Math.round(x + w));
-    const y1 = Math.min(size.height, Math.round(y + h));
+    // erodePx: negative の**コア**だけを判定対象にする。実画像の正解矩形（DOM由来）は
+    // アンチエイリアスの縁が数px入るので、縁が触れただけで leak と数えると
+    // 指標が神経質になり、本当の過剰ベクター化と区別できなくなる。
+    // 合成シーンは画素厳密なので既定 0（縮めない）。
+    const er = Math.max(0, Math.min(neg.erodePx || 0, Math.floor(w / 2) - 1, Math.floor(h / 2) - 1));
+    const x0 = Math.max(0, Math.round(x) + er);
+    const y0 = Math.max(0, Math.round(y) + er);
+    const x1 = Math.min(size.width, Math.round(x + w) - er);
+    const y1 = Math.min(size.height, Math.round(y + h) - er);
     let leaked = 0;
     let total = 0;
     for (let yy = y0; yy < y1; yy++) {
@@ -940,6 +945,27 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     // 塗りが別物なら hit にしない
     const wrongFill = [el({ id: 1, renderMode: "vector-panel", rect: [0, 0, 100, 100], fill: "#FF0000", cornerRadius: 8 })];
     check("塗りが違えば hit にしない", truthAlignment(wrongFill, truth).positivePanelInstanceRecall === 0);
+
+    // erodePx: 縁だけに掛かった侵食は数えない（実画像の DOM 由来矩形は縁が数px甘い）
+    const edgeTruth = {
+      width: 100, height: 100,
+      elements: [{ label: "n", rect: [10, 10, 40, 40], expectVectorPanel: false, semanticHint: "image", erodePx: 3 }],
+    };
+    // 上辺2pxだけを覆うパネル → erode で完全に判定対象外になる
+    const edgeOnly = [el({ id: 1, renderMode: "vector-panel", rect: [10, 10, 40, 2], fill: "#FF0000" })];
+    check("縁2pxだけの侵食は erode で無視される",
+      truthAlignment(edgeOnly, edgeTruth).negativeLeakMaxPerRegion === 0,
+      String(truthAlignment(edgeOnly, edgeTruth).negativeLeakMaxPerRegion));
+    // コアを覆うパネルは erode しても検出される
+    const coreHit = [el({ id: 1, renderMode: "vector-panel", rect: [20, 20, 20, 20], fill: "#FF0000" })];
+    check("コアへの侵食は erode しても残る",
+      truthAlignment(coreHit, edgeTruth).negativeLeakMaxPerRegion > 0.3,
+      String(truthAlignment(coreHit, edgeTruth).negativeLeakMaxPerRegion));
+    // erodePx が無ければ縁の侵食も数える（既定は縮めない）
+    const noErode = { ...edgeTruth, elements: [{ ...edgeTruth.elements[0], erodePx: 0 }] };
+    check("erodePx 無しなら縁の侵食も数える",
+      truthAlignment(edgeOnly, noErode).negativeLeakMaxPerRegion > 0,
+      String(truthAlignment(edgeOnly, noErode).negativeLeakMaxPerRegion));
 
     // 指摘1(2026-08-21 レビュー): cornerRadiusMAE は Task 14 の P1 gate の値なので、
     // hit していない組から計算されてはならない。修正前は「少しでも重なった候補」から
