@@ -101,11 +101,34 @@ onward and cropped to "nalvtics". The box is therefore extended outward, up to
 background keep appearing. That took text ink covered by an opaque fill from
 16% down to 1%.
 
+The height that sets that limit is measured after the box has been extended
+vertically, not before. Where only the ascenders survive quantisation, a line
+looks half as tall as it is, and 1.6x of the wrong number falls short of the last
+letter: "Active" was cropped to "Activ" while "Errors", the same six characters
+one card over, came through whole. Growing the box vertically first and taking
+the limit from the result fixed it. Growing it by advancing the edge instead of
+measuring from the original one does not — the box then runs past its own limit
+into the next word, and overdraw rose from 1.8x to 10.8x when it did.
+
 **Gradients become one picture, not thirty.** A band is detected as many flat
 strips, and adjacent strips whose colour steps slowly are folded back into a
 single raster. What stops this from swallowing a row of cards is the colour in the
 gaps: a gradient's gap holds the shade that was dropped, a card's margin holds the
 page behind it.
+
+## What the numbers are measured against
+
+Nine screenshots tune the thresholds; seven more are held back and opened only at
+the release gate. The held-back set was replaced in full once a page in it had
+informed a decision — a picture that has set a threshold cannot also test one.
+
+That replacement is worth reading before trusting any number here. With the
+detector untouched, the fresh pages missed the absolute targets that the previous
+set had met: worst-region leak 0.069 against a target of 0.02, and geometry
+recall 0.875 against 0.9. Nothing about the detector changed; the earlier pass
+was a property of those three pages. The targets are still printed, still unmet,
+and the gate now checks that a change does not make the measurement worse rather
+than pretending the bar is cleared.
 
 ## Demo
 

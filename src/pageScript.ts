@@ -975,24 +975,47 @@ window.riveApi = {
             const c0 = data[o] - B[0], c1 = data[o + 1] - B[1], c2 = data[o + 2] - B[2];
             return (c0 * D[0] + c1 * D[1] + c2 * D[2]) / len2 > 0.5;
           };
-          const lh = l.maxY - l.minY + 1;
-          // 伸ばす上限は行高の 1.6 倍。1文字ぶんを拾うには足りて、隣の語まで
-          // 無条件に届くほどではない距離。
-          const maxGrow = Math.max(4, Math.round(lh * 1.6));
-          const colHasInk = (x) => {
-            for (let y = l.minY; y <= l.maxY; y++) if (x >= 0 && x < W && isInk(x, y)) return true;
-            return false;
-          };
+          const lh0 = l.maxY - l.minY + 1;
+          // **走査する帯は、その時点で確定している矩形を使う。**
+          // 横方向を「伸ばす前の縦の範囲」で走査すると、生き残った断片がアセンダだけだった行で
+          // x-height にしかない文字を見落とす。実測(2026-08-21): "Active" の末尾の e は
+          // x=427..428 に alpha 1.0 のインクがあるのに、断片の縦範囲に入らず矩形の外に残り、
+          // 切り出すと "Activ" になった（同じ6文字の "Errors" は 35px、"Active" は 32px）。
+          // 縦は上下の伸びしろ（アセンダ/ディセンダ）だけなので控えめに。
+          const maxGrowY = Math.max(2, Math.round(lh0 * 0.5));
+          // **横方向の走査は「縦に伸びうる範囲」まで見る。ただし矩形は広げない。**
+          // 断片の縦範囲だけで走査すると、生き残った断片がアセンダだけだった行で
+          // x-height にしかない文字を見落とす。実測(2026-08-21): "Active" の末尾の e は
+          // x=427..428 に alpha 1.0 のインクがあるのに断片の縦範囲に入らず、
+          // 切り出すと "Activ" になった（同じ6文字の "Errors" は 35px、"Active" は 32px）。
+          //
+          // 逆に「縦を先に伸ばしてから横を走査する」と広げすぎる。実測: 重複描画が
+          // 1.76 → 10.85 に爆発した（帯が広がった分だけ横が隣の語まで走り、
+          // 同じ単語を覆う矩形が何枚も積み上がる）。**走査だけ広げ、確定は別に持つ。**
           const rowHasInk = (y) => {
             for (let x = gx0; x <= gx1; x++) if (y >= 0 && y < H && isInk(x, y)) return true;
             return false;
           };
-          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.minX - d)) gx0 = l.minX - d;
-          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.maxX + d)) gx1 = l.maxX + d;
-          // 縦は上下の伸びしろ（アセンダ/ディセンダ）だけなので控えめに。
-          const maxGrowY = Math.max(2, Math.round(lh * 0.5));
+          // **縦を先に確定する。** 横の上限は行高に比例させるが、その行高を
+          // 「生き残った断片の縦幅」から採ると足りない。断片がアセンダだけの行では
+          // 行高が半分ほどに見積もられ、上限がその 1.6 倍でも末尾の1文字に届かない。
+          // 実測(2026-08-21): "Active" の末尾の e は x=427..428 に alpha 1.0 の
+          // インクがあるのに上限の外に落ち、切り出すと "Activ" になった
+          // （同じ6文字の "Errors" は 35px、"Active" は 32px）。
           for (let d = 1; d <= maxGrowY; d++) if (rowHasInk(l.minY - d)) gy0 = l.minY - d;
           for (let d = 1; d <= maxGrowY; d++) if (rowHasInk(l.maxY + d)) gy1 = l.maxY + d;
+          // 伸ばす上限は確定した行高の 1.6 倍。1文字ぶんを拾うには足りて、隣の語まで
+          // 無条件に届くほどではない距離。
+          const maxGrow = Math.max(4, Math.round((gy1 - gy0 + 1) * 1.6));
+          // **始点は伸ばす前の端に固定する。** gx1 を足しながら進める書き方にすると
+          // 1回の走査が上限を超えて伸び続け、隣の語まで飲み込む。実測: 重複描画が
+          // 1.76 → 10.85 に爆発した（同じ単語を覆う矩形が何枚も積み上がる）。
+          const colHasInk = (x) => {
+            for (let y = gy0; y <= gy1; y++) if (x >= 0 && x < W && isInk(x, y)) return true;
+            return false;
+          };
+          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.minX - d)) gx0 = l.minX - d;
+          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.maxX + d)) gx1 = l.maxX + d;
           gx0 = Math.max(0, gx0); gy0 = Math.max(0, gy0);
           gx1 = Math.min(W - 1, gx1); gy1 = Math.min(H - 1, gy1);
         }
