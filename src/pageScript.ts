@@ -255,6 +255,42 @@ window.riveApi = {
       ctx.closePath();
       ctx.clip();
       ctx.drawImage(bitmap, -x0, -y0);
+
+      // matte が付いている領域は、切り出した矩形をそのまま貼るのではなく
+      // 前景色 + alpha に置き換える。矩形のまま貼ると背景が焼き付き、
+      // **静止時は完全に一致するのに動かした瞬間に露出する**。
+      // 判定(matteEligible)は detectUiRegions が済ませてあり、ここでは適用するだけ。
+      if (region.matte) {
+        const toLin = region.matte.space === "linear";
+        const LUT = new Float32Array(256);
+        for (let i = 0; i < 256; i++) {
+          const c = i / 255;
+          LUT[i] = toLin ? (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)) : c;
+        }
+        const px = (h) => [
+          parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16),
+        ];
+        const F8 = px(region.matte.fg), B8 = px(region.matte.bg);
+        const B = [LUT[B8[0]], LUT[B8[1]], LUT[B8[2]]];
+        const D = [LUT[F8[0]] - B[0], LUT[F8[1]] - B[1], LUT[F8[2]] - B[2]];
+        const len2 = D[0] * D[0] + D[1] * D[1] + D[2] * D[2];
+        if (len2 > 1e-9) {
+          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const d = img.data;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] === 0) continue; // クリップ外はそのまま透明
+            const c0 = LUT[d[i]] - B[0], c1 = LUT[d[i + 1]] - B[1], c2 = LUT[d[i + 2]] - B[2];
+            let a = (c0 * D[0] + c1 * D[1] + c2 * D[2]) / len2;
+            a = a < 0 ? 0 : a > 1 ? 1 : a;
+            // 色は前景色で塗り替える。これが matting モデルそのもの:
+            // 元の背景 B の上に置けば元通りに見え、別の背景の上でも破綻しない。
+            d[i] = F8[0]; d[i + 1] = F8[1]; d[i + 2] = F8[2];
+            d[i + 3] = Math.round(a * 255);
+          }
+          ctx.putImageData(img, 0, 0);
+        }
+      }
+
       parts.push({
         name: region.name,
         x: x0, y: y0, width: x1 - x0, height: y1 - y0,
@@ -361,6 +397,9 @@ window.riveApi = {
     }
 
     const inv = scale === 0 ? 1 : 1 / scale;
+    const parseHex = (h) => [
+      parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16),
+    ];
     const hex = (r, g, b) =>
       "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase();
 
@@ -406,7 +445,7 @@ window.riveApi = {
         const inside = [c.r, c.g, c.b];
         // 外側 3px を7点サンプル。角丸のコーナーと1pxの枠線を避けるため辺の 15%〜85% を使う。
         const sideContrast = (pts) => {
-          let sum = 0, n = 0;
+          let sum = 0, n = 0, mid = 0;
           for (let i = 0; i < pts.length; i++) {
             const x = pts[i][0], y = pts[i][1];
             if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -535,9 +574,6 @@ window.riveApi = {
     const STRIPE_MEMBER_THICKNESS_MIN = 0.8;
     const STRIPE_MEMBER_MAX_SHARE = 0.5;  // 1枚が union の半分超なら「大きな面＋薄片」であって縞ではない
 
-    const parseHex = (h) => [
-      parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16),
-    ];
     const colorStep = (a, b) =>
       Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
     const areaOfRect = (r) => Math.max(0, r[2]) * Math.max(0, r[3]);
@@ -720,11 +756,191 @@ window.riveApi = {
         line.maxX = Math.max(line.maxX, g.maxX);
         line.maxY = Math.max(line.maxY, g.maxY);
         line.r += g.r; line.g += g.g; line.b += g.b; line.n++;
+        line.ids.push(g.id);
       } else {
         lines.push({ minX: g.minX, minY: g.minY, maxX: g.maxX, maxY: g.maxY,
-                     r: g.r, g: g.g, b: g.b, n: 1 });
+                     r: g.r, g: g.g, b: g.b, n: 1, ids: [g.id] });
       }
     }
+    // --- テキストの alpha matte（色直線への射影） ---
+    //
+    // 目的は「文字を背景から切り離して独立に動かせるようにする」こと。矩形で切り出すと
+    // 背景が焼き付き、**静止していれば完全に一致するのに 10px 動かした瞬間に露出する**。
+    // 静的な再構成誤差では原理的に検出できない失敗なので、信頼度で守るしかない。
+    //
+    // モデル: 前景色 F と背景色 B を結ぶ直線に画素 C を射影する。
+    //   alpha = clamp( ((C-B)*(F-B)) / |F-B|^2 , 0, 1 )
+    // **2値化しない。** アンチエイリアスの縁は中間の alpha として保つ。
+    //
+    // 信頼度は直交残差 e = |(C-B) - alpha(F-B)| から出す。文字が単色なら残差はほぼ0だが、
+    // 写真や模様が「テキスト行」として誤検出された場合は残差が大きくなる。
+    // **semanticHint を信用しない**のはこのため（手続き的ノイズが text に紛れ込む実例がある）。
+    // 残差が大きければ matteEligible=false にして、普通の矩形ラスタのまま fade だけさせる。
+    const MATTE_MIN_CONTRAST = 24;        // |F-B| がこれ未満だと射影が数値的に無意味
+    // 適格性は fit と 2峰性の**両方**で判定する。単一の合成スコアにすると、
+    // 片方が高いだけの領域が通ってしまう（実測で両方の分布を取って決めた）。
+    //
+    //   fitMin midMax | テキスト残存 | 写真の誤通過   （2026-08-21・合成6枚＋実画像6枚）
+    //    0.70  0.45   |  95%         |  16%
+    //    0.78  0.35   |  89%         |  10%   ← 採用
+    //    0.82  0.35   |  73%         |  10%
+    //    0.90  0.26   |  31%         |   7%
+    //
+    // **写真の誤通過を 0 にはできない。** 7% 前後で下げ止まり、そこから先はテキストを
+    // 捨てるだけで写真は減らない。二色モデルでは原理的に分離できない領域が存在する
+    // （彩度の低い2階調の写真は、色空間で本当に文字と同じ形をしている）。
+    // 通り抜けた分は matteConfidence を通じて Task 18 の「動かし方の制限」で封じ込める。
+    //
+    // 誤りの代償は非対称: 写真を誤って matte にすると大量の画素が透明になり見た目が壊れるが、
+    // テキストを matte にし損ねても矩形ラスタ + fade に落ちるだけで見た目は保たれる。
+    const MATTE_FIT_MIN = opts?.matteFitMin ?? 0.78;
+    const MATTE_CORE_TOP_FRACTION = 0.25; // F 推定に使う「B から最も遠い」画素の割合
+    // alpha が 0.2〜0.8 に入る画素の割合。この値で 2峰性スコアが 0 になる。
+    // 既定は下の掃引の実測から決める（暫定 0.35）。
+    const MATTE_MID_ALPHA_MAX = opts?.matteMidAlphaMax ?? 0.35;
+    // 2峰性スコアが 0 になる中間 alpha 割合。分布の実測は
+    // テキスト中央 0.246 / p90 0.322、写真中央 0.319 / p75 0.447。
+    const MATTE_BIMODAL_ZERO = 0.60;
+
+    const SRGB_TO_LIN = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const c = i / 255;
+      SRGB_TO_LIN[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+    const medianOf = (arr) => {
+      if (!arr.length) return 0;
+      const a = Float64Array.from(arr).sort();
+      const m = a.length >> 1;
+      return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+    };
+
+    const estimateMatte = (line) => {
+      // コア画素: 行を構成したグリフ成分そのもの。既に持っている情報を捨てない。
+      const idSet = new Set(line.ids);
+      const core = [];
+      for (let y = line.minY; y <= line.maxY; y++) {
+        for (let x = line.minX; x <= line.maxX; x++) {
+          const q = y * W + x;
+          if (idSet.has(label[q])) core.push(q);
+        }
+      }
+      if (core.length < 24) return null;
+
+      // 背景 B。まず外接する vector-panel の塗り、無ければ bbox 外周リングの中央値。
+      // 平均ではなく中央値なのは、リングに別の要素が掛かっても引きずられないため。
+      let bg = null;
+      {
+        const ox = Math.round(line.minX * inv), oy = Math.round(line.minY * inv);
+        const ow = Math.round((line.maxX - line.minX + 1) * inv);
+        const oh = Math.round((line.maxY - line.minY + 1) * inv);
+        let bestArea = Infinity;
+        for (const r of regions) {
+          if (r.renderMode !== "vector-panel" || !r.fill) continue;
+          const rx = r.rect[0], ry = r.rect[1], rw = r.rect[2], rh = r.rect[3];
+          if (rx <= ox && ry <= oy && rx + rw >= ox + ow && ry + rh >= oy + oh && rw * rh < bestArea) {
+            bestArea = rw * rh;
+            bg = parseHex(r.fill);
+          }
+        }
+      }
+      if (!bg) {
+        const rr = [], rg = [], rb = [];
+        for (let d = 1; d <= 3; d++) {
+          for (let x = line.minX - d; x <= line.maxX + d; x++) {
+            for (const y of [line.minY - d, line.maxY + d]) {
+              if (x < 0 || y < 0 || x >= W || y >= H) continue;
+              const o = (y * W + x) * 4; rr.push(data[o]); rg.push(data[o + 1]); rb.push(data[o + 2]);
+            }
+          }
+          for (let y = line.minY - d; y <= line.maxY + d; y++) {
+            for (const x of [line.minX - d, line.maxX + d]) {
+              if (x < 0 || y < 0 || x >= W || y >= H) continue;
+              const o = (y * W + x) * 4; rr.push(data[o]); rg.push(data[o + 1]); rb.push(data[o + 2]);
+            }
+          }
+        }
+        if (rr.length < 12) return null;
+        bg = [medianOf(rr), medianOf(rg), medianOf(rb)];
+      }
+
+      // 前景 F。**成分の平均色ではない。** 平均は縁の中間色に引かれて B 寄りになる。
+      // B から最も離れたコア画素の上位 25% の中央値を使う。
+      const dist = core.map((q) => {
+        const o = q * 4;
+        const dr = data[o] - bg[0], dg = data[o + 1] - bg[1], db = data[o + 2] - bg[2];
+        return dr * dr + dg * dg + db * db;
+      });
+      const order = core.map((_, i) => i).sort((a, b) => dist[b] - dist[a]);
+      const take = Math.max(8, Math.floor(order.length * MATTE_CORE_TOP_FRACTION));
+      const fr = [], fgv = [], fb = [];
+      for (let i = 0; i < take; i++) {
+        const o = core[order[i]] * 4;
+        fr.push(data[o]); fgv.push(data[o + 1]); fb.push(data[o + 2]);
+      }
+      const fgc = [medianOf(fr), medianOf(fgv), medianOf(fb)];
+
+      // sRGB と linear の両方を試し、残差の小さいほうを採る（どちらが正しいかは
+      // 画像の生成経路に依存するので、決め打ちせず測って選ぶ）。
+      const evalSpace = (toLin) => {
+        const conv = (v) => (toLin ? SRGB_TO_LIN[v] : v / 255);
+        const B = [conv(Math.round(bg[0])), conv(Math.round(bg[1])), conv(Math.round(bg[2]))];
+        const F = [conv(Math.round(fgc[0])), conv(Math.round(fgc[1])), conv(Math.round(fgc[2]))];
+        const d = [F[0] - B[0], F[1] - B[1], F[2] - B[2]];
+        const len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+        if (len2 < 1e-9) return null;
+        // **残差はコア画素ではなく bbox 全体で測る。**
+        // コアは定義上「同じ量子化バケットの連結成分」なので、写真だろうと一様に見える。
+        // 実測(2026-08-21): コアだけで測るとノイズ領域の信頼度が最大 0.849 まで出て、
+        // 本物のテキスト(0.999)と分離できなかった。
+        // matte モデルが主張しているのは「切り出す矩形の**全画素**が F と B の混合である」
+        // ことなので、その主張をそのまま bbox 上で検証する。文字なら地の画素は alpha=0 として
+        // 直線に乗るが、写真は乗らない。
+        let sum = 0, n = 0, mid = 0;
+        for (let y = line.minY; y <= line.maxY; y++) {
+          for (let x = line.minX; x <= line.maxX; x++) {
+            const o = (y * W + x) * 4;
+            const c0 = conv(data[o]) - B[0], c1 = conv(data[o + 1]) - B[1], c2 = conv(data[o + 2]) - B[2];
+            let a = (c0 * d[0] + c1 * d[1] + c2 * d[2]) / len2;
+            a = a < 0 ? 0 : a > 1 ? 1 : a;
+            const e0 = c0 - a * d[0], e1 = c1 - a * d[1], e2 = c2 - a * d[2];
+            sum += Math.sqrt(e0 * e0 + e1 * e1 + e2 * e2);
+            if (a > 0.2 && a < 0.8) mid++;
+            n++;
+          }
+        }
+        if (n === 0) return null;
+        return { residual: sum / n, len: Math.sqrt(len2), midFraction: mid / n };
+      };
+      const srgb = evalSpace(false), lin = evalSpace(true);
+      if (!srgb && !lin) return null;
+      const useLin = !!lin && (!srgb || lin.residual / lin.len < srgb.residual / srgb.len);
+      const chosen = useLin ? lin : srgb;
+
+      const contrast = Math.max(
+        Math.abs(fgc[0] - bg[0]), Math.abs(fgc[1] - bg[1]), Math.abs(fgc[2] - bg[2])
+      );
+      // 直交残差を色距離で正規化する。0.5 で割っているのは「残差が色距離の半分に達したら
+      // 信頼度0」という意味（それだけ外れていれば直線モデルはもう成り立っていない）。
+      const fit = Math.max(0, Math.min(1, 1 - chosen.residual / (chosen.len * 0.5)));
+      // **残差だけでは原理的に分離できない。** 彩度を落としたノイズは色空間でほぼ1次元で、
+      // 色直線モデルに実際によく当てはまる（実測: ノイズ領域で fit 0.844）。
+      // 構造で分ける: テキストの alpha は2峰性（ほぼ0かほぼ1で、中間はアンチエイリアスの
+      // 細い縁だけ）だが、写真の alpha は全域に散る。
+      const bimodal = Math.max(0, Math.min(1, 1 - chosen.midFraction / MATTE_BIMODAL_ZERO));
+      const confidence = fit * bimodal;
+      return {
+        fg: hex(fgc[0], fgc[1], fgc[2]),
+        bg: hex(bg[0], bg[1], bg[2]),
+        space: useLin ? "linear" : "srgb",
+        confidence,
+        fit,
+        midFraction: chosen.midFraction,
+        contrast,
+        eligible: contrast >= MATTE_MIN_CONTRAST &&
+          fit >= MATTE_FIT_MIN && chosen.midFraction <= MATTE_MID_ALPHA_MAX,
+      };
+    };
+
     for (const l of lines) {
       const w = (l.maxX - l.minX + 1) * inv;
       const h = (l.maxY - l.minY + 1) * inv;
@@ -736,12 +952,20 @@ window.riveApi = {
       // テキスト行は面積が小さいことが多いが、件数(=行の本数)ではなく面積で数えることで
       // 「小さい文字がたくさんある画面」でbackgroundを誤って乗っ取らないようにする。
       sampledColors.push({ hex: color, weight: rectW * rectH });
+      const m = estimateMatte(l);
       regions.push({
         renderMode: "raster",
         semanticHint: "text",
         rect: [Math.round(l.minX * inv), Math.round(l.minY * inv), rectW, rectH],
         fill: color,
         fontSizePx: Math.round(h * 1.3),  // 大文字高 ≒ フォントサイズの 0.7〜0.75
+        // **matteEligible は semanticHint とは独立。** 手続き的ノイズが「テキスト行」として
+        // 誤検出されても、射影残差が大きければここが false になり、matte の対象から外れる。
+        matteEligible: !!(m && m.eligible),
+        matteConfidence: m ? Math.round(m.confidence * 1000) / 1000 : 0,
+        matteFit: m ? Math.round(m.fit * 1000) / 1000 : 0,
+        matteMidAlpha: m ? Math.round(m.midFraction * 1000) / 1000 : 1,
+        matte: m && m.eligible ? { fg: m.fg, bg: m.bg, space: m.space } : undefined,
       });
     }
 

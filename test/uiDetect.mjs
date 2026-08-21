@@ -403,5 +403,90 @@ try {
   await hostGate.close();
 }
 
+// --- テキストの alpha matte と信頼度フォールバック（Task 17） ---
+// matte を fallback 設計なしで単独投入しない、というのがこの機能の完了条件。
+// 「成功→独立に動かす / 失敗→矩形ラスタのまま fade」までを一体で確かめる。
+const hostMatte = new RiveHost(PAGE_SCRIPT);
+try {
+  // 1) 単色の文字が単色の地に乗っている ＝ 色直線モデルがそのまま成り立つ
+  const textPng = await hostMatte.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="420" height="200">
+      <rect width="420" height="200" fill="#F3F5F6"/>
+      <rect x="20" y="40" width="380" height="90" rx="10" fill="#194878"/>
+      <text x="44" y="98" font-family="Arial, sans-serif" font-size="30" fill="#FFFFFF">Revenue</text>
+    </svg>`);
+  const td = await hostMatte.detectUiRegions(textPng, { minArea: 576, workingMax: 1280 });
+  const textRegions = td.regions.filter((r) => r.semanticHint === "text");
+  check("テキスト行を検出している", textRegions.length >= 1, String(textRegions.length));
+  const line = textRegions.sort((a, b) => b.rect[2] * b.rect[3] - a.rect[2] * a.rect[3])[0];
+  check("単色文字は matteEligible", line && line.matteEligible === true,
+    line ? `eligible=${line.matteEligible} conf=${line.matteConfidence}` : "-");
+  // matteConfidence = 当てはまり(fit) × 2峰性。1 にはならない — アンチエイリアスの縁は
+  // 必ず中間 alpha になるため。実測の分布はテキスト中央 0.246 / 写真中央 0.319（mid）で、
+  // このフィクスチャ(30px の白文字)は 0.75 前後。ノイズ側は 0.012〜0.235 に収まる。
+  check("信頼度がノイズ側の上限(0.235)を明確に上回る",
+    line && line.matteConfidence >= 0.6, line && String(line.matteConfidence));
+  check("前景色として白に近い色を推定する",
+    line && line.matte && parseInt(line.matte.fg.slice(1, 3), 16) >= 200,
+    line && line.matte && line.matte.fg);
+  check("背景色として囲んでいるパネルの色を採る",
+    line && line.matte && line.matte.bg.toUpperCase() === "#194878",
+    line && line.matte && line.matte.bg);
+
+  // 2) 切り出した結果が本当に alpha を持つか。**ここまで確かめないと「矩形のまま」と
+  //    区別がつかない。** 文字の内側は不透明、地だった画素は透明になっているはず。
+  const sliced = await hostMatte.sliceImage(textPng, [{
+    name: "line", polygon: [
+      [line.rect[0], line.rect[1]],
+      [line.rect[0] + line.rect[2], line.rect[1]],
+      [line.rect[0] + line.rect[2], line.rect[1] + line.rect[3]],
+      [line.rect[0], line.rect[1] + line.rect[3]],
+    ], matte: line.matte,
+  }]);
+  const st = await (async () => {
+    const page = await hostMatte.getPage();
+    return page.evaluate(async (b64) => {
+      const bin = atob(b64); const by = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) by[i] = bin.charCodeAt(i);
+      const bmp = await createImageBitmap(new Blob([by], { type: "image/png" }));
+      const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+      const x = c.getContext("2d"); x.drawImage(bmp, 0, 0);
+      const d = x.getImageData(0, 0, bmp.width, bmp.height).data;
+      let opaque = 0, clear = 0, mid = 0, n = 0;
+      for (let i = 3; i < d.length; i += 4) {
+        n++;
+        if (d[i] >= 250) opaque++; else if (d[i] <= 5) clear++; else mid++;
+      }
+      return { opaque, clear, mid, n };
+    }, sliced.parts[0].png);
+  })();
+  check("切り出しに不透明な画素がある（文字の中身）", st.opaque > 0, JSON.stringify(st));
+  check("切り出しに透明な画素がある（地だったところ）", st.clear > st.n * 0.3, JSON.stringify(st));
+  check("中間の alpha がある（2値化していない）", st.mid > 0, JSON.stringify(st));
+
+  // 3) **完了条件の本体。** 手続き的ノイズが「テキスト行」として誤検出されても
+  //    matte の対象にしてはいけない。semanticHint を信用すると、写真領域の大量の
+  //    画素を透明化する事故になる。守っているのは射影残差だけ。
+  const noisePng = await hostMatte.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="420" height="260">
+      <defs><filter id="n" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="7" result="t"/>
+        <feColorMatrix in="t" type="saturate" values="0.6"/>
+      </filter></defs>
+      <rect width="420" height="260" fill="#F3F5F6"/>
+      <rect x="40" y="40" width="340" height="180" fill="#888888" filter="url(#n)"/>
+    </svg>`);
+  const nd = await hostMatte.detectUiRegions(noisePng, { minArea: 576, workingMax: 1280 });
+  const noiseText = nd.regions.filter((r) => r.semanticHint === "text");
+  check("ノイズ領域がテキストと誤検出され得ることを確認", noiseText.length >= 1,
+    `text扱い ${noiseText.length}件 / 全${nd.regions.length}件`);
+  check("誤検出されても matteEligible は false",
+    noiseText.every((r) => r.matteEligible !== true),
+    noiseText.map((r) => `${r.rect.join(",")} conf=${r.matteConfidence}`).join(" | "));
+  check("matte 自体が付いていない", noiseText.every((r) => !r.matte));
+} finally {
+  await hostMatte.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

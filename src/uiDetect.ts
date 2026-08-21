@@ -21,6 +21,22 @@ export interface RawRegion {
   fill?: string;
   stroke?: { color: string; width: number };
   fontSizePx?: number;
+  /** テキストを背景から切り離して独立に動かせるか。**semanticHint とは独立に決まる。**
+   *  写真や模様が「テキスト行」として誤検出されても、色直線モデルに乗らなければ false。
+   *  false のときは矩形ラスタのまま扱い、動かし方も fade だけに落とす(uiPrototype.ts)。 */
+  matteEligible?: boolean;
+  /** 動かし方を決めるための総合信頼度(0〜1) = 当てはまり × alpha の2峰性。
+   *  アンチエイリアスの縁が必ず中間 alpha になるので 1 には到達しない。
+   *  実測(2026-08-21): 本物のテキストで 0.6〜0.8、写真の誤検出で 0.0〜0.24。 */
+  matteConfidence?: number;
+  /** 色直線モデルの当てはまり(0〜1)。**これだけでは写真と分離できない** —
+   *  彩度の低い写真は色空間でほぼ1次元なので本当によく当てはまる(実測 0.84)。 */
+  matteFit?: number;
+  /** alpha が 0.2〜0.8 に入る画素の割合。テキストは2峰性なので小さい(中央 0.246)、
+   *  写真は全域に散るので大きい(中央 0.319)。fit と併せて初めて分離できる。 */
+  matteMidAlpha?: number;
+  /** eligible のときだけ入る。sliceImage がこの2色で alpha を作る。 */
+  matte?: { fg: string; bg: string; space: "srgb" | "linear" };
 }
 
 export interface UiElement extends RawRegion {

@@ -95,7 +95,7 @@ function polygonOf(rect: [number, number, number, number]): Array<[number, numbe
 
 export function buildPrototypeScene(input: PrototypeInput): {
   spec: SceneSpec;
-  rasterRegions: Array<{ name: string; polygon: Array<[number, number]> }>;
+  rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }>;
   warnings: string[];
 } {
   const warnings: string[] = [];
@@ -147,7 +147,7 @@ export function buildPrototypeScene(input: PrototypeInput): {
   const shapes: ShapeSpec[] = [];
   const images: ImageSpec[] = [];
   const groups: GroupSpec[] = [];
-  const rasterRegions: Array<{ name: string; polygon: Array<[number, number]> }> = [];
+  const rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }> = [];
   const targetIdOf = new Map<number, string>(); // 要素id -> shape/image id（アニメの対象）
 
   for (const el of input.elements) {
@@ -177,7 +177,9 @@ export function buildPrototypeScene(input: PrototypeInput): {
       targetIdOf.set(el.id, id);
     } else if (el.renderMode === "raster") {
       const name = `el${el.id}_${el.role}`; // id を含むので role が衝突しても一意
-      rasterRegions.push({ name, polygon: polygonOf(rect) });
+      // matte を持つテキストは、矩形の切り出しではなく前景色+alpha として切り出す。
+      // 判定は検出側で済んでおり、ここは「持っていれば渡す」だけ。
+      rasterRegions.push({ name, polygon: polygonOf(rect), matte: el.matte });
       images.push({ id: name, x: cx, y: cy, scale: 1, z }); // bytes は attachRasterAssets が後で埋める
       targetIdOf.set(el.id, name);
     }

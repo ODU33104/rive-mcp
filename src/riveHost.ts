@@ -205,7 +205,7 @@ export class RiveHost {
 
   sliceImage(
     pngBytes: Buffer,
-    regions: Array<{ name: string; polygon: Array<[number, number]>; keepInBase?: boolean }>
+    regions: Array<{ name: string; polygon: Array<[number, number]>; keepInBase?: boolean; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }>
   ): Promise<{
     width: number;
     height: number;
