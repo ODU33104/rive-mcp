@@ -1,6 +1,6 @@
 // stdio JSON-RPC で実サーバーを spawn し全ツールを実呼び出しする E2E テスト
 import { spawn } from "node:child_process";
-import { existsSync, statSync, readFileSync } from "node:fs";
+import { existsSync, statSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -82,7 +82,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 31 tools", names.length === 31, names.join(","));
+  check("tools/list has 32 tools", names.length === 32, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -1068,6 +1068,57 @@ try {
 
   const stopped = await callTool("riv_studio", { path: genPath, stop: true });
   check("riv_studio stops", !stopped.isError && textOf(stopped).includes("stopped"));
+
+  // --- riv_ui_detect → riv_ui_prototype（画像1枚から動くプロトタイプ） ---
+  // 検出は riv_ui_prototype 側でも走るので、**同じ引数でなければ id がずれる**。
+  // その前提が本当に成り立っているかをここで確かめる（ずれると全要素が
+  // 汎用パネル扱いになり、静かに退屈な .riv ができる）。
+  {
+    const shotPath = join(root, "test", "tmp", "ui-shot.png");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420">
+      <rect width="640" height="420" fill="#F3F5F6"/>
+      <rect x="24" y="24" width="592" height="56" rx="10" fill="#194878"/>
+      <rect x="24" y="104" width="280" height="180" rx="12" fill="#3E3179"/>
+      <rect x="48" y="230" width="120" height="36" rx="8" fill="#EB6F38"/>
+      <rect x="330" y="104" width="150" height="96" rx="6" fill="#78D3A3"/>
+      <rect x="496" y="104" width="120" height="96" rx="6" fill="#E275B5"/>
+    </svg>`;
+    // スクリーンショットは自前で用意する（SVG→PNG のツールは公開していない）。
+    // サーバー本体とは別に headless を1つ起こすが、テスト内だけの話。
+    mkdirSync(dirname(shotPath), { recursive: true });
+    {
+      const { RiveHost } = await import(pathToFileURL(join(root, "dist", "riveHost.js")).href);
+      const { PAGE_SCRIPT } = await import(pathToFileURL(join(root, "dist", "pageScript.js")).href);
+      const h = new RiveHost(PAGE_SCRIPT);
+      try { writeFileSync(shotPath, await h.rasterize(svg)); } finally { await h.close(); }
+    }
+    {
+      const det = await callTool("riv_ui_detect", { imagePath: shotPath });
+      check("riv_ui_detect が要素を返す", !det.isError, textOf(det).slice(0, 120));
+      const parsed = JSON.parse(textOf(det));
+      check("要素が5件以上ある", parsed.elements.length >= 5, String(parsed.elements.length));
+
+      const roles = parsed.elements.map((e, i) => ({
+        id: e.id,
+        role: i === 0 ? "background" : e.semanticHint === "text" ? "text" : "card",
+      }));
+      const outRiv = join(root, "test", "tmp", "ui-prototype.riv");
+      const proto = await callTool("riv_ui_prototype", { imagePath: shotPath, outPath: outRiv, roles });
+      check("riv_ui_prototype が .riv を書く", !proto.isError, textOf(proto).slice(0, 200));
+      const pr = JSON.parse(textOf(proto));
+      check("id が突き合っている（未知idの警告が出ない）",
+        !pr.warnings.some((w) => w.includes("not in the detected element list")),
+        JSON.stringify(pr.warnings));
+      check("要素数が riv_ui_detect と一致", pr.elements === parsed.elements.length,
+        `${pr.elements} vs ${parsed.elements.length}`);
+      check("出力が RIVE で始まる", fsMod2Sig(outRiv) === "52495645", fsMod2Sig(outRiv));
+      check("アニメーションが1つ以上ある", pr.animations.length >= 1, JSON.stringify(pr.animations));
+
+      // 実際に再生できるか。ファイルが書けても読めなければ意味がない。
+      const frame = await callTool("riv_render_frame", { path: outRiv, outPath: join(root, "test", "tmp", "ui-prototype.png") });
+      check("生成した .riv を描画できる", !frame.isError, textOf(frame).slice(0, 160));
+    }
+  }
 
   // エラー処理: 存在しないアニメ名 → 候補列挙
   const bad = await callTool("riv_render_frame", { path: RIV, animation: "__nope__" });

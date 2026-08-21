@@ -771,6 +771,12 @@ window.riveApi = {
     return canvas.toDataURL("image/png").split(",")[1];
   },
 
+  // 画像の実寸だけを知りたいとき（検出を走らせずに済ませる）
+  async imageSize(b64) {
+    const bitmap = await createImageBitmap(new Blob([b64ToBytes(b64)], { type: "image/png" }));
+    return { width: bitmap.width, height: bitmap.height };
+  },
+
   // テスト用: SVG 文字列を PNG にする
   async rasterize(b64) {
     const svg = new TextDecoder().decode(b64ToBytes(b64));

@@ -23,6 +23,7 @@ import { startStudio, stopStudio, takeStudioNotes, postStudioReply } from "./stu
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, paletteFromColors, type Mood } from "./designTokens.js";
 import { buildTree } from "./uiDetect.js";
+import { buildPrototypeScene, attachRasterAssets, ROLE_MOTION, type Role } from "./uiPrototype.js";
 import { overlayLabels } from "./uiOverlay.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
 import { importSvg } from "./svgImport.js";
@@ -1701,6 +1702,118 @@ server.registerTool(
           overlayPath,
           dropped,
           next: "Assign a role to each element, then call riv_ui_prototype.",
+        }, null, 1),
+      }],
+    };
+  })
+);
+
+// ---- riv_ui_prototype ----------------------------------------------------
+// riv_ui_detect が返した要素にロールを付けて渡すと、動くプロトタイプ(.riv)を書き出す。
+// **検出をここで再実行してロールを id で突き合わせる。** 要素の全文をもう一度
+// 送らせない代わりに、minArea/maxElements は riv_ui_detect と同じ値でなければ
+// id がずれる（検出自体は決定的なので、同じ画像と同じ引数なら同じ id になる）。
+server.registerTool(
+  "riv_ui_prototype",
+  {
+    title: "Turn a detected UI screenshot into an animated .riv",
+    description:
+      "Take the elements from riv_ui_detect, assign each one a role, and get back a working .riv: every element becomes a shape or an image asset, each gets an entrance appropriate to its role, and buttons and cards get hover and press states. Roles: " +
+      (Object.keys(ROLE_MOTION) as Role[]).join(", ") +
+      ". Elements you leave unassigned animate as a generic panel. Pass the same imagePath, minArea and maxElements you gave riv_ui_detect, or the ids will not line up.",
+    inputSchema: {
+      imagePath: z.string().describe("The same screenshot you passed to riv_ui_detect"),
+      outPath: z.string().describe("Where to write the .riv"),
+      roles: z
+        .array(
+          z.object({
+            id: z.number().describe("Element id from riv_ui_detect"),
+            role: z.string().describe("One of the roles listed in the description"),
+            name: z.string().optional().describe("Name for this object inside the .riv"),
+          })
+        )
+        .describe("Role for each element. Ids you omit fall back to a generic panel."),
+      minArea: z.number().optional().describe("Must match the riv_ui_detect call (default 576)"),
+      maxElements: z.number().optional().describe("Must match the riv_ui_detect call (default 120)"),
+      interactions: z.boolean().optional().describe("Add hover and press states where the role has them (default true)"),
+      entranceMs: z.number().optional().describe("How long the whole entrance takes, in milliseconds"),
+      stagger: z.number().optional().describe("Delay between elements entering, in milliseconds"),
+      ambient: z.boolean().optional().describe("Give roles with an idle motion a looping ambient animation (default true)"),
+    },
+  },
+  wrap(async (a: {
+    imagePath: string; outPath: string;
+    roles: Array<{ id: number; role: string; name?: string }>;
+    minArea?: number; maxElements?: number; interactions?: boolean;
+    entranceMs?: number; stagger?: number; ambient?: boolean;
+  }) => {
+    const src = resolve(a.imagePath);
+    if (!existsSync(src)) return err(`Image not found: ${src}`);
+    const png = readFileSync(src);
+    const det = await host.detectUiRegions(png, { minArea: a.minArea ?? 576, workingMax: 1280 });
+    if (!det.regions.length) {
+      return err(
+        `No UI elements detected in ${src}. Run riv_ui_detect first to see what this image gives you.`
+      );
+    }
+    const { elements, dropped } = buildTree(det.regions, a.maxElements ?? 120);
+
+    const roleById = new Map(a.roles.map((r) => [r.id, r]));
+    const unknownIds = a.roles.filter((r) => !elements.some((e) => e.id === r.id)).map((r) => r.id);
+    const withRoles = elements.map((e) => {
+      const r = roleById.get(e.id);
+      return { ...e, role: r?.role ?? "panel", name: r?.name };
+    });
+
+    const built = buildPrototypeScene({
+      elements: withRoles,
+      source: { width: det.width, height: det.height },
+      interactions: a.interactions ?? true,
+      motion: { entranceMs: a.entranceMs, stagger: a.stagger, ambient: a.ambient ?? true },
+    });
+
+    // ラスタ要素は元画像から切り出して .riv に埋め込む。切り出す領域が無ければ
+    // 元画像をまるごと base として持たせる（背景が消えた .riv を作らないため）。
+    const sliced = built.rasterRegions.length
+      ? await host.sliceImage(png, built.rasterRegions)
+      : { width: det.width, height: det.height, parts: [], base: png.toString("base64") };
+    attachRasterAssets(built.spec, sliced);
+
+    const out = resolve(a.outPath);
+    mkdirSync(dirname(out), { recursive: true });
+    const { bytes, warnings: writerWarnings } = createRiv(built.spec);
+    writeFileSync(out, bytes);
+
+    const warnings = [...built.warnings, ...(writerWarnings ?? [])];
+    if (unknownIds.length) {
+      warnings.push(
+        `These ids are not in the detected element list and were ignored: ${unknownIds.join(", ")}. ` +
+          `Check that minArea and maxElements match the riv_ui_detect call.`
+      );
+    }
+    if (dropped > 0) {
+      warnings.push(`${dropped} smaller elements were dropped by the maxElements cap.`);
+    }
+
+    const roleCounts: Record<string, number> = {};
+    for (const e of withRoles) roleCounts[e.role] = (roleCounts[e.role] ?? 0) + 1;
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          outPath: out,
+          bytes: bytes.length,
+          source: { width: det.width, height: det.height },
+          elements: withRoles.length,
+          rasterAssets: sliced.parts.length,
+          animations: built.spec.animations?.map((an) => an.name) ?? [],
+          stateMachines: (Array.isArray(built.spec.stateMachine)
+            ? built.spec.stateMachine
+            : built.spec.stateMachine ? [built.spec.stateMachine] : []).map((sm) => sm.name),
+          roleCounts,
+          warnings,
+          next: "Render it with riv_render_gif or open it in riv_studio.",
         }, null, 1),
       }],
     };

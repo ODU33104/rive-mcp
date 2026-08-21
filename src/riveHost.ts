@@ -227,6 +227,10 @@ export class RiveHost {
     return this.call("detectUiRegions", pngBytes.toString("base64"), opts);
   }
 
+  async imageSize(pngBytes: Buffer): Promise<{ width: number; height: number }> {
+    return this.call("imageSize", pngBytes.toString("base64"), {});
+  }
+
   async drawOverlay(pngBytes: Buffer, labels: OverlayLabel[]): Promise<Buffer> {
     const b64 = await this.call<string>("drawOverlay", pngBytes.toString("base64"), { labels });
     return Buffer.from(b64, "base64");
