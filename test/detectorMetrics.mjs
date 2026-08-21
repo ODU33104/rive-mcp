@@ -688,6 +688,21 @@ export function truthAlignment(elements, truth) {
   const leakRatiosAll = perNegative.map((p) => p.leakRatio);
 
   // --- positive: どれだけ拾えたか（抜け道1「全部raster」を塞ぐ主指標） ---
+  // 幾何としての recall。renderMode を問わず「その場所にその形の要素があるか」だけを見る。
+  // vector-panel の recall と分けて持つ理由: 実画像では「見つかってはいるが raster に
+  // 分類されている」が支配的で、両者を1つの数字に混ぜると
+  // 「検出できていない」のか「編集可能にできていない」のかが判別できなくなる
+  // （実測 2026-08-21: holdout のボタン2件はどちらも IoU 0.89 / 0.95 で検出されている）。
+  let geometryHits = 0;
+  for (const pos of positives) {
+    let best = 0;
+    for (const e of elements) {
+      const v = iou(e.rect, pos.rect);
+      if (v > best) best = v;
+    }
+    if (best >= POSITIVE_IOU_HIT) geometryHits++;
+  }
+
   const candidates = elements.filter((e) => e.renderMode === "vector-panel");
   const radiusTolOf = (pos) =>
     Math.max(POSITIVE_RADIUS_TOL_PX, (pos.cornerRadius || 0) * POSITIVE_RADIUS_TOL_RATIO);
@@ -760,6 +775,7 @@ export function truthAlignment(elements, truth) {
     positiveHitCount: hitCount,
     positiveTotal: positives.length,
     positiveCandidateCount: candidates.length,
+    positiveGeometryRecall: positives.length ? geometryHits / positives.length : 0,
     cornerRadiusMAE: radiusErrors.length ? radiusErrors.reduce((a, b) => a + b, 0) / radiusErrors.length : 0,
     perNegative,
     perPositive,
