@@ -168,7 +168,7 @@ export function topLayerLabels(elements, { width, height }) {
  * host: RiveHost（既に起動済みの canvas-advanced ページを持つ）。canvas 実行にライブ
  * ページが要るため brief の型 reconstructionError(png, elements) に host を足してある。
  */
-export async function reconstructionStats(host, sourcePng, elements) {
+export async function reconstructionStats(host, sourcePng, elements, inkProbes = []) {
   const page = await host.getPage();
   const srcB64 = Buffer.isBuffer(sourcePng) ? sourcePng.toString("base64") : sourcePng;
 
@@ -188,7 +188,7 @@ export async function reconstructionStats(host, sourcePng, elements) {
   const labelsB64 = Buffer.from(labels).toString("base64");
 
   return await page.evaluate(
-    async ({ srcB64, elements, labelsB64 }) => {
+    async ({ srcB64, elements, labelsB64, inkProbes, INK_TOL }) => {
       function b64ToBytes(b64) {
         const bin = atob(b64);
         const bytes = new Uint8Array(bin.length);
@@ -287,7 +287,44 @@ export async function reconstructionStats(host, sourcePng, elements) {
         }
         return 1;
       };
+      // --- インク被覆(テキスト忠実度) ---
+      // GT のテキスト bbox はフォントメトリクス近似なので面積の正解にはならないが、
+      // **インク色の画素そのものは画素厳密な正解**。そのインクが raster に拾われているか
+      // (=独立して動かせるか)、それとも不透明なベクター塗りで潰されているかを測る。
+      // これが無いと「テキストを一切検出しない検出器」がどの hard gate にも掛からない。
+      const inkCoverage = [];
+      for (const probe of inkProbes) {
+        const [px, py, pw, ph] = probe.rect;
+        const ir = parseInt(probe.inkColor.slice(1, 3), 16);
+        const ig = parseInt(probe.inkColor.slice(3, 5), 16);
+        const ib = parseInt(probe.inkColor.slice(5, 7), 16);
+        const x0 = Math.max(0, Math.round(px)), y0 = Math.max(0, Math.round(py));
+        const x1 = Math.min(W, Math.round(px + pw)), y1 = Math.min(H, Math.round(py + ph));
+        let ink = 0, onRaster = 0, onVector = 0;
+        for (let yy = y0; yy < y1; yy++) {
+          for (let xx = x0; xx < x1; xx++) {
+            const q = yy * W + xx;
+            const i = q * 4;
+            if (Math.abs(srcData[i] - ir) > INK_TOL) continue;
+            if (Math.abs(srcData[i + 1] - ig) > INK_TOL) continue;
+            if (Math.abs(srcData[i + 2] - ib) > INK_TOL) continue;
+            ink++;
+            if (labels[q] === 2) onRaster++;
+            else if (labels[q] === 1) onVector++;
+          }
+        }
+        inkCoverage.push({
+          label: probe.label,
+          inkPixels: ink,
+          // 理想 1: インクがラスタ要素として拾われている
+          rasterCoverRatio: ink ? onRaster / ink : 0,
+          // 理想 0: インクが不透明なベクター塗りで潰されている
+          vectorCoverRatio: ink ? onVector / ink : 0,
+        });
+      }
+
       return {
+        inkCoverage,
         mae: sum / (N * 765),
         p95: percentile(0.95),
         p99: percentile(0.99),
@@ -297,7 +334,7 @@ export async function reconstructionStats(host, sourcePng, elements) {
         height: H,
       };
     },
-    { srcB64, elements, labelsB64 }
+    { srcB64, elements, labelsB64, inkProbes, INK_TOL: INK_MATCH_TOL }
   );
 }
 
@@ -307,6 +344,12 @@ export async function reconstructionError(host, sourcePng, elements) {
 }
 
 // ---- 安価な guardrail 指標 ---------------------------------------------------
+
+// インク色一致の許容差。アンチエイリアスの縁は中間色になるので、**コア画素だけ**を
+// インクとみなす値にする。32 = 5bit量子化のバケット幅(8)の4倍で、JPEG等の
+// 実画像ノイズにも耐えつつ「別の色」を拾わない幅。合成シーンのインクは可逆PNGなので
+// 実質厳密一致で拾える。
+export const INK_MATCH_TOL = 32;
 
 // 44px は Apple/Material のタップ領域下限。20x20=400px^2 はその半分以下で、意図的なUI
 // 要素としてはまず小さすぎるサイズ。detectUiRegions の panel/image 経路は minArea
@@ -524,28 +567,57 @@ export const REGION_MEMBERSHIP_RATIO = 0.5;
 
 /**
  * candidate(vector-panel) と GT positive を1対1で対応付ける。
- * IoU 降順の貪欲法。要素数が高々数十なのでHungarianは不要で、
- * 同点時の順序を pi/ci で固定してあるため結果は決定的。
+ *
+ * **辺は「hit の資格がある組」だけ**（IoU・塗り・角丸のすべてが許容内）。その上で
+ * **最大マッチング**（Kuhn の増加道法）を解く。hit 件数の最大値そのものが答えになる。
+ *
+ * IoU 降順の貪欲法ではいけない。貪欲は最大マッチングを与えず、**recall を過小評価する**:
+ *   p1↔c1 = 0.961 / p1↔c3 = 0.920 / p2↔c1 = 0.852 / p2↔c3 = 0.745(資格なし)
+ *   貪欲は最大値の p1-c1 を先に取り、p2 が相手を失って 1 hit。
+ *   最適は p1-c3 と p2-c1 で 2 hit。
+ * recall は抜け道1（全部 raster）を守る主指標なので、実在しない recall 低下を
+ * 報告すると後続タスクが幻の劣化を追いかけることになる。
+ *
+ * 候補は高々120・positive は高々十数なので Kuhn で十分。各 positive の隣接リストを
+ * IoU 降順に固定してあるため、最大マッチングが複数あっても選択は決定的。
  */
-function matchPositives(candidates, positives) {
-  const pairs = [];
-  for (let pi = 0; pi < positives.length; pi++) {
+function matchPositives(candidates, positives, eligible) {
+  const adj = positives.map((_, pi) => {
+    const es = [];
     for (let ci = 0; ci < candidates.length; ci++) {
-      const v = iou(candidates[ci].rect, positives[pi].rect);
-      if (v > 0) pairs.push({ pi, ci, iou: v });
+      const e = eligible(pi, ci);
+      if (e) es.push({ ci, iou: e.iou });
     }
+    es.sort((a, b) => b.iou - a.iou || a.ci - b.ci);
+    return es;
+  });
+
+  const matchOfC = new Array(candidates.length).fill(-1);
+  const matchOfP = new Array(positives.length).fill(-1);
+  const augment = (pi, seen) => {
+    for (const { ci } of adj[pi]) {
+      if (seen[ci]) continue;
+      seen[ci] = true;
+      if (matchOfC[ci] === -1 || augment(matchOfC[ci], seen)) {
+        matchOfC[ci] = pi;
+        matchOfP[pi] = ci;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let pi = 0; pi < positives.length; pi++) augment(pi, new Array(candidates.length).fill(false));
+  return matchOfP;
+}
+
+/** 対応が付かなかった positive の診断用。**gate 指標には使わない。** */
+function nearestCandidate(candidates, rect) {
+  let best = null;
+  for (const c of candidates) {
+    const v = iou(c.rect, rect);
+    if (!best || v > best.iou) best = { candidate: c, iou: v };
   }
-  pairs.sort((a, b) => b.iou - a.iou || a.pi - b.pi || a.ci - b.ci);
-  const usedP = new Set();
-  const usedC = new Set();
-  const matched = new Map(); // pi -> {candidate, iou}
-  for (const p of pairs) {
-    if (usedP.has(p.pi) || usedC.has(p.ci)) continue;
-    usedP.add(p.pi);
-    usedC.add(p.ci);
-    matched.set(p.pi, { candidate: candidates[p.ci], iou: p.iou });
-  }
-  return matched;
+  return best;
 }
 
 function median(nums) {
@@ -612,36 +684,61 @@ export function truthAlignment(elements, truth) {
 
   // --- positive: どれだけ拾えたか（抜け道1「全部raster」を塞ぐ主指標） ---
   const candidates = elements.filter((e) => e.renderMode === "vector-panel");
-  const matched = matchPositives(candidates, positives);
+  const radiusTolOf = (pos) =>
+    Math.max(POSITIVE_RADIUS_TOL_PX, (pos.cornerRadius || 0) * POSITIVE_RADIUS_TOL_RATIO);
+
+  // 「hit の資格がある組」の判定。matchPositives はこの辺集合の最大マッチングを解くので、
+  // 判定をここに1箇所だけ置いておけば hit 件数 = マッチング数になる。
+  const eligible = (pi, ci) => {
+    const pos = positives[pi];
+    const cand = candidates[ci];
+    const v = iou(cand.rect, pos.rect);
+    if (v < POSITIVE_IOU_HIT) return null;
+    if (pos.fill !== undefined && fillDelta(cand.fill, pos.fill) > POSITIVE_FILL_TOL) return null;
+    if (pos.cornerRadius !== undefined &&
+        Math.abs((cand.cornerRadius || 0) - pos.cornerRadius) > radiusTolOf(pos)) return null;
+    return { iou: v };
+  };
+
+  const matchOfP = matchPositives(candidates, positives, eligible);
   const perPositive = [];
   const hitIous = [];
   const radiusErrors = [];
   let hitCount = 0;
   for (let pi = 0; pi < positives.length; pi++) {
     const pos = positives[pi];
-    const m = matched.get(pi);
-    const gotIou = m ? m.iou : 0;
-    const dFill = m && pos.fill !== undefined ? fillDelta(m.candidate.fill, pos.fill) : m ? 0 : Infinity;
-    const dRadius =
-      m && pos.cornerRadius !== undefined
-        ? Math.abs((m.candidate.cornerRadius || 0) - pos.cornerRadius)
-        : m
-          ? 0
-          : Infinity;
-    const radiusTol = Math.max(POSITIVE_RADIUS_TOL_PX, (pos.cornerRadius || 0) * POSITIVE_RADIUS_TOL_RATIO);
-    const hit = !!m && gotIou >= POSITIVE_IOU_HIT && dFill <= POSITIVE_FILL_TOL && dRadius <= radiusTol;
-    if (hit) {
+    const ci = matchOfP[pi];
+    if (ci >= 0) {
+      const cand = candidates[ci];
+      const v = iou(cand.rect, pos.rect);
+      const dRadius = pos.cornerRadius !== undefined
+        ? Math.abs((cand.cornerRadius || 0) - pos.cornerRadius)
+        : 0;
       hitCount++;
-      hitIous.push(gotIou);
+      hitIous.push(v);
+      // **hit した組だけを gate 指標に入れる。** 対応が付かなかった positive の
+      // 「たまたま少し重なっていた別物」を混ぜると、cornerRadiusMAE(Task 14 の P1 gate)が
+      // 検出器の精度ではなく囮候補の角丸で決まってしまう。
+      radiusErrors.push(dRadius);
+      perPositive.push({
+        label: pos.label,
+        hit: true,
+        iou: v,
+        fillDelta: pos.fill !== undefined ? fillDelta(cand.fill, pos.fill) : 0,
+        radiusDelta: dRadius,
+      });
+    } else {
+      // 診断用に最も近い候補を載せるが、値は gate 指標に一切入れない。
+      const near = nearestCandidate(candidates, pos.rect);
+      perPositive.push({
+        label: pos.label,
+        hit: false,
+        iou: 0,
+        nearestIou: near ? near.iou : 0,
+        fillDelta: null,
+        radiusDelta: null,
+      });
     }
-    if (m && Number.isFinite(dRadius)) radiusErrors.push(dRadius);
-    perPositive.push({
-      label: pos.label,
-      hit,
-      iou: gotIou,
-      fillDelta: Number.isFinite(dFill) ? dFill : null,
-      radiusDelta: Number.isFinite(dRadius) ? dRadius : null,
-    });
   }
 
   return {
@@ -657,6 +754,7 @@ export function truthAlignment(elements, truth) {
     positivePanelMedianIoU: median(hitIous),
     positiveHitCount: hitCount,
     positiveTotal: positives.length,
+    positiveCandidateCount: candidates.length,
     cornerRadiusMAE: radiusErrors.length ? radiusErrors.reduce((a, b) => a + b, 0) / radiusErrors.length : 0,
     perNegative,
     perPositive,
@@ -843,6 +941,37 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const wrongFill = [el({ id: 1, renderMode: "vector-panel", rect: [0, 0, 100, 100], fill: "#FF0000", cornerRadius: 8 })];
     check("塗りが違えば hit にしない", truthAlignment(wrongFill, truth).positivePanelInstanceRecall === 0);
 
+    // 指摘1(2026-08-21 レビュー): cornerRadiusMAE は Task 14 の P1 gate の値なので、
+    // hit していない組から計算されてはならない。修正前は「少しでも重なった候補」から
+    // 計算していたため、ほぼ重なっていない囮1枚で MAE 20 が出せた。
+    const decoyTruth = {
+      width: 200, height: 200,
+      elements: [{ label: "p", rect: [0, 0, 10, 10], expectVectorPanel: true, semanticHint: "panel", fill: "#111111", cornerRadius: 20 }],
+    };
+    const decoy = [el({ id: 1, renderMode: "vector-panel", rect: [9, 9, 10, 10], fill: "#111111", cornerRadius: 0 })];
+    const tD = truthAlignment(decoy, decoyTruth);
+    check("囮候補は hit にならない", tD.positivePanelInstanceRecall === 0, String(tD.positivePanelInstanceRecall));
+    check("囮候補は cornerRadiusMAE を汚さない", tD.cornerRadiusMAE === 0, String(tD.cornerRadiusMAE));
+    check("囮候補は診断用に nearestIou で見える", tD.perPositive[0].nearestIou > 0, String(tD.perPositive[0].nearestIou));
+
+    // 指摘2(同レビュー): 貪欲マッチングは最大マッチングを与えず recall を過小評価する。
+    //   iou(p1,c1)=0.961 / iou(p1,c3)=0.920 / iou(p2,c1)=0.852 / iou(p2,c3)=0.745(資格なし)
+    //   貪欲は最大値 p1-c1 を先に取り p2 が相手を失って 1 hit。最適は 2 hit。
+    const pairTruth = {
+      width: 200, height: 200,
+      elements: [
+        { label: "p1", rect: [0, 0, 100, 100], expectVectorPanel: true, semanticHint: "panel", fill: "#111111", cornerRadius: 0 },
+        { label: "p2", rect: [0, 10, 100, 100], expectVectorPanel: true, semanticHint: "panel", fill: "#111111", cornerRadius: 0 },
+      ],
+    };
+    const pairEls = [
+      el({ id: 1, renderMode: "vector-panel", rect: [0, 2, 100, 100], fill: "#111111", cornerRadius: 0 }),
+      el({ id: 2, renderMode: "vector-panel", rect: [0, 0, 100, 92], fill: "#111111", cornerRadius: 0 }),
+    ];
+    const tP = truthAlignment(pairEls, pairTruth);
+    check("最大マッチングで2件とも hit する(貪欲なら1件)",
+      tP.positivePanelInstanceRecall === 1, `recall=${tP.positivePanelInstanceRecall} hits=${tP.positiveHitCount}`);
+
     // 過検出: negative を飲み込む vector-panel
     const badEls = [el({ id: 1, renderMode: "vector-panel", rect: [0, 0, 200, 100], fill: "#123456" })];
     const t2 = truthAlignment(badEls, truth);
@@ -906,6 +1035,53 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     // 80x40=3200px / 30000px = 10.7% が壊れている → p95 は明確に大きい。
     // これが「global mean だけでは局所事故が見えない」を塞ぐ根拠。
     check("局所的な破壊は p95 に出る", wrong.p95 > 0.1, `p95=${wrong.p95} mae=${wrong.mae}`);
+
+    // --- インク被覆: 「テキストを検出しない検出器」を落とせるか ---
+    // 静止画の再構成誤差はどちらもほぼ0（パネルの塗りが元の背景色と同じなので）。
+    // つまり**再構成誤差では原理的に区別できない**失敗を、この指標だけが拾う。
+    const textSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">
+      <rect width="200" height="100" fill="#203040"/>
+      <text x="20" y="60" font-family="Arial, sans-serif" font-size="36" fill="#FFFFFF">Ab8</text>
+    </svg>`;
+    const textPng = await host.rasterize(textSvg);
+    const probes = [{ label: "t", rect: [20, 28, 80, 45], inkColor: "#FFFFFF" }];
+
+    const withText = await reconstructionStats(host, textPng, [
+      el({ id: 1, children: [2], renderMode: "vector-panel", rect: [0, 0, 200, 100], fill: "#203040" }),
+      el({ id: 2, parent: 1, renderMode: "raster", semanticHint: "text", rect: [20, 28, 80, 45] }),
+    ], probes);
+    check("インク画素を実際に見つけている", withText.inkCoverage[0].inkPixels > 100, String(withText.inkCoverage[0].inkPixels));
+    check("テキストを拾えばインクは raster 上", withText.inkCoverage[0].rasterCoverRatio === 1, String(withText.inkCoverage[0].rasterCoverRatio));
+    check("テキストを拾えばインクはベクターに潰されない", withText.inkCoverage[0].vectorCoverRatio === 0, String(withText.inkCoverage[0].vectorCoverRatio));
+
+    const noText = await reconstructionStats(host, textPng, [
+      el({ id: 1, renderMode: "vector-panel", rect: [0, 0, 200, 100], fill: "#203040" }),
+    ], probes);
+    check("テキストを検出しなければインクはベクターに潰される", noText.inkCoverage[0].vectorCoverRatio === 1, String(noText.inkCoverage[0].vectorCoverRatio));
+    check("テキストを検出しなければ raster 被覆 0", noText.inkCoverage[0].rasterCoverRatio === 0, String(noText.inkCoverage[0].rasterCoverRatio));
+    // なぜ専用の指標が要るのか。**再構成誤差は盲目ではないが希釈される。**
+    // 上の 200x100 では文字が画面の 2.6% を占めるので mae は 0.00001 → 0.027 と動く。
+    // 実際の画面では文字のインクは全画素の 0.1% 未満で、平均にも p99(上位1%)にも乗らない。
+    // 下はそれを実測で示す: 同じ文字を 1000x1000 に置くと分位は動かないのに
+    // インク被覆は 1 → 0 に落ちる。
+    const bigSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000">
+      <rect width="1000" height="1000" fill="#203040"/>
+      <text x="20" y="60" font-family="Arial, sans-serif" font-size="36" fill="#FFFFFF">Ab8</text>
+    </svg>`;
+    const bigPng = await host.rasterize(bigSvg);
+    const bigWith = await reconstructionStats(host, bigPng, [
+      el({ id: 1, children: [2], renderMode: "vector-panel", rect: [0, 0, 1000, 1000], fill: "#203040" }),
+      el({ id: 2, parent: 1, renderMode: "raster", semanticHint: "text", rect: [20, 28, 80, 45] }),
+    ], probes);
+    const bigNo = await reconstructionStats(host, bigPng, [
+      el({ id: 1, renderMode: "vector-panel", rect: [0, 0, 1000, 1000], fill: "#203040" }),
+    ], probes);
+    check("希釈されると p99 は文字の消失に反応しない",
+      Math.abs(bigWith.p99 - bigNo.p99) < 1e-9, `with=${bigWith.p99} no=${bigNo.p99}`);
+    check("希釈されてもインク被覆は 1 → 0 に落ちる",
+      bigWith.inkCoverage[0].rasterCoverRatio === 1 && bigNo.inkCoverage[0].rasterCoverRatio === 0,
+      `with=${bigWith.inkCoverage[0].rasterCoverRatio} no=${bigNo.inkCoverage[0].rasterCoverRatio}`);
+    console.log(`     (参考: 希釈時の mae は ${bigWith.mae.toFixed(6)} → ${bigNo.mae.toFixed(6)})`);
 
     // 要素0件(何も描かない=baseそのまま) → 誤差は0(baseを消していないため)
     const empty = await reconstructionStats(host, png, []);

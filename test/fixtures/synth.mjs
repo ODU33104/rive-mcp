@@ -116,6 +116,12 @@ export function generateScene(seed, opts = {}) {
   const titleX = 44;
   const titleBaseline = 24 + 64 / 2 + titleFontSize * 0.35;
 
+  // インク色を定数にして正解データへも載せる。テキストの bbox は近似だが、
+  // **この色の画素そのものは画素厳密な正解**になる(2026-08-21 レビューの指摘3)。
+  // これが無いと「テキストを一切検出しない検出器」がどの hard gate にも掛からない。
+  const TITLE_INK = "#FFFFFF";
+  const NUMBER_INK = "#12151C";
+
   const numberWord = String(Math.floor(pick(rng, 100, 999)));
   const numberFontSize = Math.round(pick(rng, 24, 30));
   const numberX = 388;
@@ -133,11 +139,11 @@ export function generateScene(seed, opts = {}) {
   </defs>
   <rect width="${W}" height="${H}" fill="${bgColor}"/>
   <rect x="${header.rect[0]}" y="${header.rect[1]}" width="${header.rect[2]}" height="${header.rect[3]}" rx="${header.cornerRadius}" fill="${header.fill}"/>
-  <text x="${titleX}" y="${titleBaseline}" font-family="Arial, sans-serif" font-size="${titleFontSize}" fill="#FFFFFF">${titleWord}</text>
+  <text x="${titleX}" y="${titleBaseline}" font-family="Arial, sans-serif" font-size="${titleFontSize}" fill="${TITLE_INK}">${titleWord}</text>
   <rect x="${card.rect[0]}" y="${card.rect[1]}" width="${card.rect[2]}" height="${card.rect[3]}" rx="${card.cornerRadius}" fill="${card.fill}"/>
   <rect x="${cardButton.rect[0]}" y="${cardButton.rect[1]}" width="${cardButton.rect[2]}" height="${cardButton.rect[3]}" rx="${cardButton.cornerRadius}" fill="${cardButton.fill}"/>
   <rect x="${tileA.rect[0]}" y="${tileA.rect[1]}" width="${tileA.rect[2]}" height="${tileA.rect[3]}" rx="${tileA.cornerRadius}" fill="${tileA.fill}"/>
-  <text x="${numberX}" y="${numberBaseline}" font-family="Arial, sans-serif" font-size="${numberFontSize}" fill="#12151C">${numberWord}</text>
+  <text x="${numberX}" y="${numberBaseline}" font-family="Arial, sans-serif" font-size="${numberFontSize}" fill="${NUMBER_INK}">${numberWord}</text>
   <rect x="${tileB.rect[0]}" y="${tileB.rect[1]}" width="${tileB.rect[2]}" height="${tileB.rect[3]}" rx="${tileB.cornerRadius}" fill="${tileB.fill}"/>
   <rect x="${noiseRect[0]}" y="${noiseRect[1]}" width="${noiseRect[2]}" height="${noiseRect[3]}" fill="#888888" filter="url(#noise)"/>
   <rect x="${gradientRect[0]}" y="${gradientRect[1]}" width="${gradientRect[2]}" height="${gradientRect[3]}" fill="url(#grad)"/>
@@ -166,8 +172,8 @@ export function generateScene(seed, opts = {}) {
       // **指標の作り物**が gate に混ざる。矩形が画素厳密な noise/gradient だけを gate に使う。
       // テキストの過剰ベクター化は面積ではなく perNegative[].vectorPanelCount で見ること
       // (こちらは近似に影響されない)。
-      { label: "title-text", rect: SR(textBBox(titleX, titleBaseline, titleWord, titleFontSize)), expectVectorPanel: false, semanticHint: "text", leakGate: false },
-      { label: "number-text", rect: SR(textBBox(numberX, numberBaseline, numberWord, numberFontSize)), expectVectorPanel: false, semanticHint: "text", leakGate: false },
+      { label: "title-text", rect: SR(textBBox(titleX, titleBaseline, titleWord, titleFontSize)), expectVectorPanel: false, semanticHint: "text", leakGate: false, inkColor: TITLE_INK },
+      { label: "number-text", rect: SR(textBBox(numberX, numberBaseline, numberWord, numberFontSize)), expectVectorPanel: false, semanticHint: "text", leakGate: false, inkColor: NUMBER_INK },
       { label: "noise-texture", rect: SR(noiseRect), expectVectorPanel: false, semanticHint: "image", leakGate: true },
       { label: "gradient-band", rect: SR(gradientRect), expectVectorPanel: false, semanticHint: "image", leakGate: true },
     ],
@@ -209,6 +215,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       check(`negative ${negatives[i].label} と ${negatives[j].label} は重ならない`, ov === 0, String(ov));
     }
   }
+  check("テキスト negative は inkColor を持つ",
+    negatives.filter((e) => e.semanticHint === "text").every((e) => /^#[0-9A-Fa-f]{6}$/.test(e.inkColor)));
+  check("inkColor は svg の描画色と一致",
+    a1.svg.includes(`fill="${negatives.find((e) => e.label === "title-text").inkColor}"`) &&
+    a1.svg.includes(`fill="${negatives.find((e) => e.label === "number-text").inkColor}"`));
+
   check("gate 対象の negative は画素厳密な2件", negatives.filter((e) => e.leakGate).length === 2);
 
   check("positive は fill を持つ", positives.every((e) => /^#[0-9A-Fa-f]{6}$/.test(e.fill)));

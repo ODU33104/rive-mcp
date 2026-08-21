@@ -79,7 +79,14 @@ async function main() {
       const det = await host.detectUiRegions(png, DETECT_OPTS);
       const { elements, dropped } = buildTree(det.regions, MAX_ELEMENTS);
 
-      const recon = await reconstructionStats(host, png, elements);
+      // インク probe: テキストの GT bbox は近似だが、インク色の画素は画素厳密。
+      // これが無いと「テキストを一切検出しない検出器」がどの gate にも掛からない
+      // (実測: 文字が全画素の0.1%未満だと p99 は無反応、mae の差 0.00054 は
+      //  ベースライン全体の mae 0.00066 に埋もれる)。
+      const inkProbes = truth.elements
+        .filter((e) => e.inkColor)
+        .map((e) => ({ label: e.label, rect: e.rect, inkColor: e.inkColor }));
+      const recon = await reconstructionStats(host, png, elements, inkProbes);
       const g = guardrails(elements, { width: det.width, height: det.height }, {
         dropped,
         rawRegions: det.regions,
@@ -101,7 +108,8 @@ async function main() {
         `seed=${seed} x${pixelScale} elements=${elements.length} dropped=${dropped} ` +
           `mae=${recon.mae.toFixed(5)} p99=${recon.p99.toFixed(3)} ` +
           `leakOverall=${t.negativeLeakOverall.toFixed(3)} leakMax=${t.negativeLeakMaxPerRegion.toFixed(3)} ` +
-          `recall=${t.positivePanelInstanceRecall.toFixed(3)} stripe=${g.stripeRunScore}`
+          `recall=${t.positivePanelInstanceRecall.toFixed(3)} stripe=${g.stripeRunScore} ` +
+          `ink=${recon.inkCoverage.map((i) => i.rasterCoverRatio.toFixed(2)).join("/")}`
       );
     }
   } finally {
@@ -115,11 +123,18 @@ async function main() {
     negativeLeakOverallMean: mean(perScene.map((s) => s.truthAlignment.negativeLeakOverall)),
     negativeLeakMaxPerRegionWorst: Math.max(...perScene.map((s) => s.truthAlignment.negativeLeakMaxPerRegion)),
     negativeRegionsWithAnyLeakTotal: perScene.reduce((a, s) => a + s.truthAlignment.negativeRegionsWithAnyLeak, 0),
+    // gate 対象外(テキスト)を含めた最悪値。gate には使わないが、**要約から消してはいけない** —
+    // 実測でテキストの leak が gradient/noise の最悪値を上回るシーンが 7 中 2 件ある。
+    negativeLeakMaxPerRegionAllWorst: Math.max(...perScene.map((s) => s.truthAlignment.negativeLeakMaxPerRegionAll)),
     // 理想 0。negative なのだから 1 枚でも誤り。
     gradientVectorPanelCountMean: mean(perScene.map((s) => gradientOf(s).vectorPanelCount ?? 0)),
     // 理想 1。何枚の raster にまとまったか。
     gradientRasterRegionCountMean: mean(perScene.map((s) => gradientOf(s).rasterCount ?? 0)),
     // --- P1: 編集性を落とす側（抜け道1「全部raster」を塞ぐ） ---
+    // テキスト忠実度。理想は raster 1 / vector 0。これが無いと「テキストを検出しない」で満点が取れる。
+    textInkRasterCoverMean: mean(perScene.flatMap((s) => s.reconstruction.inkCoverage.map((i) => i.rasterCoverRatio))),
+    textInkVectorCoverMean: mean(perScene.flatMap((s) => s.reconstruction.inkCoverage.map((i) => i.vectorCoverRatio))),
+    textInkRasterCoverWorst: Math.min(...perScene.flatMap((s) => s.reconstruction.inkCoverage.map((i) => i.rasterCoverRatio))),
     positivePanelInstanceRecallMean: mean(perScene.map((s) => s.truthAlignment.positivePanelInstanceRecall)),
     positivePanelMedianIoUMean: mean(perScene.map((s) => s.truthAlignment.positivePanelMedianIoU)),
     cornerRadiusMAEMean: mean(perScene.map((s) => s.truthAlignment.cornerRadiusMAE)),

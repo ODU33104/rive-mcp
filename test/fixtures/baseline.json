@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-21T00:58:40.385Z",
+  "generatedAt": "2026-08-21T01:15:59.119Z",
   "note": "現在(未変更)の検出器のスナップショット。改善の目標値ではなく、後続タスクが自分の変更の効果を測るための固定参照点。",
   "srcClean": true,
   "detectOpts": {
@@ -41,11 +41,15 @@
     "negativeLeakOverallMean": 0.46308553485531034,
     "negativeLeakMaxPerRegionWorst": 0.7973766051364366,
     "negativeRegionsWithAnyLeakTotal": 7,
+    "negativeLeakMaxPerRegionAllWorst": 0.8267477203647416,
     "gradientVectorPanelCountMean": 32.42857142857143,
     "gradientRasterRegionCountMean": 7.142857142857143,
+    "textInkRasterCoverMean": 0.7909032138156926,
+    "textInkVectorCoverMean": 0.20909678618430733,
+    "textInkRasterCoverWorst": 0.2637837837837838,
     "positivePanelInstanceRecallMean": 0.9761904761904762,
     "positivePanelMedianIoUMean": 0.998784391302167,
-    "cornerRadiusMAEMean": 0.8095238095238094,
+    "cornerRadiusMAEMean": 0.8571428571428571,
     "rasterOverdrawRatioMean": 0.1369430487275882,
     "rasterContainmentCountTotal": 177,
     "reconstructionMaeMean": 0.0006634191294601511,
@@ -71,6 +75,20 @@
       "downscaled": false,
       "elementCount": 63,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 176,
+            "rasterCoverRatio": 0.9602272727272727,
+            "vectorCoverRatio": 0.03977272727272727
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 201,
+            "rasterCoverRatio": 0.9601990049751243,
+            "vectorCoverRatio": 0.03980099502487562
+          }
+        ],
         "mae": 0.00041888280278373156,
         "p95": 0.00261437908496732,
         "p99": 0.00784313725490196,
@@ -108,6 +126,7 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 6,
         "positiveTotal": 6,
+        "positiveCandidateCount": 41,
         "cornerRadiusMAE": 0.6666666666666666,
         "perNegative": [
           {
@@ -195,6 +214,20 @@
       "downscaled": false,
       "elementCount": 54,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 176,
+            "rasterCoverRatio": 0.9602272727272727,
+            "vectorCoverRatio": 0.03977272727272727
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 186,
+            "rasterCoverRatio": 0.34946236559139787,
+            "vectorCoverRatio": 0.6505376344086021
+          }
+        ],
         "mae": 0.0005896476674340451,
         "p95": 0.00130718954248366,
         "p99": 0.00784313725490196,
@@ -232,6 +265,7 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 6,
         "positiveTotal": 6,
+        "positiveCandidateCount": 39,
         "cornerRadiusMAE": 0.6666666666666666,
         "perNegative": [
           {
@@ -319,6 +353,20 @@
       "downscaled": false,
       "elementCount": 47,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 176,
+            "rasterCoverRatio": 0.5738636363636364,
+            "vectorCoverRatio": 0.42613636363636365
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 228,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
         "mae": 0.0005698082876875447,
         "p95": 0.00261437908496732,
         "p99": 0.006535947712418301,
@@ -356,6 +404,7 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 6,
         "positiveTotal": 6,
+        "positiveCandidateCount": 25,
         "cornerRadiusMAE": 0.6666666666666666,
         "perNegative": [
           {
@@ -443,6 +492,20 @@
       "downscaled": false,
       "elementCount": 49,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 245,
+            "rasterCoverRatio": 0.926530612244898,
+            "vectorCoverRatio": 0.07346938775510205
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 172,
+            "rasterCoverRatio": 0.9767441860465116,
+            "vectorCoverRatio": 0.023255813953488372
+          }
+        ],
         "mae": 0.00045012701436850046,
         "p95": 0.00261437908496732,
         "p99": 0.006535947712418301,
@@ -480,6 +543,7 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 6,
         "positiveTotal": 6,
+        "positiveCandidateCount": 35,
         "cornerRadiusMAE": 0.6666666666666666,
         "perNegative": [
           {
@@ -567,6 +631,20 @@
       "downscaled": false,
       "elementCount": 49,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 238,
+            "rasterCoverRatio": 0.7352941176470589,
+            "vectorCoverRatio": 0.2647058823529412
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 300,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
         "mae": 0.0005606923606149612,
         "p95": 0.00261437908496732,
         "p99": 0.00784313725490196,
@@ -604,6 +682,7 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 6,
         "positiveTotal": 6,
+        "positiveCandidateCount": 32,
         "cornerRadiusMAE": 0.6666666666666666,
         "perNegative": [
           {
@@ -691,6 +770,20 @@
       "downscaled": false,
       "elementCount": 66,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 245,
+            "rasterCoverRatio": 0.7142857142857143,
+            "vectorCoverRatio": 0.2857142857142857
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 222,
+            "rasterCoverRatio": 0.6891891891891891,
+            "vectorCoverRatio": 0.3108108108108108
+          }
+        ],
         "mae": 0.0007674512450054245,
         "p95": 0.00261437908496732,
         "p99": 0.00784313725490196,
@@ -728,6 +821,7 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 6,
         "positiveTotal": 6,
+        "positiveCandidateCount": 43,
         "cornerRadiusMAE": 0.6666666666666666,
         "perNegative": [
           {
@@ -815,6 +909,20 @@
       "downscaled": true,
       "elementCount": 120,
       "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "title-text",
+            "inkPixels": 888,
+            "rasterCoverRatio": 0.9628378378378378,
+            "vectorCoverRatio": 0.037162162162162164
+          },
+          {
+            "label": "number-text",
+            "inkPixels": 925,
+            "rasterCoverRatio": 0.2637837837837838,
+            "vectorCoverRatio": 0.7362162162162162
+          }
+        ],
         "mae": 0.0012873245283268502,
         "p95": 0.00392156862745098,
         "p99": 0.009150326797385621,
@@ -852,7 +960,8 @@
         "positivePanelMedianIoU": 0.9914907391151685,
         "positiveHitCount": 5,
         "positiveTotal": 6,
-        "cornerRadiusMAE": 1.6666666666666667,
+        "positiveCandidateCount": 58,
+        "cornerRadiusMAE": 2,
         "perNegative": [
           {
             "label": "title-text",
@@ -922,9 +1031,10 @@
           {
             "label": "divider",
             "hit": false,
-            "iou": 0.4996488764044944,
-            "fillDelta": 0,
-            "radiusDelta": 0
+            "iou": 0,
+            "nearestIou": 0.4996488764044944,
+            "fillDelta": null,
+            "radiusDelta": null
           }
         ]
       }
