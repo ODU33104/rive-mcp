@@ -9,7 +9,7 @@
 // スクリーンショットとアンカーは**必ず同一の読み込みから**取ること
 // （ニュース系サイトは再訪のたびに中身が変わるので、別々に撮ると対応が壊れる）。
 import { chromium } from "playwright-core";
-import { mkdirSync, writeFileSync, readdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
@@ -42,10 +42,30 @@ const TARGETS = [
   // photo-rich の検体にならなかった（実測）。ニュースの一覧は写真カードが密に並ぶ。
   // 大きな写真1枚 + 小さな写真複数。photo negative を確実に確保するため。
   { id: "photo-hero", url: "https://en.wikipedia.org/wiki/Mount_Fuji", w: 1440, h: 900, category: "photo + article", split: "tuning", scrollY: 1600 },
-  { id: "photo-rich", url: "https://www.bbc.com/news", w: 1440, h: 900, category: "photo-rich", split: "holdout" },
+  // --- 2026-08-21: 下の3枚は holdout から tuning へ降格した ---
+  // Task 19 で release gate として一度開封しており、さらにこの日、矩形度判定の調査で
+  // 全フィクスチャを対象にした表（四辺の充填・穴の大きさ）を作って閾値候補を検討した。
+  // **一度でも閾値選択の材料として見た画像は holdout ではない。**
+  // 数値としては引き続き使えるので捨てず、tuning に移す。
+  { id: "photo-rich", url: "https://www.bbc.com/news", w: 1440, h: 900, category: "photo-rich", split: "tuning" },
   // Vercel は 96% 白のページが撮れた（dark mode の検体にならない）。
-  { id: "dark-mode", url: "https://github.com/", w: 1440, h: 900, category: "dark mode", split: "holdout", colorScheme: "dark" },
-  { id: "dashboard-flat", url: "https://tailwindcss.com/", w: 1440, h: 900, category: "flat marketing / cards", split: "holdout" },
+  { id: "dark-mode", url: "https://github.com/", w: 1440, h: 900, category: "dark mode", split: "tuning", colorScheme: "dark" },
+  { id: "dashboard-flat", url: "https://tailwindcss.com/", w: 1440, h: 900, category: "flat marketing / cards", split: "tuning" },
+
+  // --- 新しい holdout（2026-08-21 追加。閾値決定には絶対に使わない） ---
+  // 上の降格で holdout が空になったので、未閲覧のページを撮り足した。
+  // 直そうとしているのが「文字入りのボタン・角丸カードが picture に落ちる」問題なので、
+  // **ボタンとカードが主役のページ**を優先して選んでいる。
+  { id: "buttons-rounded", url: "https://www.rust-lang.org/", w: 1440, h: 900, category: "marketing / rounded buttons", split: "holdout" },
+  { id: "components-dense", url: "https://getbootstrap.com/", w: 1440, h: 900, category: "component showcase", split: "holdout" },
+  { id: "photo-wide", url: "https://www.nasa.gov/", w: 1440, h: 900, category: "photo-rich / wide", split: "holdout" },
+  { id: "cards-gradient", url: "https://astro.build/", w: 1440, h: 900, category: "cards + gradient", split: "holdout" },
+  // 上の4枚は DOM 上のパネルが各1件しか画素検証を通らなかった（実測 2026-08-21）。
+  // 直そうとしているのがパネルの判定なので、正解パネルが薄いと holdout が効かない。
+  // コンポーネントギャラリーは塗りのある矩形が密に並ぶので、そこを狙って足す。
+  { id: "gallery-mui", url: "https://mui.com/material-ui/all-components/", w: 1440, h: 900, category: "component gallery", split: "holdout" },
+  { id: "gallery-antd", url: "https://ant.design/components/overview/", w: 1440, h: 900, category: "component gallery", split: "holdout" },
+  { id: "design-system", url: "https://primer.style/", w: 1440, h: 900, category: "design system", split: "holdout" },
 ];
 
 // ページ内で実行する抽出器。**疎なアンカーで良い**（網羅は不要）。
@@ -420,7 +440,22 @@ try {
   await browser.close();
 }
 
-if (!only.length) {
-  writeFileSync(join(FIXTURE_DIR, "fixtures.json"), JSON.stringify({ capturedAt: new Date().toISOString(), fixtures }, null, 2) + "\n");
-  console.log(`\n${fixtures.length}/${TARGETS.length} captured`);
+// 部分取得(--only 相当)のときは既存の fixtures.json へマージする。
+// **全件撮り直してはいけない**: 対象ページは日々変わるので、撮り直すと tuning 側の画素まで
+// 変わり、committed の real-baseline.json が比較対象として無効になる。
+const manifestPath = join(FIXTURE_DIR, "fixtures.json");
+let merged = fixtures;
+if (only.length) {
+  let prev = [];
+  try { prev = JSON.parse(readFileSync(manifestPath, "utf8")).fixtures ?? []; } catch {}
+  const byId = new Map(prev.map((f) => [f.id, f]));
+  for (const f of fixtures) byId.set(f.id, f);
+  // split だけは TARGETS 側を正とする（降格・昇格を撮り直さずに反映するため）
+  for (const t of TARGETS) {
+    const f = byId.get(t.id);
+    if (f && f.split !== t.split) f.split = t.split;
+  }
+  merged = TARGETS.map((t) => byId.get(t.id)).filter(Boolean);
 }
+writeFileSync(manifestPath, JSON.stringify({ capturedAt: new Date().toISOString(), fixtures: merged }, null, 2) + "\n");
+console.log(`\n${fixtures.length}/${only.length || TARGETS.length} captured, manifest has ${merged.length}`);

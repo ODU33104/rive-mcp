@@ -1,50 +1,51 @@
 {
-  "generatedAt": "2026-08-21T02:51:59.535Z",
-  "note": "実画像に対する現行(未変更)検出器のベースライン。画像とオーバーレイは公開除外側にあり、ここには数値だけを置く。",
-  "capturedAt": "2026-08-21T02:51:35.214Z",
+  "generatedAt": "2026-08-21T08:43:36.247Z",
+  "note": "実画像に対する検出器のベースライン。画像とオーバーレイは公開除外側にあり、ここには数値だけを置く。",
+  "srcClean": true,
+  "capturedAt": "2026-08-21T08:43:06.318Z",
   "detectOpts": {
     "minArea": 576,
     "workingMax": 1280
   },
   "maxElements": 120,
   "summaryTuning": {
-    "scenes": 6,
-    "negativeLeakOverallMean": 0.20888899686751303,
-    "negativeLeakMaxPerRegionWorst": 0.8893129770992366,
-    "negativeRegionsWithAnyLeakTotal": 3,
-    "positivePanelInstanceRecallMean": 0.4166666666666667,
-    "positivePanelMedianIoUMean": 0.6504108892387408,
-    "cornerRadiusMAEMean": 0,
-    "textInkRasterCoverMean": 1,
-    "textInkVectorCoverMean": 0,
-    "rasterOverdrawRatioMean": 0.40957300319901835,
-    "rasterContainmentCountTotal": 163,
-    "reconstructionMaeMean": 0.0026736221752821127,
-    "reconstructionP99Mean": 0.0681917211328976,
-    "vectorAreaReconstructionMaeMean": 0.0184154245141547,
-    "keptElementsPerMegapixelMean": 96.02966924826829,
-    "droppedTotal": 118,
-    "stripeRunScoreMean": 8.833333333333334,
-    "cycleCountTotal": 0
-  },
-  "summaryHoldout": {
-    "scenes": 3,
+    "scenes": 9,
     "negativeLeakOverallMean": 0,
     "negativeLeakMaxPerRegionWorst": 0,
     "negativeRegionsWithAnyLeakTotal": 0,
-    "positivePanelInstanceRecallMean": 0,
-    "positivePanelMedianIoUMean": 0,
+    "positivePanelInstanceRecallMean": 0.2777777777777778,
+    "positivePanelMedianIoUMean": 0.43360725949249385,
     "cornerRadiusMAEMean": 0,
-    "textInkRasterCoverMean": 0.875,
-    "textInkVectorCoverMean": 0.125,
-    "rasterOverdrawRatioMean": 1.7420079110110187,
-    "rasterContainmentCountTotal": 822,
-    "reconstructionMaeMean": 0.0027232816240350733,
-    "reconstructionP99Mean": 0.028322440087145972,
-    "vectorAreaReconstructionMaeMean": 0.011259535123734274,
-    "keptElementsPerMegapixelMean": 92.5925925925926,
-    "droppedTotal": 810,
-    "stripeRunScoreMean": 2.3333333333333335,
+    "textInkRasterCoverMean": 1,
+    "textInkVectorCoverMean": 0,
+    "rasterOverdrawRatioMean": 1.0162496195679094,
+    "rasterContainmentCountTotal": 1182,
+    "reconstructionMaeMean": 0.00125552339134099,
+    "reconstructionP99Mean": 0.03326071169208424,
+    "vectorAreaReconstructionMaeMean": 0.02752984426378697,
+    "keptElementsPerMegapixelMean": 93.94090432737777,
+    "droppedTotal": 893,
+    "stripeRunScoreMean": 0.3333333333333333,
+    "cycleCountTotal": 0
+  },
+  "summaryHoldout": {
+    "scenes": 7,
+    "negativeLeakOverallMean": 0.005514398835240416,
+    "negativeLeakMaxPerRegionWorst": 0.0686363210931894,
+    "negativeRegionsWithAnyLeakTotal": 2,
+    "positivePanelInstanceRecallMean": 0.4761904761904762,
+    "positivePanelMedianIoUMean": 0.5546622260385697,
+    "cornerRadiusMAEMean": 0.5714285714285714,
+    "textInkRasterCoverMean": 0.9340986394557823,
+    "textInkVectorCoverMean": 0.06590136054421769,
+    "rasterOverdrawRatioMean": 1.304890535849077,
+    "rasterContainmentCountTotal": 1003,
+    "reconstructionMaeMean": 0.00029416779057301934,
+    "reconstructionP99Mean": 0,
+    "vectorAreaReconstructionMaeMean": 0.006089713099782367,
+    "keptElementsPerMegapixelMean": 85.53791887125222,
+    "droppedTotal": 585,
+    "stripeRunScoreMean": 0.42857142857142855,
     "cycleCountTotal": 0
   },
   "perImage": [
@@ -91,11 +92,11 @@
             "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.0014874263697248447,
+        "mae": 0.00047694162026950697,
         "p95": 0,
-        "p99": 0.01045751633986928,
-        "vectorAreaMae": 0.007283839622011293,
-        "vectorPixelRatio": 0.2042091049382716,
+        "p99": 0,
+        "vectorAreaMae": 0.007187315727366903,
+        "vectorPixelRatio": 0.06635879629629629,
         "width": 1440,
         "height": 900
       },
@@ -103,40 +104,41 @@
         "keptElementsPerMegapixel": 87.19135802469135,
         "rawElementsPerMegapixel": 87.19135802469135,
         "dropped": 0,
-        "tinyFraction": 0.2920353982300885,
-        "rasterUnionAreaRatio": 1.0000424382716049,
-        "rasterOverdrawRatio": 0.2922831207008962,
-        "rasterContainmentCount": 24,
+        "tinyFraction": 0.061946902654867256,
+        "rasterUnionAreaRatio": 1,
+        "rasterOverdrawRatio": 0.4667492283950617,
+        "rasterContainmentCount": 46,
         "rasterBackgroundCount": 1,
-        "highIouDuplicateCount": 1,
-        "stripeRunScore": 11,
-        "stripeRunScoreRaw": 11,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
         "rootCount": 1,
         "cycleCount": 0,
         "maxDepth": 4
       },
       "truthAlignment": {
-        "negativeLeakOverall": 0.43921676778819635,
-        "negativeLeakMeanPerRegion": 0.43921676778819635,
-        "negativeLeakMaxPerRegion": 0.43921676778819635,
-        "negativeRegionsWithAnyLeak": 1,
-        "negativeLeakCount": 1,
-        "negativeLeakMaxPerRegionAll": 0.43921676778819635,
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0,
         "negativeGatedTotal": 1,
         "negativeTotal": 5,
         "positivePanelInstanceRecall": 0.25,
         "positivePanelMedianIoU": 0.9836065573770492,
         "positiveHitCount": 1,
         "positiveTotal": 4,
-        "positiveCandidateCount": 19,
+        "positiveCandidateCount": 10,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
             "label": "grad@16_189_265_76",
             "leakGate": true,
-            "leakRatio": 0.43921676778819635,
-            "vectorPanelCount": 1,
-            "rasterCount": 1
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
           },
           {
             "label": "text@1145_189_181_72",
@@ -217,7 +219,7 @@
         "image": 2,
         "text": 4
       },
-      "elementCount": 120,
+      "elementCount": 109,
       "reconstruction": {
         "inkCoverage": [
           {
@@ -245,59 +247,60 @@
             "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.00164559832163318,
-        "p95": 0.00261437908496732,
-        "p99": 0.01045751633986928,
-        "vectorAreaMae": 0.007007795686575614,
-        "vectorPixelRatio": 0.23482021604938272,
+        "mae": 0.0003395898894537239,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.005615634368550326,
+        "vectorPixelRatio": 0.06047222222222222,
         "width": 1440,
         "height": 900
       },
       "guardrails": {
-        "keptElementsPerMegapixel": 92.5925925925926,
-        "rawElementsPerMegapixel": 108.02469135802468,
-        "dropped": 20,
-        "tinyFraction": 0.1,
+        "keptElementsPerMegapixel": 84.10493827160494,
+        "rawElementsPerMegapixel": 84.10493827160494,
+        "dropped": 0,
+        "tinyFraction": 0.05504587155963303,
         "rasterUnionAreaRatio": 1,
-        "rasterOverdrawRatio": 0.4125663580246914,
-        "rasterContainmentCount": 33,
+        "rasterOverdrawRatio": 0.633449074074074,
+        "rasterContainmentCount": 44,
         "rasterBackgroundCount": 1,
-        "highIouDuplicateCount": 2,
-        "stripeRunScore": 33,
-        "stripeRunScoreRaw": 33,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
         "rootCount": 1,
         "cycleCount": 0,
         "maxDepth": 4
       },
       "truthAlignment": {
-        "negativeLeakOverall": 0.8141172134168817,
-        "negativeLeakMeanPerRegion": 0.6642648724437165,
-        "negativeLeakMaxPerRegion": 0.8893129770992366,
-        "negativeRegionsWithAnyLeak": 2,
-        "negativeLeakCount": 2,
-        "negativeLeakMaxPerRegionAll": 0.8893129770992366,
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0,
         "negativeGatedTotal": 2,
         "negativeTotal": 6,
         "positivePanelInstanceRecall": 0,
         "positivePanelMedianIoU": 0,
         "positiveHitCount": 0,
         "positiveTotal": 4,
-        "positiveCandidateCount": 42,
+        "positiveCandidateCount": 9,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
             "label": "f:grad@16_16_351_268",
             "leakGate": true,
-            "leakRatio": 0.8893129770992366,
-            "vectorPanelCount": 28,
-            "rasterCount": 4
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
           },
           {
             "label": "grad@16_189_265_76",
             "leakGate": true,
-            "leakRatio": 0.43921676778819635,
-            "vectorPanelCount": 1,
-            "rasterCount": 1
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
           },
           {
             "label": "text@1145_189_181_72",
@@ -311,7 +314,7 @@
             "leakGate": false,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 1
+            "rasterCount": 2
           },
           {
             "label": "text@1147_357_122_32",
@@ -382,22 +385,22 @@
       "elementCount": 120,
       "reconstruction": {
         "inkCoverage": [],
-        "mae": 0.010306978737997257,
+        "mae": 0.006174334301621883,
         "p95": 0,
-        "p99": 0.38823529411764707,
-        "vectorAreaMae": 0.014102781572676354,
-        "vectorPixelRatio": 0.7308472222222222,
+        "p99": 0.29934640522875816,
+        "vectorAreaMae": 0.009184485712861434,
+        "vectorPixelRatio": 0.6722569444444444,
         "width": 1440,
         "height": 900
       },
       "guardrails": {
         "keptElementsPerMegapixel": 92.5925925925926,
-        "rawElementsPerMegapixel": 99.53703703703704,
-        "dropped": 9,
-        "tinyFraction": 0.5666666666666667,
-        "rasterUnionAreaRatio": 1,
-        "rasterOverdrawRatio": 0.10505864197530865,
-        "rasterContainmentCount": 3,
+        "rawElementsPerMegapixel": 98.76543209876543,
+        "dropped": 8,
+        "tinyFraction": 0.2,
+        "rasterUnionAreaRatio": 1.0000733024691357,
+        "rasterOverdrawRatio": 0.20326905049398386,
+        "rasterContainmentCount": 6,
         "rasterBackgroundCount": 1,
         "highIouDuplicateCount": 0,
         "stripeRunScore": 3,
@@ -419,7 +422,8 @@
         "positivePanelMedianIoU": 0.9567493112947658,
         "positiveHitCount": 1,
         "positiveTotal": 1,
-        "positiveCandidateCount": 5,
+        "positiveCandidateCount": 4,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [],
         "perPositive": [
@@ -476,26 +480,26 @@
             "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.0019452089889453723,
+        "mae": 0.0008753943758573388,
         "p95": 0,
         "p99": 0,
-        "vectorAreaMae": 0.02025526751089259,
-        "vectorPixelRatio": 0.09603472222222222,
+        "vectorAreaMae": 0.023719159355044032,
+        "vectorPixelRatio": 0.03690663580246913,
         "width": 1440,
         "height": 900
       },
       "guardrails": {
         "keptElementsPerMegapixel": 92.5925925925926,
-        "rawElementsPerMegapixel": 118.05555555555556,
-        "dropped": 33,
-        "tinyFraction": 0.10833333333333334,
+        "rawElementsPerMegapixel": 116.51234567901234,
+        "dropped": 31,
+        "tinyFraction": 0,
         "rasterUnionAreaRatio": 1,
-        "rasterOverdrawRatio": 0.23538811728395062,
-        "rasterContainmentCount": 19,
+        "rasterOverdrawRatio": 0.3755841049382716,
+        "rasterContainmentCount": 22,
         "rasterBackgroundCount": 1,
-        "highIouDuplicateCount": 3,
-        "stripeRunScore": 6,
-        "stripeRunScoreRaw": 6,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
         "rootCount": 1,
         "cycleCount": 0,
         "maxDepth": 2
@@ -513,7 +517,8 @@
         "positivePanelMedianIoU": 0.9621094667606296,
         "positiveHitCount": 4,
         "positiveTotal": 4,
-        "positiveCandidateCount": 32,
+        "positiveCandidateCount": 17,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
@@ -521,14 +526,14 @@
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 2
+            "rasterCount": 1
           },
           {
             "label": "text@264_391_912_78",
             "leakGate": false,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 10
+            "rasterCount": 12
           },
           {
             "label": "text@264_611_912_52",
@@ -542,7 +547,7 @@
             "leakGate": false,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 2
+            "rasterCount": 3
           },
           {
             "label": "text@60_172_180_28",
@@ -627,11 +632,11 @@
             "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.00031186639309508025,
+        "mae": 0,
         "p95": 0,
         "p99": 0,
-        "vectorAreaMae": 0.006465737051210677,
-        "vectorPixelRatio": 0.04823369565217391,
+        "vectorAreaMae": 0,
+        "vectorPixelRatio": 0,
         "width": 414,
         "height": 896
       },
@@ -639,10 +644,10 @@
         "keptElementsPerMegapixel": 118.61628709454797,
         "rawElementsPerMegapixel": 118.61628709454797,
         "dropped": 0,
-        "tinyFraction": 0.2727272727272727,
+        "tinyFraction": 0.09090909090909091,
         "rasterUnionAreaRatio": 1,
-        "rasterOverdrawRatio": 0.9013678614561766,
-        "rasterContainmentCount": 34,
+        "rasterOverdrawRatio": 1.0176010395100068,
+        "rasterContainmentCount": 40,
         "rasterBackgroundCount": 1,
         "highIouDuplicateCount": 0,
         "stripeRunScore": 0,
@@ -664,7 +669,8 @@
         "positivePanelMedianIoU": 0,
         "positiveHitCount": 0,
         "positiveTotal": 1,
-        "positiveCandidateCount": 2,
+        "positiveCandidateCount": 0,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
@@ -751,11 +757,11 @@
             "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.0003446542402969418,
+        "mae": 0.00008542624868877592,
         "p95": 0,
         "p99": 0,
-        "vectorAreaMae": 0.05537712564156169,
-        "vectorPixelRatio": 0.006223765432098766,
+        "vectorAreaMae": 0.018594628535548136,
+        "vectorPixelRatio": 0.0045941358024691355,
         "width": 1440,
         "height": 900
       },
@@ -765,8 +771,8 @@
         "dropped": 56,
         "tinyFraction": 0,
         "rasterUnionAreaRatio": 1,
-        "rasterOverdrawRatio": 0.5107739197530864,
-        "rasterContainmentCount": 50,
+        "rasterOverdrawRatio": 0.7430162037037037,
+        "rasterContainmentCount": 55,
         "rasterBackgroundCount": 1,
         "highIouDuplicateCount": 0,
         "stripeRunScore": 0,
@@ -788,7 +794,8 @@
         "positivePanelMedianIoU": 1,
         "positiveHitCount": 1,
         "positiveTotal": 4,
-        "positiveCandidateCount": 3,
+        "positiveCandidateCount": 1,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
@@ -803,7 +810,7 @@
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 10
+            "rasterCount": 9
           },
           {
             "label": "img@920_669_252_103",
@@ -817,7 +824,7 @@
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 0
+            "rasterCount": 2
           },
           {
             "label": "text@938_46_231_44",
@@ -838,7 +845,7 @@
             "leakGate": false,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 0
+            "rasterCount": 1
           },
           {
             "label": "text@1240_245_140_22",
@@ -887,7 +894,7 @@
       "id": "photo-rich",
       "url": "https://www.bbc.com/news",
       "category": "photo-rich",
-      "split": "holdout",
+      "split": "tuning",
       "size": {
         "width": 1440,
         "height": 900
@@ -922,31 +929,31 @@
           {
             "label": "text@576_81_92_42",
             "inkPixels": 74,
-            "rasterCoverRatio": 0,
-            "vectorCoverRatio": 1
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.0034466341886548856,
+        "mae": 0.0008845315904139434,
         "p95": 0,
-        "p99": 0.030065359477124184,
-        "vectorAreaMae": 0.021439003933250773,
-        "vectorPixelRatio": 0.16076466049382715,
+        "p99": 0,
+        "vectorAreaMae": 0.1592156862745098,
+        "vectorPixelRatio": 0.005555555555555556,
         "width": 1440,
         "height": 900
       },
       "guardrails": {
         "keptElementsPerMegapixel": 92.5925925925926,
-        "rawElementsPerMegapixel": 185.95679012345678,
-        "dropped": 121,
+        "rawElementsPerMegapixel": 184.41358024691357,
+        "dropped": 119,
         "tinyFraction": 0,
-        "rasterUnionAreaRatio": 0.8370131172839507,
-        "rasterOverdrawRatio": 1.0725472427770337,
-        "rasterContainmentCount": 221,
+        "rasterUnionAreaRatio": 0.9974614197530864,
+        "rasterOverdrawRatio": 1.5089223414377548,
+        "rasterContainmentCount": 278,
         "rasterBackgroundCount": 0,
         "highIouDuplicateCount": 0,
-        "stripeRunScore": 7,
-        "stripeRunScoreRaw": 7,
-        "rootCount": 11,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 12,
         "cycleCount": 0,
         "maxDepth": 3
       },
@@ -956,14 +963,15 @@
         "negativeLeakMaxPerRegion": 0,
         "negativeRegionsWithAnyLeak": 0,
         "negativeLeakCount": 0,
-        "negativeLeakMaxPerRegionAll": 0.9761904761904762,
+        "negativeLeakMaxPerRegionAll": 0,
         "negativeGatedTotal": 3,
         "negativeTotal": 7,
         "positivePanelInstanceRecall": 0,
         "positivePanelMedianIoU": 0,
         "positiveHitCount": 0,
         "positiveTotal": 1,
-        "positiveCandidateCount": 9,
+        "positiveCandidateCount": 5,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
@@ -971,14 +979,14 @@
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 80
+            "rasterCount": 70
           },
           {
             "label": "img@412_543_616_347",
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 13
+            "rasterCount": 18
           },
           {
             "label": "img@1044_543_300_169",
@@ -992,7 +1000,7 @@
             "leakGate": false,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 0
+            "rasterCount": 3
           },
           {
             "label": "text@1044_780_300_54",
@@ -1011,7 +1019,7 @@
           {
             "label": "text@576_81_92_42",
             "leakGate": false,
-            "leakRatio": 0.9761904761904762,
+            "leakRatio": 0,
             "vectorPanelCount": 0,
             "rasterCount": 0
           }
@@ -1021,7 +1029,7 @@
             "label": "panel@1234_23_90_34",
             "hit": false,
             "iou": 0,
-            "nearestIou": 0.0265625,
+            "nearestIou": 0,
             "fillDelta": null,
             "radiusDelta": null
           }
@@ -1032,7 +1040,7 @@
       "id": "dark-mode",
       "url": "https://github.com/",
       "category": "dark mode",
-      "split": "holdout",
+      "split": "tuning",
       "size": {
         "width": 1440,
         "height": 900
@@ -1071,11 +1079,11 @@
             "vectorCoverRatio": 0
           }
         ],
-        "mae": 0.0005817729766803841,
-        "p95": 0.00392156862745098,
-        "p99": 0.00522875816993464,
-        "vectorAreaMae": 0.0032331392725555752,
-        "vectorPixelRatio": 0.17994058641975308,
+        "mae": 0,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0,
+        "vectorPixelRatio": 0,
         "width": 1440,
         "height": 900
       },
@@ -1084,16 +1092,16 @@
         "rawElementsPerMegapixel": 263.11728395061726,
         "dropped": 221,
         "tinyFraction": 0,
-        "rasterUnionAreaRatio": 0.8008981481481482,
-        "rasterOverdrawRatio": 2.6414605901553427,
-        "rasterContainmentCount": 256,
+        "rasterUnionAreaRatio": 0.9806921296296296,
+        "rasterOverdrawRatio": 2.4338363322074277,
+        "rasterContainmentCount": 314,
         "rasterBackgroundCount": 0,
         "highIouDuplicateCount": 1,
         "stripeRunScore": 0,
-        "stripeRunScoreRaw": 3,
-        "rootCount": 35,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 27,
         "cycleCount": 0,
-        "maxDepth": 4
+        "maxDepth": 5
       },
       "truthAlignment": {
         "negativeLeakOverall": 0,
@@ -1108,7 +1116,8 @@
         "positivePanelMedianIoU": 0,
         "positiveHitCount": 0,
         "positiveTotal": 1,
-        "positiveCandidateCount": 2,
+        "positiveCandidateCount": 0,
+        "positiveGeometryRecall": 1,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
@@ -1116,7 +1125,7 @@
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
-            "rasterCount": 2
+            "rasterCount": 3
           },
           {
             "label": "text@856_524_168_22",
@@ -1163,7 +1172,7 @@
       "id": "dashboard-flat",
       "url": "https://tailwindcss.com/",
       "category": "flat marketing / cards",
-      "split": "holdout",
+      "split": "tuning",
       "size": {
         "width": 1440,
         "height": 900
@@ -1177,29 +1186,29 @@
       "elementCount": 120,
       "reconstruction": {
         "inkCoverage": [],
-        "mae": 0.004141437706769951,
+        "mae": 0.0024634924957637376,
         "p95": 0,
-        "p99": 0.04967320261437908,
-        "vectorAreaMae": 0.009106462165396477,
-        "vectorPixelRatio": 0.4547800925925926,
+        "p99": 0,
+        "vectorAreaMae": 0.024251688400202084,
+        "vectorPixelRatio": 0.10158024691358025,
         "width": 1440,
         "height": 900
       },
       "guardrails": {
         "keptElementsPerMegapixel": 92.5925925925926,
-        "rawElementsPerMegapixel": 453.7037037037037,
-        "dropped": 468,
+        "rawElementsPerMegapixel": 445.98765432098764,
+        "dropped": 458,
         "tinyFraction": 0,
-        "rasterUnionAreaRatio": 0.7985817901234568,
-        "rasterOverdrawRatio": 1.51201590010068,
-        "rasterContainmentCount": 345,
+        "rasterUnionAreaRatio": 0.9888225308641976,
+        "rasterOverdrawRatio": 1.7638192013509022,
+        "rasterContainmentCount": 377,
         "rasterBackgroundCount": 0,
         "highIouDuplicateCount": 20,
         "stripeRunScore": 0,
         "stripeRunScoreRaw": 0,
-        "rootCount": 22,
+        "rootCount": 20,
         "cycleCount": 0,
-        "maxDepth": 20
+        "maxDepth": 21
       },
       "truthAlignment": {
         "negativeLeakOverall": 0,
@@ -1214,7 +1223,8 @@
         "positivePanelMedianIoU": 0,
         "positiveHitCount": 0,
         "positiveTotal": 0,
-        "positiveCandidateCount": 6,
+        "positiveCandidateCount": 1,
+        "positiveGeometryRecall": 0,
         "cornerRadiusMAE": 0,
         "perNegative": [
           {
@@ -1222,7 +1232,938 @@
             "leakGate": true,
             "leakRatio": 0,
             "vectorPanelCount": 0,
+            "rasterCount": 7
+          }
+        ],
+        "perPositive": []
+      }
+    },
+    {
+      "id": "buttons-rounded",
+      "url": "https://www.rust-lang.org/",
+      "category": "marketing / rounded buttons",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 1,
+        "image": 0,
+        "text": 4
+      },
+      "elementCount": 66,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@156_559_344_47",
+            "inkPixels": 1908,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@548_559_344_47",
+            "inkPixels": 1773,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@940_559_344_47",
+            "inkPixels": 1853,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@156_478_179_45",
+            "inkPixels": 2002,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
+        "mae": 0.000694918502380376,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.0008231644795345231,
+        "vectorPixelRatio": 0.8442037037037037,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 50.925925925925924,
+        "rawElementsPerMegapixel": 50.925925925925924,
+        "dropped": 0,
+        "tinyFraction": 0.030303030303030304,
+        "rasterUnionAreaRatio": 0.1557962962962963,
+        "rasterOverdrawRatio": 0.16905384523951028,
+        "rasterContainmentCount": 11,
+        "rasterBackgroundCount": 0,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 3,
+        "stripeRunScoreRaw": 3,
+        "rootCount": 3,
+        "cycleCount": 0,
+        "maxDepth": 3
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0.6269173676397823,
+        "negativeGatedTotal": 0,
+        "negativeTotal": 4,
+        "positivePanelInstanceRecall": 1,
+        "positivePanelMedianIoU": 0.9706926557605291,
+        "positiveHitCount": 1,
+        "positiveTotal": 1,
+        "positiveCandidateCount": 5,
+        "positiveGeometryRecall": 1,
+        "cornerRadiusMAE": 2,
+        "perNegative": [
+          {
+            "label": "text@156_559_344_47",
+            "leakGate": false,
+            "leakRatio": 0.6269173676397823,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@548_559_344_47",
+            "leakGate": false,
+            "leakRatio": 0.6224022761009401,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@940_559_344_47",
+            "leakGate": false,
+            "leakRatio": 0.5445942602671945,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@156_478_179_45",
+            "leakGate": false,
+            "leakRatio": 0.22656734947237742,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "panel@924_133_338_85",
+            "hit": true,
+            "iou": 0.9706926557605291,
+            "fillDelta": 0,
+            "radiusDelta": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "components-dense",
+      "url": "https://getbootstrap.com/",
+      "category": "component showcase",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 1,
+        "image": 2,
+        "text": 2
+      },
+      "elementCount": 120,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@793_718_79_21",
+            "inkPixels": 150,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@700_718_72_21",
+            "inkPixels": 149,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
+        "mae": 0.00014016178487856048,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.005748953166522594,
+        "vectorPixelRatio": 0.024380401234567903,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 92.5925925925926,
+        "rawElementsPerMegapixel": 207.56172839506172,
+        "dropped": 149,
+        "tinyFraction": 0,
+        "rasterUnionAreaRatio": 0.9794652777777778,
+        "rasterOverdrawRatio": 1.4329514954856162,
+        "rasterContainmentCount": 117,
+        "rasterBackgroundCount": 0,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 49,
+        "cycleCount": 0,
+        "maxDepth": 5
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0.024873527628045036,
+        "negativeLeakMeanPerRegion": 0.012808836851120125,
+        "negativeLeakMaxPerRegion": 0.02561767370224025,
+        "negativeRegionsWithAnyLeak": 1,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0.02561767370224025,
+        "negativeGatedTotal": 2,
+        "negativeTotal": 4,
+        "positivePanelInstanceRecall": 1,
+        "positivePanelMedianIoU": 0.9799408783783784,
+        "positiveHitCount": 1,
+        "positiveTotal": 1,
+        "positiveCandidateCount": 3,
+        "positiveGeometryRecall": 1,
+        "cornerRadiusMAE": 0,
+        "perNegative": [
+          {
+            "label": "grad@0_64_1440_725",
+            "leakGate": true,
+            "leakRatio": 0.02561767370224025,
+            "vectorPanelCount": 2,
+            "rasterCount": 109
+          },
+          {
+            "label": "img@620_172_200_165",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 13
+          },
+          {
+            "label": "text@793_718_79_21",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "text@700_718_72_21",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "panel@769_629_222_64",
+            "hit": true,
+            "iou": 0.9799408783783784,
+            "fillDelta": 0,
+            "radiusDelta": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "photo-wide",
+      "url": "https://www.nasa.gov/",
+      "category": "photo-rich / wide",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 1,
+        "image": 0,
+        "text": 4
+      },
+      "elementCount": 120,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@24_437_640_79",
+            "inkPixels": 4102,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@65_798_648_46",
+            "inkPixels": 4486,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@1122_830_212_22",
+            "inkPixels": 941,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@1291_34_106_21",
+            "inkPixels": 272,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
+        "mae": 0.00001792241587993222,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.00010125658689227243,
+        "vectorPixelRatio": 0.177,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 92.5925925925926,
+        "rawElementsPerMegapixel": 156.6358024691358,
+        "dropped": 83,
+        "tinyFraction": 0,
+        "rasterUnionAreaRatio": 1,
+        "rasterOverdrawRatio": 2.0170949074074076,
+        "rasterContainmentCount": 111,
+        "rasterBackgroundCount": 2,
+        "highIouDuplicateCount": 1,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 1,
+        "cycleCount": 0,
+        "maxDepth": 4
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0.5913848631239935,
+        "negativeGatedTotal": 0,
+        "negativeTotal": 4,
+        "positivePanelInstanceRecall": 0,
+        "positivePanelMedianIoU": 0,
+        "positiveHitCount": 0,
+        "positiveTotal": 1,
+        "positiveCandidateCount": 1,
+        "positiveGeometryRecall": 1,
+        "cornerRadiusMAE": 0,
+        "perNegative": [
+          {
+            "label": "text@24_437_640_79",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 12
+          },
+          {
+            "label": "text@65_798_648_46",
+            "leakGate": false,
+            "leakRatio": 0.5913848631239935,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@1122_830_212_22",
+            "leakGate": false,
+            "leakRatio": 0.13636363636363635,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@1291_34_106_21",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "panel@24_533_233_46",
+            "hit": false,
+            "iou": 0,
+            "nearestIou": 0,
+            "fillDelta": null,
+            "radiusDelta": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "cards-gradient",
+      "url": "https://astro.build/",
+      "category": "cards + gradient",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 1,
+        "image": 5,
+        "text": 4
+      },
+      "elementCount": 120,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@368_366_704_54",
+            "inkPixels": 1558,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@555_640_329_24",
+            "inkPixels": 167,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@625_513_177_20",
+            "inkPixels": 313,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@453_28_103_24",
+            "inkPixels": 84,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
+        "mae": 0,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0,
+        "vectorPixelRatio": 0,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 92.5925925925926,
+        "rawElementsPerMegapixel": 307.09876543209873,
+        "dropped": 278,
+        "tinyFraction": 0,
+        "rasterUnionAreaRatio": 0.9556875,
+        "rasterOverdrawRatio": 3.1340133105005687,
+        "rasterContainmentCount": 91,
+        "rasterBackgroundCount": 0,
+        "highIouDuplicateCount": 1,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 76,
+        "cycleCount": 0,
+        "maxDepth": 4
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0,
+        "negativeGatedTotal": 5,
+        "negativeTotal": 9,
+        "positivePanelInstanceRecall": 0,
+        "positivePanelMedianIoU": 0,
+        "positiveHitCount": 0,
+        "positiveTotal": 1,
+        "positiveCandidateCount": 0,
+        "positiveGeometryRecall": 0,
+        "cornerRadiusMAE": 0,
+        "perNegative": [
+          {
+            "label": "svg@757_776_185_36",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "svg@180_776_178_36",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "svg@1028_692_118_48",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "svg@1186_700_147_32",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "svg@877_698_111_36",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "text@368_366_704_54",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
+          },
+          {
+            "label": "text@555_640_329_24",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "text@625_513_177_20",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "text@453_28_103_24",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "panel@589_452_261_42",
+            "hit": false,
+            "iou": 0,
+            "nearestIou": 0,
+            "fillDelta": null,
+            "radiusDelta": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "gallery-mui",
+      "url": "https://mui.com/material-ui/all-components/",
+      "category": "component gallery",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 1,
+        "image": 5,
+        "text": 4
+      },
+      "elementCount": 120,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@360_99_778_44",
+            "inkPixels": 3475,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@1101_743_306_63",
+            "inkPixels": 532,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@10_197_279_29",
+            "inkPixels": 83,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@10_255_279_29",
+            "inkPixels": 85,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
+        "mae": 0.0001774711530702816,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.02001589194840179,
+        "vectorPixelRatio": 0.008866512345679013,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 92.5925925925926,
+        "rawElementsPerMegapixel": 114.19753086419753,
+        "dropped": 28,
+        "tinyFraction": 0,
+        "rasterUnionAreaRatio": 0.9993094135802469,
+        "rasterOverdrawRatio": 0.5499523204682246,
+        "rasterContainmentCount": 170,
+        "rasterBackgroundCount": 0,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 5,
+        "cycleCount": 0,
+        "maxDepth": 3
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0.013727264218637882,
+        "negativeLeakMeanPerRegion": 0.01372726421863788,
+        "negativeLeakMaxPerRegion": 0.0686363210931894,
+        "negativeRegionsWithAnyLeak": 1,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0.0686363210931894,
+        "negativeGatedTotal": 5,
+        "negativeTotal": 9,
+        "positivePanelInstanceRecall": 1,
+        "positivePanelMedianIoU": 0.9605734767025089,
+        "positiveHitCount": 1,
+        "positiveTotal": 1,
+        "positiveCandidateCount": 5,
+        "positiveGeometryRecall": 1,
+        "cornerRadiusMAE": 0,
+        "perNegative": [
+          {
+            "label": "img@361_547_247_139",
+            "leakGate": true,
+            "leakRatio": 0.0686363210931894,
+            "vectorPanelCount": 2,
+            "rasterCount": 5
+          },
+          {
+            "label": "img@626_547_247_139",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
             "rasterCount": 3
+          },
+          {
+            "label": "img@890_547_247_139",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 5
+          },
+          {
+            "label": "img@626_752_247_139",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 8
+          },
+          {
+            "label": "img@890_752_247_139",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 5
+          },
+          {
+            "label": "text@360_99_778_44",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
+          },
+          {
+            "label": "text@1101_743_306_63",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
+          },
+          {
+            "label": "text@10_197_279_29",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@10_255_279_29",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "panel@10_135_279_29",
+            "hit": true,
+            "iou": 0.9605734767025089,
+            "fillDelta": 0,
+            "radiusDelta": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "gallery-antd",
+      "url": "https://ant.design/components/overview/",
+      "category": "component gallery",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 3,
+        "image": 3,
+        "text": 2
+      },
+      "elementCount": 110,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@542_196_134_22",
+            "inkPixels": 154,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@849_21_84_22",
+            "inkPixels": 98,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          }
+        ],
+        "mae": 0.00007995440974743807,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.004198408291101647,
+        "vectorPixelRatio": 0.01904398148148148,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 84.87654320987654,
+        "rawElementsPerMegapixel": 84.87654320987654,
+        "dropped": 0,
+        "tinyFraction": 0.08181818181818182,
+        "rasterUnionAreaRatio": 1.0006574074074075,
+        "rasterOverdrawRatio": 0.6011063714286595,
+        "rasterContainmentCount": 190,
+        "rasterBackgroundCount": 0,
+        "highIouDuplicateCount": 0,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 3,
+        "cycleCount": 0,
+        "maxDepth": 5
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 0,
+        "negativeGatedTotal": 3,
+        "negativeTotal": 5,
+        "positivePanelInstanceRecall": 0.3333333333333333,
+        "positivePanelMedianIoU": 0.9714285714285714,
+        "positiveHitCount": 1,
+        "positiveTotal": 3,
+        "positiveCandidateCount": 12,
+        "positiveGeometryRecall": 1,
+        "cornerRadiusMAE": 2,
+        "perNegative": [
+          {
+            "label": "img@1094_495_150_104",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 11
+          },
+          {
+            "label": "img@615_813_156_87",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 2,
+            "rasterCount": 3
+          },
+          {
+            "label": "img@615_504_156_86",
+            "leakGate": true,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
+          },
+          {
+            "label": "text@542_196_134_22",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "text@849_21_84_22",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          }
+        ],
+        "perPositive": [
+          {
+            "label": "panel@8_100_273_40",
+            "hit": true,
+            "iou": 0.9714285714285714,
+            "fillDelta": 0,
+            "radiusDelta": 2
+          },
+          {
+            "label": "panel@220_153_49_22",
+            "hit": false,
+            "iou": 0,
+            "nearestIou": 0,
+            "fillDelta": null,
+            "radiusDelta": null
+          },
+          {
+            "label": "panel@225_683_44_22",
+            "hit": false,
+            "iou": 0,
+            "nearestIou": 0,
+            "fillDelta": null,
+            "radiusDelta": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "design-system",
+      "url": "https://primer.style/",
+      "category": "design system",
+      "split": "holdout",
+      "size": {
+        "width": 1440,
+        "height": 900
+      },
+      "downscaled": true,
+      "anchorCounts": {
+        "panel": 0,
+        "image": 0,
+        "text": 4
+      },
+      "elementCount": 120,
+      "reconstruction": {
+        "inkCoverage": [
+          {
+            "label": "text@636_161_169_62",
+            "inkPixels": 1881,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@569_223_302_31",
+            "inkPixels": 506,
+            "rasterCoverRatio": 1,
+            "vectorCoverRatio": 0
+          },
+          {
+            "label": "text@988_16_120_32",
+            "inkPixels": 98,
+            "rasterCoverRatio": 0.41836734693877553,
+            "vectorCoverRatio": 0.5816326530612245
+          },
+          {
+            "label": "text@692_16_105_32",
+            "inkPixels": 62,
+            "rasterCoverRatio": 0,
+            "vectorCoverRatio": 1
+          }
+        ],
+        "mae": 0.000948746268054547,
+        "p95": 0,
+        "p99": 0,
+        "vectorAreaMae": 0.011740317226023745,
+        "vectorPixelRatio": 0.08081095679012346,
+        "width": 1440,
+        "height": 900
+      },
+      "guardrails": {
+        "keptElementsPerMegapixel": 92.5925925925926,
+        "rawElementsPerMegapixel": 128.85802469135803,
+        "dropped": 47,
+        "tinyFraction": 0,
+        "rasterUnionAreaRatio": 0.942229938271605,
+        "rasterOverdrawRatio": 1.2300615004135513,
+        "rasterContainmentCount": 313,
+        "rasterBackgroundCount": 0,
+        "highIouDuplicateCount": 2,
+        "stripeRunScore": 0,
+        "stripeRunScoreRaw": 0,
+        "rootCount": 3,
+        "cycleCount": 0,
+        "maxDepth": 5
+      },
+      "truthAlignment": {
+        "negativeLeakOverall": 0,
+        "negativeLeakMeanPerRegion": 0,
+        "negativeLeakMaxPerRegion": 0,
+        "negativeRegionsWithAnyLeak": 0,
+        "negativeLeakCount": 0,
+        "negativeLeakMaxPerRegionAll": 1,
+        "negativeGatedTotal": 0,
+        "negativeTotal": 4,
+        "positivePanelInstanceRecall": 0,
+        "positivePanelMedianIoU": 0,
+        "positiveHitCount": 0,
+        "positiveTotal": 0,
+        "positiveCandidateCount": 3,
+        "positiveGeometryRecall": 0,
+        "cornerRadiusMAE": 0,
+        "perNegative": [
+          {
+            "label": "text@636_161_169_62",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 1
+          },
+          {
+            "label": "text@569_223_302_31",
+            "leakGate": false,
+            "leakRatio": 0,
+            "vectorPanelCount": 0,
+            "rasterCount": 2
+          },
+          {
+            "label": "text@988_16_120_32",
+            "leakGate": false,
+            "leakRatio": 0.6526041666666667,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
+          },
+          {
+            "label": "text@692_16_105_32",
+            "leakGate": false,
+            "leakRatio": 1,
+            "vectorPanelCount": 0,
+            "rasterCount": 0
           }
         ],
         "perPositive": []
