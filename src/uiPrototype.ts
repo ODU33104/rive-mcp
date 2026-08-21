@@ -49,6 +49,42 @@ export function motionFor(role: string): RoleMotion {
   return ROLE_MOTION[role as Role] ?? ROLE_MOTION.panel;
 }
 
+/** 要素をどこまで動かしてよいか。 */
+export type MotionCapability = "free" | "fade-only" | "merge";
+
+/** 位置を動かさない入場。fade-only の要素はこれだけを使う。 */
+export const FADE_ONLY_ENTRANCE = "fade-in";
+
+// 信頼度がこれ未満、かつ小さい要素は、独立した要素として出さずに背景へ残す。
+// 「動かさない」だけでは、要素として存在する以上いつか誰かが動かす。
+const MERGE_CONFIDENCE_MAX = 0.05;
+const MERGE_AREA_MAX_PX = 1200;
+
+/**
+ * **矩形で切り出したラスタは背景が焼き付いている。**
+ * このプロトタイプでは最下層に元画像そのものが残るので、焼き付いた切り出しを
+ * 動かすと元の位置にも同じ絵が見えたまま二重になる。静止していれば完全に一致するので、
+ * 再構成誤差では原理的に検出できない（だから信頼度で守るしかない）。
+ *
+ * alpha matte が付いている要素だけは、背景が透明なので自由に動かしてよい。
+ *
+ * 判定は semanticHint ではなく **matteEligible** を見る。写真が「テキスト行」として
+ * 誤検出されることがあり、意味のラベルは信用できない（pageScript.ts の matte 推定を参照）。
+ */
+export function motionCapabilityOf(el: {
+  renderMode: string;
+  matteEligible?: boolean;
+  matteConfidence?: number;
+  rect: [number, number, number, number];
+}): MotionCapability {
+  // ベクター図形は塗りで再構成されるので焼き付きが無い。制限しない。
+  if (el.renderMode !== "raster") return "free";
+  if (el.matteEligible) return "free";
+  const area = el.rect[2] * el.rect[3];
+  if ((el.matteConfidence ?? 0) < MERGE_CONFIDENCE_MAX && area <= MERGE_AREA_MAX_PX) return "merge";
+  return "fade-only";
+}
+
 // ---- Task 6: シーン組み立て ------------------------------------------------
 
 export interface PrototypeElement extends UiElement {
@@ -149,6 +185,8 @@ export function buildPrototypeScene(input: PrototypeInput): {
   const groups: GroupSpec[] = [];
   const rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }> = [];
   const targetIdOf = new Map<number, string>(); // 要素id -> shape/image id（アニメの対象）
+  const capabilityOf = new Map<number, MotionCapability>();
+  let mergedIntoBase = 0;
 
   for (const el of input.elements) {
     const rect = clamped.get(el.id)!;
@@ -176,6 +214,15 @@ export function buildPrototypeScene(input: PrototypeInput): {
       shapes.push(shape);
       targetIdOf.set(el.id, id);
     } else if (el.renderMode === "raster") {
+      // capability が merge の要素は**そもそも切り出さない**。切り出さなければ
+      // 背景画像の中に残り、周囲と一緒に動く。信頼度が極端に低い小片を
+      // 独立した画像アセットにしても、動かせば壊れるものが1つ増えるだけ。
+      const cap = motionCapabilityOf(el);
+      capabilityOf.set(el.id, cap);
+      if (cap === "merge") {
+        mergedIntoBase++;
+        continue;
+      }
       const name = `el${el.id}_${el.role}`; // id を含むので role が衝突しても一意
       // matte を持つテキストは、矩形の切り出しではなく前景色+alpha として切り出す。
       // 判定は検出側で済んでおり、ここは「持っていれば渡す」だけ。
@@ -208,7 +255,10 @@ export function buildPrototypeScene(input: PrototypeInput): {
   animatable.forEach((el, i) => {
     const targetId = targetIdOf.get(el.id)!;
     const atFrame = Math.round((delayFor(i) / 1000) * FPS);
-    const preset = motionFor(el.role).entrance;
+    // **焼き付いた切り出しを平行移動させない。** capability が fade-only の要素は
+    // ロールの入場（rise-in/slide-in など位置を動かすもの）を使わず fade に落とす。
+    const cap = capabilityOf.get(el.id) ?? "free";
+    const preset = cap === "fade-only" ? FADE_ONLY_ENTRANCE : motionFor(el.role).entrance;
 
     if (preset === "chart-grow") {
       // chart-grow は既存プリセットに無いので自前でキーフレームを組む。
@@ -265,7 +315,10 @@ export function buildPrototypeScene(input: PrototypeInput): {
   // ambient指定があればタイムライン自体は（対象が0件でも）必ず作る
   if (input.motion.ambient) {
     const idlePresets: PresetSpec[] = animatable
-      .filter((el) => motionFor(el.role).idle)
+      // idle は float/breathing など位置や大きさを動かすものばかりなので、
+      // 焼き付いた切り出し(fade-only)には付けない。常時ループする分、
+      // 入場より二重露出が目立つ。
+      .filter((el) => motionFor(el.role).idle && (capabilityOf.get(el.id) ?? "free") === "free")
       .map((el) => ({ preset: motionFor(el.role).idle as PresetName, target: targetIdOf.get(el.id)! }));
     animations.push({ name: "idle", fps: FPS, duration: FPS * 4, loop: "loop", tracks: [], presets: idlePresets });
   }
@@ -275,11 +328,30 @@ export function buildPrototypeScene(input: PrototypeInput): {
   if (input.interactions) {
     const smInputs: NonNullable<StateMachineSpec["inputs"]> = [];
     for (const el of animatable) {
+      // hover(lift/grow/spin) と press はいずれも位置か大きさを変える。
+      // 焼き付いた切り出しに付けると、触るたびに元の位置の絵と二重になる。
+      if ((capabilityOf.get(el.id) ?? "free") !== "free") continue;
       const m = motionFor(el.role);
       if (m.hover) smInputs.push({ name: `hover_${el.id}`, type: "bool", initial: false });
       if (m.press) smInputs.push({ name: `press_${el.id}`, type: "trigger" });
     }
     stateMachine = { name: "Interactions", inputs: smInputs };
+  }
+
+  // 何がどう制限されたかを黙って隠さない。プロトタイプが「思ったより動かない」ときの
+  // 原因がここに出る。
+  const fadeOnly = [...capabilityOf.values()].filter((c) => c === "fade-only").length;
+  if (fadeOnly > 0) {
+    warnings.push(
+      `${fadeOnly} raster element(s) fade in place instead of moving: their crops carry ` +
+        `the background with them, so moving them would show the same pixels twice.`
+    );
+  }
+  if (mergedIntoBase > 0) {
+    warnings.push(
+      `${mergedIntoBase} small low-confidence raster element(s) were left in the background ` +
+        `layer instead of becoming separate objects.`
+    );
   }
 
   if (shapes.length === 0 && rasterRegions.length === 0) {

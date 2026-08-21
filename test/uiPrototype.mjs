@@ -1,4 +1,4 @@
-import { ROLE_MOTION, motionFor } from "../dist/uiPrototype.js";
+import { ROLE_MOTION, motionFor, motionCapabilityOf } from "../dist/uiPrototype.js";
 import { PRESET_NAMES, AMBIENT_PRESETS } from "../dist/motionPresets.js";
 
 let failed = 0;
@@ -148,6 +148,80 @@ const over = buildPrototypeScene({
 check("はみ出しを警告する", over.warnings.length === 1, over.warnings.join(" / "));
 check("警告に元と後の値が載る", over.warnings[0].includes("380") && over.warnings[0].includes("20"),
   over.warnings[0]);
+
+// --- 信頼度 → 動かし方（Task 18） ---
+// 守っている失敗: 矩形で切り出したラスタは背景が焼き付いており、最下層に元画像が
+// 残るこの構成では、動かすと元の位置にも同じ絵が見えて二重になる。
+// **静止していれば完全に一致するので再構成誤差では検出できない。**
+{
+  const el = (o) => ({ parent: null, children: [], semanticHint: "text", role: "text", ...o });
+
+  check("matte 付きは自由に動かせる",
+    motionCapabilityOf({ renderMode: "raster", matteEligible: true, matteConfidence: 0.7, rect: [0, 0, 80, 20] }) === "free");
+  check("matte 無しは fade のみ",
+    motionCapabilityOf({ renderMode: "raster", matteEligible: false, matteConfidence: 0.4, rect: [0, 0, 80, 20] }) === "fade-only");
+  check("信頼度が極端に低い小片は背景へ統合",
+    motionCapabilityOf({ renderMode: "raster", matteEligible: false, matteConfidence: 0.01, rect: [0, 0, 20, 12] }) === "merge");
+  check("小さくても信頼度があれば統合しない",
+    motionCapabilityOf({ renderMode: "raster", matteEligible: false, matteConfidence: 0.3, rect: [0, 0, 20, 12] }) === "fade-only");
+  check("大きければ信頼度が低くても統合しない（背景ごと動かない大物は残す）",
+    motionCapabilityOf({ renderMode: "raster", matteEligible: false, matteConfidence: 0.01, rect: [0, 0, 300, 200] }) === "fade-only");
+  check("ベクター図形は制限しない（塗りで再構成されるので焼き付きが無い）",
+    motionCapabilityOf({ renderMode: "vector-panel", rect: [0, 0, 80, 20] }) === "free");
+
+  // シーン組み立てを通した挙動。ロールは card（本来 pop-cascade + float + hover:lift）を使い、
+  // matte の有無だけで結果が変わることを見る。
+  const source = { width: 400, height: 300 };
+  const mk = (matteEligible, conf) => buildPrototypeScene({
+    elements: [
+      el({ id: 1, renderMode: "vector-panel", semanticHint: "panel", role: "background",
+           rect: [0, 0, 400, 300], fill: "#101010", children: [2] }),
+      el({ id: 2, parent: 1, renderMode: "raster", role: "card", rect: [40, 40, 200, 60],
+           matteEligible, matteConfidence: conf }),
+    ],
+    source, interactions: true, motion: { ambient: true },
+  });
+
+  const good = mk(true, 0.7);
+  const bad = mk(false, 0.4);
+
+  const entranceOf = (b, target) =>
+    (b.spec.animations.find((a) => a.name === "entrance")?.presets ?? [])
+      .filter((p) => p.target === target).map((p) => p.preset);
+  const idleTargets = (b) =>
+    (b.spec.animations.find((a) => a.name === "idle")?.presets ?? []).map((p) => p.target);
+  const smNames = (b) => (b.spec.stateMachine?.inputs ?? []).map((i) => i.name);
+  const target = "el2_card";
+
+  check("matte 付きはロールどおりの入場", entranceOf(good, target).includes(ROLE_MOTION.card.entrance),
+    entranceOf(good, target).join(","));
+  check("matte 無しは fade-in に落ちる", entranceOf(bad, target).join(",") === "fade-in",
+    entranceOf(bad, target).join(","));
+  check("matte 付きは idle が付く", idleTargets(good).includes(target), idleTargets(good).join(","));
+  check("matte 無しは idle が付かない", !idleTargets(bad).includes(target), idleTargets(bad).join(","));
+  check("matte 付きは hover 入力がある", smNames(good).includes("hover_2"), smNames(good).join(","));
+  check("matte 無しは hover 入力が無い", !smNames(bad).includes("hover_2"), smNames(bad).join(","));
+  check("制限したことを黙っていない",
+    bad.warnings.some((w) => w.includes("fade in place")), bad.warnings.join(" / "));
+
+  // merge: 独立した画像アセットとして出さず、背景に残す
+  const merged = mk(false, 0.01);
+  const mergedTiny = buildPrototypeScene({
+    elements: [
+      el({ id: 1, renderMode: "vector-panel", semanticHint: "panel", role: "background",
+           rect: [0, 0, 400, 300], fill: "#101010", children: [2] }),
+      el({ id: 2, parent: 1, renderMode: "raster", role: "text", rect: [40, 40, 30, 12],
+           matteEligible: false, matteConfidence: 0.01 }),
+    ],
+    source, interactions: true, motion: { ambient: true },
+  });
+  check("大きい要素は信頼度が低くても切り出す",
+    merged.rasterRegions.some((r) => r.name === target), merged.rasterRegions.map((r) => r.name).join(","));
+  check("小さく信頼度の無い要素は切り出さない（背景に残す）",
+    mergedTiny.rasterRegions.length === 0, mergedTiny.rasterRegions.map((r) => r.name).join(","));
+  check("背景へ統合したことを警告に出す",
+    mergedTiny.warnings.some((w) => w.includes("left in the background")), mergedTiny.warnings.join(" / "));
+}
 
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
