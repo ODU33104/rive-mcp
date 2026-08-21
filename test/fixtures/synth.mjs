@@ -62,7 +62,15 @@ const H = 520;
  * negative を含めない正解データは過検出を検出できない(ブリーフの核心)ので、
  * このシーンは常に positive 6件・negative 4件を含む構成で固定している。
  */
-export function generateScene(seed) {
+export function generateScene(seed, opts = {}) {
+  // pixelScale: SVG の viewBox は 760x520 のまま、出力ピクセル寸法だけを倍にする。
+  // 目的は検出器の**縮小経路を踏ませること**。detectUiRegions は workingMax(既定1280)を
+  // 超える画像を縮小して解析し、結果を inv 倍して元座標へ戻す。760x520 のシーンだけでは
+  // scale が常に厳密に 1 になり、この座標変換が一度も実行されない。
+  // このコードベースは既に座標系のバグを2件出しているので、未実行の経路を残さない。
+  const pixelScale = opts.pixelScale ?? 1;
+  const S = (v) => Math.round(v * pixelScale);
+  const SR = (r) => [S(r[0]), S(r[1]), S(r[2]), S(r[3])];
   const rng = makeRng(seed);
 
   const bgColor = hslToHex(210 + pick(rng, -10, 10), 12 + pick(rng, 0, 6), 96);
@@ -97,7 +105,11 @@ export function generateScene(seed) {
   // (バンドを細かくしすぎると逆にnegativeとして自明に安全になり測定の意味が薄れる)。
   const noiseSeed = Math.floor(pick(rng, 0, 900));
   const noiseFreq = (0.03 + pick(rng, 0, 0.05)).toFixed(3);
-  const noiseRect = [368, 232, 200, 120];
+  // 高さ 100(y=232..332)。**グラデーション帯(y=336..392)と重ねてはいけない。**
+  // 当初は 120(y=232..352)で 16px 重なっており、noise の leak 0.045〜0.116 は
+  // すべて gradient 縞の食い込みで、noise 自身の過検出は 0 だった(2026-08-21 実測)。
+  // negative 同士が重なると「どちらの失敗か」が数値から判定できなくなる。
+  const noiseRect = [368, 232, 200, 100];
 
   const titleWord = WORD_LIST[Math.floor(pick(rng, 0, WORD_LIST.length))];
   const titleFontSize = Math.round(pick(rng, 16, 20));
@@ -109,7 +121,7 @@ export function generateScene(seed) {
   const numberX = 388;
   const numberBaseline = 160;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S(W)}" height="${S(H)}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
       ${gradStops.map((s) => `<stop offset="${s.offset}" stop-color="${s.color}"/>`).join("\n      ")}
@@ -132,21 +144,32 @@ export function generateScene(seed) {
   <rect x="${divider.rect[0]}" y="${divider.rect[1]}" width="${divider.rect[2]}" height="${divider.rect[3]}" fill="${divider.fill}"/>
 </svg>`;
 
+  // positive には fill と cornerRadius も持たせる(Task 11 Step 1)。
+  // instance recall の hit 条件は IoU だけでは足りない —「位置は合っているが
+  // 色も角丸も別物」を hit と数えてしまい、抜け道1 を塞げなくなる。
   const truth = {
-    width: W,
-    height: H,
+    width: S(W),
+    height: S(H),
+    pixelScale,
     elements: [
-      { label: "header", rect: header.rect, expectVectorPanel: true, semanticHint: "panel" },
-      { label: "card", rect: card.rect, expectVectorPanel: true, semanticHint: "panel" },
-      { label: "card-button", rect: cardButton.rect, expectVectorPanel: true, semanticHint: "panel" },
-      { label: "tileA", rect: tileA.rect, expectVectorPanel: true, semanticHint: "panel" },
-      { label: "tileB", rect: tileB.rect, expectVectorPanel: true, semanticHint: "panel" },
-      { label: "divider", rect: divider.rect, expectVectorPanel: true, semanticHint: "line" },
+      { label: "header", rect: SR(header.rect), expectVectorPanel: true, semanticHint: "panel", fill: header.fill, cornerRadius: S(header.cornerRadius) },
+      { label: "card", rect: SR(card.rect), expectVectorPanel: true, semanticHint: "panel", fill: card.fill, cornerRadius: S(card.cornerRadius) },
+      { label: "card-button", rect: SR(cardButton.rect), expectVectorPanel: true, semanticHint: "panel", fill: cardButton.fill, cornerRadius: S(cardButton.cornerRadius) },
+      { label: "tileA", rect: SR(tileA.rect), expectVectorPanel: true, semanticHint: "panel", fill: tileA.fill, cornerRadius: S(tileA.cornerRadius) },
+      { label: "tileB", rect: SR(tileB.rect), expectVectorPanel: true, semanticHint: "panel", fill: tileB.fill, cornerRadius: S(tileB.cornerRadius) },
+      { label: "divider", rect: SR(divider.rect), expectVectorPanel: true, semanticHint: "line", fill: divider.fill, cornerRadius: 0 },
       // --- negative: vector-panel であってはならない ---
-      { label: "title-text", rect: textBBox(titleX, titleBaseline, titleWord, titleFontSize), expectVectorPanel: false, semanticHint: "text" },
-      { label: "number-text", rect: textBBox(numberX, numberBaseline, numberWord, numberFontSize), expectVectorPanel: false, semanticHint: "text" },
-      { label: "noise-texture", rect: noiseRect, expectVectorPanel: false, semanticHint: "image" },
-      { label: "gradient-band", rect: gradientRect, expectVectorPanel: false, semanticHint: "image" },
+      // leakGate: 面積 leak を**合否判定(P0 gate)に使ってよいか**。
+      // テキストの2件は false。textBBox() のフォントメトリクス近似は実測で過大評価だった
+      // (2026-08-21: GT "Revenue"/17px が 69x18 に対し、実際のグリフ矩形は 61x12)。
+      // 余った縁は正当な header パネルの塗りなので leak として数えられてしまい、
+      // **指標の作り物**が gate に混ざる。矩形が画素厳密な noise/gradient だけを gate に使う。
+      // テキストの過剰ベクター化は面積ではなく perNegative[].vectorPanelCount で見ること
+      // (こちらは近似に影響されない)。
+      { label: "title-text", rect: SR(textBBox(titleX, titleBaseline, titleWord, titleFontSize)), expectVectorPanel: false, semanticHint: "text", leakGate: false },
+      { label: "number-text", rect: SR(textBBox(numberX, numberBaseline, numberWord, numberFontSize)), expectVectorPanel: false, semanticHint: "text", leakGate: false },
+      { label: "noise-texture", rect: SR(noiseRect), expectVectorPanel: false, semanticHint: "image", leakGate: true },
+      { label: "gradient-band", rect: SR(gradientRect), expectVectorPanel: false, semanticHint: "image", leakGate: true },
     ],
   };
 
@@ -176,9 +199,42 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   check("negativeにグラデーション帯を含む", negatives.some((e) => e.label === "gradient-band"));
   check("negativeに写真調ノイズを含む", negatives.some((e) => e.label === "noise-texture"));
 
+  // negative 同士が重なると leak の帰属が決まらない(回帰防止)
+  for (let i = 0; i < negatives.length; i++) {
+    for (let j = i + 1; j < negatives.length; j++) {
+      const [ax, ay, aw, ah] = negatives[i].rect;
+      const [bx, by, bw, bh] = negatives[j].rect;
+      const ov = Math.max(0, Math.min(ax + aw, bx + bw) - Math.max(ax, bx)) *
+                 Math.max(0, Math.min(ay + ah, by + bh) - Math.max(ay, by));
+      check(`negative ${negatives[i].label} と ${negatives[j].label} は重ならない`, ov === 0, String(ov));
+    }
+  }
+  check("gate 対象の negative は画素厳密な2件", negatives.filter((e) => e.leakGate).length === 2);
+
+  check("positive は fill を持つ", positives.every((e) => /^#[0-9A-Fa-f]{6}$/.test(e.fill)));
+  check("positive は cornerRadius を持つ", positives.every((e) => Number.isFinite(e.cornerRadius)));
+
   for (const e of a1.truth.elements) {
     const [x, y, w, h] = e.rect;
-    check(`${e.label}: rectが画面内`, x >= 0 && y >= 0 && x + w <= W && y + h <= H, e.rect.join(","));
+    check(`${e.label}: rectが画面内`,
+      x >= 0 && y >= 0 && x + w <= a1.truth.width && y + h <= a1.truth.height, e.rect.join(","));
+  }
+
+  // pixelScale: 縮小経路を踏ませるための倍寸シーン。viewBox は据え置きなので
+  // 正解座標はちょうど2倍になる（検出器が inv を掛け忘れれば半分にずれて露見する）。
+  const big = generateScene(1, { pixelScale: 2 });
+  check("pixelScale=2 の出力寸法は倍", big.truth.width === W * 2 && big.truth.height === H * 2,
+    `${big.truth.width}x${big.truth.height}`);
+  check("pixelScale=2 の svg は viewBox を持つ", big.svg.includes(`viewBox="0 0 ${W} ${H}"`));
+  check("pixelScale=2 の正解矩形は倍",
+    big.truth.elements.every((e, i) => e.rect.every((v, k) => v === a1.truth.elements[i].rect[k] * 2)));
+  check("pixelScale=2 は workingMax(1280) を超える", big.truth.width > 1280, String(big.truth.width));
+  check("pixelScale は決定的",
+    JSON.stringify(big.truth) === JSON.stringify(generateScene(1, { pixelScale: 2 }).truth));
+  for (const e of big.truth.elements) {
+    const [x, y, w, h] = e.rect;
+    check(`big/${e.label}: rectが画面内`,
+      x >= 0 && y >= 0 && x + w <= big.truth.width && y + h <= big.truth.height, e.rect.join(","));
   }
 
   process.exit(failed ? 1 : 0);

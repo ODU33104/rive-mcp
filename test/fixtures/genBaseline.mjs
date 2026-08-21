@@ -1,19 +1,24 @@
-// Task 10 Step4: 現在(未変更)の検出器を合成シーンに通し、baseline.json を書き出す。
+// 現在(未変更)の検出器を合成シーンに通し、baseline.json を書き出す。
 //
 // この baseline は「今の検出器がどれだけ壊れているか」の記録であって、目標値ではない。
-// このスクリプトを再実行して baseline.json を上書きするのは、意図的に「新しい基準点を
-// 置き直す」判断をしたときだけ(このタスクでは行わない)。Task 11以降は自分の計測結果を
-// このファイルの値と比較するだけで、baseline.json 自体を書き換えてはならない。
+// 上書きしてよいのは「計器を直したので基準点を取り直す」と明示的に判断したときだけ。
+// **検出器そのものを変えた直後に再生成してはならない**（比較対象を消す行為になる）。
+// 実際、下の checkDetectorUntouched() は src/ に変更があれば書き出しを拒否する。
+//
+// 2026-08-21 (Task 11): 計器の抜け道を塞いだため一度だけ取り直した。
+// このときも src/ は 1 行も変えていない。
 import { writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { RiveHost } from "../../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../../dist/pageScript.js";
 import { buildTree } from "../../dist/uiDetect.js";
 import { generateScene } from "./synth.mjs";
-import { reconstructionError, guardrails, truthAlignment } from "../detectorMetrics.mjs";
+import { reconstructionStats, guardrails, truthAlignment } from "../detectorMetrics.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = join(HERE, "..", "..");
 
 // 生産側のデフォルト(src/index.ts の riv_from_screenshot 定義済みデフォルト)と同じ値を使う。
 // ここを変えると baseline が検出器そのものの変更なしに動いてしまうので固定する。
@@ -21,67 +26,131 @@ const DETECT_OPTS = { minArea: 576, workingMax: 1280 };
 const MAX_ELEMENTS = 120;
 
 // 6シード: 色・グラデーション位相・ノイズ周波数/シードがシーンごとに変わるので、
-// 単一シーンだけでは「たまたま今回は縞が少なかった」を拾ってしまう。数を増やすほど
-// 安定するが、1シードあたりheadless Chromiumの検出+再構成が要るため実行コストとの
-// バランスでこの数にした。
-const SEEDS = [1, 2, 3, 4, 5, 6];
+// 単一シーンだけでは「たまたま今回は縞が少なかった」を拾ってしまう。
+// pixelScale=2 の1件は**縮小経路(workingMax 超え → inv で元座標へ戻す)を踏ませるため**。
+// これが無いと scale が常に厳密に 1 で、座標変換が一度も実行されない。
+const SCENES = [
+  { seed: 1, pixelScale: 1 },
+  { seed: 2, pixelScale: 1 },
+  { seed: 3, pixelScale: 1 },
+  { seed: 4, pixelScale: 1 },
+  { seed: 5, pixelScale: 1 },
+  { seed: 6, pixelScale: 1 },
+  { seed: 1, pixelScale: 2 },
+];
 
 function mean(nums) {
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
 }
 
+/**
+ * baseline は「検出器を変えていない」ことが前提の記録。src/ に未コミットの変更が
+ * あるまま再生成すると、比較対象が静かに動いて以降の全タスクの判断が壊れる。
+ * ALLOW_DIRTY_SRC=1 で意図的に外せるが、外した事実は baseline に書き残す。
+ */
+function checkDetectorUntouched() {
+  if (process.env.ALLOW_DIRTY_SRC === "1") return { clean: false, overridden: true };
+  try {
+    const out = execFileSync("git", ["status", "--porcelain", "--", "src"], {
+      cwd: REPO,
+      encoding: "utf8",
+    }).trim();
+    if (out) {
+      console.error("src/ に未コミットの変更があります:\n" + out);
+      console.error("検出器を変えた直後に baseline を取り直すと比較対象が消えます。");
+      console.error("意図的に取り直すなら ALLOW_DIRTY_SRC=1 を付けてください。");
+      process.exit(1);
+    }
+    return { clean: true, overridden: false };
+  } catch (e) {
+    console.error("git status を実行できませんでした: " + e.message);
+    process.exit(1);
+  }
+}
+
 async function main() {
+  const srcState = checkDetectorUntouched();
   const host = new RiveHost(PAGE_SCRIPT);
   const perScene = [];
   try {
-    for (const seed of SEEDS) {
-      const { svg, truth } = generateScene(seed);
+    for (const { seed, pixelScale } of SCENES) {
+      const { svg, truth } = generateScene(seed, { pixelScale });
       const png = await host.rasterize(svg);
       const det = await host.detectUiRegions(png, DETECT_OPTS);
       const { elements, dropped } = buildTree(det.regions, MAX_ELEMENTS);
 
-      const mae = await reconstructionError(host, png, elements);
-      const g = guardrails(elements, { width: det.width, height: det.height }, dropped);
+      const recon = await reconstructionStats(host, png, elements);
+      const g = guardrails(elements, { width: det.width, height: det.height }, {
+        dropped,
+        rawRegions: det.regions,
+      });
       const t = truthAlignment(elements, truth);
 
       perScene.push({
         seed,
+        pixelScale,
         sourceSize: { width: det.width, height: det.height },
+        // 検出器が縮小経路を通ったか。false のシーンしか無い baseline は inv を検証していない。
+        downscaled: det.width > DETECT_OPTS.workingMax || det.height > DETECT_OPTS.workingMax,
         elementCount: elements.length,
-        reconstructionMae: mae,
+        reconstruction: recon,
         guardrails: g,
         truthAlignment: t,
       });
       console.log(
-        `seed=${seed} elements=${elements.length} dropped=${dropped} mae=${mae.toFixed(4)} ` +
-          `gradientBandScore=${g.gradientBandScore} negativeLeakMean=${t.negativeLeakAreaRatioMean.toFixed(3)}`
+        `seed=${seed} x${pixelScale} elements=${elements.length} dropped=${dropped} ` +
+          `mae=${recon.mae.toFixed(5)} p99=${recon.p99.toFixed(3)} ` +
+          `leakOverall=${t.negativeLeakOverall.toFixed(3)} leakMax=${t.negativeLeakMaxPerRegion.toFixed(3)} ` +
+          `recall=${t.positivePanelInstanceRecall.toFixed(3)} stripe=${g.stripeRunScore}`
       );
     }
   } finally {
     await host.close();
   }
 
+  const gradientOf = (s) => s.truthAlignment.perNegative.find((n) => n.label === "gradient-band") || {};
+
   const summary = {
-    reconstructionMaeMean: mean(perScene.map((s) => s.reconstructionMae)),
-    gradientBandScoreMean: mean(perScene.map((s) => s.guardrails.gradientBandScore)),
-    elementsPerMegapixelMean: mean(perScene.map((s) => s.guardrails.elementsPerMegapixel)),
+    // --- P0: 見た目を壊す側（非対称損失の重いほう） ---
+    negativeLeakOverallMean: mean(perScene.map((s) => s.truthAlignment.negativeLeakOverall)),
+    negativeLeakMaxPerRegionWorst: Math.max(...perScene.map((s) => s.truthAlignment.negativeLeakMaxPerRegion)),
+    negativeRegionsWithAnyLeakTotal: perScene.reduce((a, s) => a + s.truthAlignment.negativeRegionsWithAnyLeak, 0),
+    // 理想 0。negative なのだから 1 枚でも誤り。
+    gradientVectorPanelCountMean: mean(perScene.map((s) => gradientOf(s).vectorPanelCount ?? 0)),
+    // 理想 1。何枚の raster にまとまったか。
+    gradientRasterRegionCountMean: mean(perScene.map((s) => gradientOf(s).rasterCount ?? 0)),
+    // --- P1: 編集性を落とす側（抜け道1「全部raster」を塞ぐ） ---
+    positivePanelInstanceRecallMean: mean(perScene.map((s) => s.truthAlignment.positivePanelInstanceRecall)),
+    positivePanelMedianIoUMean: mean(perScene.map((s) => s.truthAlignment.positivePanelMedianIoU)),
+    cornerRadiusMAEMean: mean(perScene.map((s) => s.truthAlignment.cornerRadiusMAE)),
+    // --- 抜け道2「巨大な raster 1枚」を塞ぐ ---
+    rasterOverdrawRatioMean: mean(perScene.map((s) => s.guardrails.rasterOverdrawRatio)),
+    rasterContainmentCountTotal: perScene.reduce((a, s) => a + s.guardrails.rasterContainmentCount, 0),
+    // --- 再構成（平均は局所事故を隠すので分位も持つ） ---
+    reconstructionMaeMean: mean(perScene.map((s) => s.reconstruction.mae)),
+    reconstructionP95Mean: mean(perScene.map((s) => s.reconstruction.p95)),
+    reconstructionP99Mean: mean(perScene.map((s) => s.reconstruction.p99)),
+    vectorAreaReconstructionMaeMean: mean(perScene.map((s) => s.reconstruction.vectorAreaMae)),
+    // --- 要素数は cap 前後を分ける（押し出されただけの偽改善を検出する） ---
+    keptElementsPerMegapixelMean: mean(perScene.map((s) => s.guardrails.keptElementsPerMegapixel)),
+    rawElementsPerMegapixelMean: mean(perScene.map((s) => s.guardrails.rawElementsPerMegapixel)),
+    droppedTotal: perScene.reduce((a, s) => a + s.guardrails.dropped, 0),
+    stripeRunScoreMean: mean(perScene.map((s) => s.guardrails.stripeRunScore)),
+    stripeRunScoreRawMean: mean(perScene.map((s) => s.guardrails.stripeRunScoreRaw)),
     tinyFractionMean: mean(perScene.map((s) => s.guardrails.tinyFraction)),
-    negativeLeakAreaRatioMeanOverall: mean(perScene.map((s) => s.truthAlignment.negativeLeakAreaRatioMean)),
-    positiveCoverRateMean: mean(
-      perScene.map((s) => (s.truthAlignment.positiveTotal ? s.truthAlignment.positiveCoverCount / s.truthAlignment.positiveTotal : 0))
-    ),
     cycleCountTotal: perScene.reduce((a, s) => a + s.guardrails.cycleCount, 0),
   };
 
   const baseline = {
     generatedAt: new Date().toISOString(),
     note:
-      "現在(未変更)の検出器のスナップショット。改善の目標値ではなく、後続タスクが自分の変更の効果を測るための固定参照点。このファイル自体は再生成しないこと。",
+      "現在(未変更)の検出器のスナップショット。改善の目標値ではなく、後続タスクが自分の変更の効果を測るための固定参照点。",
+    srcClean: srcState.clean,
     detectOpts: DETECT_OPTS,
     maxElements: MAX_ELEMENTS,
-    seeds: SEEDS,
+    scenes: SCENES,
     summary,
-    scenes: perScene,
+    perScene,
   };
 
   const outPath = join(HERE, "baseline.json");
