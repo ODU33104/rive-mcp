@@ -58,6 +58,41 @@ the element count. Measured across six real pages:
 Feed it the original file rather than a screenshot of a screenshot, and expect a
 different element tree if you re-export at another size.
 
+Three ways of fixing that were built and measured, and none of them shipped. The
+measurements are worth more than the attempts:
+
+*Merging the fragments back together.* The instability really is a shattering
+effect — the flat part of a panel that loses its classification still has a
+colour range of 4 after the noise, and 85% of them stay under 8, so joining
+neighbouring regions whose combined range stays narrow does put them back. It
+works: agreement rises from 18% to 69%, and the element count stops nearly
+tripling. It also vectorises things it should not. Any limit from 3 upward takes
+the worst-region leak from 0.032 to 0.137, and a limit of 8 takes it to 0.266.
+The merged range does not separate the two cases — real panels and gradients both
+sit at the limit, because a panel's own anti-aliasing spans as much as a
+gradient's step. And on a clean screenshot nothing is shattered, so the merge can
+only cost; the benefit exists only for an input that has been perturbed.
+
+*Painting each candidate and measuring what breaks.* Rather than guessing whether
+a shape is a photo, render it flat and count the pixels where it is still visible
+in the final image and no longer matches. Text on a button is covered by the text
+element, contributes nothing, and the button becomes editable. This is the right
+question to ask, and it does not work here: the detector cannot see the final
+image. Every stand-in for it — draw order by area, the element cap, the corner
+radius, the alpha of a matte — leaves a gap where a candidate scores zero and the
+finished prototype is wrong anyway. Closing the element cap alone moved tuning
+recall from 7 to 4 while adding p99 error on three held-back pages that had none.
+The measurement belongs where the scene is actually assembled, not in the
+detector.
+
+*Deciding rectangularity from the outline or the holes.* How much of its bounding
+box a shape fills, how much of the box's border it touches, and how big its
+largest interior hole is are three summaries of the same binary mask. Requiring
+three sides to be filled lifts panel recall from 7 of 20 to 19 of 20 and admits a
+650,000-pixel photograph whose four borders are full. Adding a hole limit trims
+that but sets a third threshold on twenty examples. The orderings overlap: the
+lowest fill among real panels is 0.628 and there are photographs at 0.715.
+
 **A panel with a label in it is often classified as a picture.** Whether
 something can be rebuilt as a vector rectangle is decided by how much of its
 bounding box the shape fills, and text punches holes: a button with a caption can
