@@ -46,7 +46,13 @@ check("panel はラスタにしない", !built.rasterRegions.some((r) => r.name.
 check("entrance タイムラインがある", json.includes("entrance"));
 check("interactions で SM がある", json.includes("Interactions"));
 check("button の press 入力がある", json.includes("press_2"));
-check("警告なし", built.warnings.length === 0, built.warnings.join(" / "));
+// この固定具のテキスト要素は matte を持たないので、Task 18 の制限が働いて
+// 「fade だけにした」という警告が1件出るのが正しい。ここで見たいのは
+// **矩形のクランプ等の異常が起きていないこと**なので、その種類の警告が無いことを見る。
+check("異常な警告が出ない",
+  built.warnings.every((w) => w.includes("fade in place")), built.warnings.join(" / "));
+check("制限は黙って行われない",
+  built.warnings.some((w) => w.includes("fade in place")), built.warnings.join(" / "));
 
 // --- z順: card(1) -> button(2) -> text(3) の3階層。祖先は常に子孫より小さいzでなければ
 // ならない。特定の数値ではなく「親<子」の関係だけを見る（カウンタの基準値や刻み幅が

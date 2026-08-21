@@ -953,11 +953,62 @@ window.riveApi = {
       // 「小さい文字がたくさんある画面」でbackgroundを誤って乗っ取らないようにする。
       sampledColors.push({ hex: color, weight: rectW * rectH });
       const m = estimateMatte(l);
+
+      // --- インクの実際の広がりまで矩形を伸ばす ---
+      // 行の矩形は「生き残ったグリフ断片の和」でしかない。量子化が丸い文字(o,a,e)や
+      // 先頭・末尾の1文字を背景の連結成分ごと飲み込むと、その文字は断片を1つも残さず
+      // **矩形の外に出る**。実測(2026-08-21): "Analytics" が x=57 から検出され、
+      // 実際の文字は x=44 から始まっていて、切り出すと "nalvtics" になった。
+      //
+      // 固定量のパディングでは足りない（1文字分は行高の 1.2 倍近くある）し、
+      // 増やせば隣を巻き込む。前景色 F が分かっているので、**その色の画素が
+      // 実際に在る所まで**伸ばす。無ければ止まる。
+      let gx0 = l.minX, gy0 = l.minY, gx1 = l.maxX, gy1 = l.maxY;
+      if (m) {
+        const F = parseHex(m.fg), B = parseHex(m.bg);
+        const D = [F[0] - B[0], F[1] - B[1], F[2] - B[2]];
+        const len2 = D[0] * D[0] + D[1] * D[1] + D[2] * D[2];
+        if (len2 > 1e-6) {
+          // alpha > 0.5 ＝ 背景より前景に近い画素を「インク」とみなす。
+          const isInk = (x, y) => {
+            const o = (y * W + x) * 4;
+            const c0 = data[o] - B[0], c1 = data[o + 1] - B[1], c2 = data[o + 2] - B[2];
+            return (c0 * D[0] + c1 * D[1] + c2 * D[2]) / len2 > 0.5;
+          };
+          const lh = l.maxY - l.minY + 1;
+          // 伸ばす上限は行高の 1.6 倍。1文字ぶんを拾うには足りて、隣の語まで
+          // 無条件に届くほどではない距離。
+          const maxGrow = Math.max(4, Math.round(lh * 1.6));
+          const colHasInk = (x) => {
+            for (let y = l.minY; y <= l.maxY; y++) if (x >= 0 && x < W && isInk(x, y)) return true;
+            return false;
+          };
+          const rowHasInk = (y) => {
+            for (let x = gx0; x <= gx1; x++) if (y >= 0 && y < H && isInk(x, y)) return true;
+            return false;
+          };
+          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.minX - d)) gx0 = l.minX - d;
+          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.maxX + d)) gx1 = l.maxX + d;
+          // 縦は上下の伸びしろ（アセンダ/ディセンダ）だけなので控えめに。
+          const maxGrowY = Math.max(2, Math.round(lh * 0.5));
+          for (let d = 1; d <= maxGrowY; d++) if (rowHasInk(l.minY - d)) gy0 = l.minY - d;
+          for (let d = 1; d <= maxGrowY; d++) if (rowHasInk(l.maxY + d)) gy1 = l.maxY + d;
+          gx0 = Math.max(0, gx0); gy0 = Math.max(0, gy0);
+          gx1 = Math.min(W - 1, gx1); gy1 = Math.min(H - 1, gy1);
+        }
+      }
+      const gRect = [
+        Math.round(gx0 * inv), Math.round(gy0 * inv),
+        Math.round((gx1 - gx0 + 1) * inv), Math.round((gy1 - gy0 + 1) * inv),
+      ];
+
       regions.push({
         renderMode: "raster",
         semanticHint: "text",
-        rect: [Math.round(l.minX * inv), Math.round(l.minY * inv), rectW, rectH],
+        rect: gRect,
         fill: color,
+        // フォントサイズの推定は**伸ばす前の**高さから出す。伸ばした矩形には
+        // アセンダ/ディセンダが入るので、そのまま使うと大きく見積もる。
         fontSizePx: Math.round(h * 1.3),  // 大文字高 ≒ フォントサイズの 0.7〜0.75
         // **matteEligible は semanticHint とは独立。** 手続き的ノイズが「テキスト行」として
         // 誤検出されても、射影残差が大きければここが false になり、matte の対象から外れる。

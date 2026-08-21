@@ -26,7 +26,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Data binding & pipeline tooling** — `riv_inspect` decodes ViewModel definitions, instances (with resolved values), enums, converters and bind wiring — data binding inspection that few tools support yet; `riv_batch_render` exports many files × formats in one glob-aware call for CI, and `riv_ab_compare` composites two files side by side into one labeled GIF/APNG for design review
 - **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
 
-## Tools (30)
+## Tools (32)
 
 | Tool | What it does |
 |---|---|
@@ -59,7 +59,21 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_diff` | Structural diff between two `.riv` files |
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, **bezier curve editor** (drag control points, hold/linear/cubic, 10 easing presets), **state machine graph view** (node graph, transition details, lint-highlighted states, live playback highlighting), **onion skin** overlay, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Read the Studio's Agent chat (with auto-attached context: selection, artboard, animation, playback time) and post replies back into it |
+| `riv_ui_detect` | **Read a UI screenshot**: finds panels, text runs and pictures, returns a nested element tree with rects, corner radii and fill colours plus a numbered overlay PNG. Each element says how it would be rebuilt (`vector-panel` / `raster`) and what it looks like (`panel` / `text` / `image` / `line`) as separate fields. Geometry only — it does not know a button from a card |
+| `riv_ui_prototype` | **Screenshot → animated `.riv` in one more call**: assign a role to each detected element and get a working prototype — vector rectangles where they can be rebuilt, image slices where they cannot, an entrance per role, hover and press on cards and buttons. Text is cut out with a real alpha matte where the colour model holds; where it does not, the element fades in place instead of moving, and the warnings say so |
 | `riv_setup` | **One-call environment setup**: installs the bundled `rive-design-guidelines` skill into `.claude/skills/` (project) or `~/.claude/skills/` (user) so the pro workflow auto-triggers — confirmation happens via the normal tool-permission prompt |
+
+### Screenshot → animated prototype
+
+![screenshot to prototype](docs/media/ui-prototype-demo.gif)
+
+`riv_ui_detect` reads a UI screenshot into an element tree with a numbered
+overlay; assign a role to each element and `riv_ui_prototype` writes a working
+`.riv`. Panels come back as editable vector rectangles, pictures as image slices,
+and text is cut out with a real alpha matte where the colour model holds — where
+it does not, the element fades in place instead of moving, and says so. The
+detector's limits are measured rather than asserted: see
+[docs/ui-screenshot-to-prototype.md](docs/ui-screenshot-to-prototype.md).
 
 ### Showcases: professional assets in, professional motion out
 
@@ -203,7 +217,7 @@ Turn a single character PNG into a naturally moving `.riv`:
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 30 tools over JSON-RPC
+npm run test:e2e   # spawns the real server, exercises all 32 tools over JSON-RPC
 ```
 
 `docs/riv-format.md` documents the reverse-engineered knowledge of the `.riv` binary format used by the writer (typeKeys/propertyKeys resolved from the official `rive-runtime` type definitions vendored in `vendor/rive-defs/defs.json`).
@@ -215,6 +229,7 @@ npm run test:e2e   # spawns the real server, exercises all 30 tools over JSON-RP
 - The Canvas2D preview renderer can show mesh seams that don't exist in the file (WebGL/Skia render clean)
 - `fill.feather`/`stroke.feather` (vector blur) writes correctly to the `.riv` but isn't rendered by this server's Canvas2D preview pipeline — only a GPU Rive Renderer supports it
 - Luau scripting and the Layout engine are not generated (runtime spec still moving)
+- Screenshot detection (`riv_ui_detect`) is sensitive to small pixel changes: a lossless PNG re-encode is identical, but ±2 RGB noise reclassifies most vector panels and can nearly triple the element count. A panel with a label in it is often returned as a picture rather than an editable rectangle — it is found, but not made editable. See [docs/ui-screenshot-to-prototype.md](docs/ui-screenshot-to-prototype.md) for the measured numbers and the rest of the limits
 
 ## License
 
