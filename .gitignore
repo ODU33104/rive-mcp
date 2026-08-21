@@ -47,3 +47,6 @@ samples/*.ab.gif
 # DLした第三者アセット(CC BY)。帰属表示なしで公開リポジトリに入れないため除外
 samples/riv.app-marketplace/
 .playwright-mcp/
+
+# テスト出力（生成物。コミットしない）
+test/tmp/
