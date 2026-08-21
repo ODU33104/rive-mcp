@@ -10,7 +10,7 @@
 import { writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../../dist/pageScript.js";
 import { buildTree } from "../../dist/uiDetect.js";
@@ -39,6 +39,11 @@ const SCENES = [
   { seed: 1, pixelScale: 2 },
 ];
 
+function outArgPath() {
+  const i = process.argv.indexOf("--out");
+  return i >= 0 ? process.argv[i + 1] : null;
+}
+
 function mean(nums) {
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
 }
@@ -49,7 +54,15 @@ function mean(nums) {
  * ALLOW_DIRTY_SRC=1 で意図的に外せるが、外した事実は baseline に書き残す。
  */
 function checkDetectorUntouched() {
-  if (process.env.ALLOW_DIRTY_SRC === "1") return { clean: false, overridden: true };
+  if (process.env.ALLOW_DIRTY_SRC === "1") {
+    // **検出器を変えたときは既定のファイルへ書かせない。** 比較対象そのものを
+    // 消してしまうため。別名(--out)を必ず要求する。
+    if (!outArgPath()) {
+      console.error("ALLOW_DIRTY_SRC=1 のときは --out <path> が必須です（baseline.json を上書きさせない）。");
+      process.exit(1);
+    }
+    return { clean: false, overridden: true };
+  }
   try {
     const out = execFileSync("git", ["status", "--porcelain", "--", "src"], {
       cwd: REPO,
@@ -168,7 +181,7 @@ async function main() {
     perScene,
   };
 
-  const outPath = join(HERE, "baseline.json");
+  const outPath = outArgPath() ? resolve(outArgPath()) : join(HERE, "baseline.json");
   writeFileSync(outPath, JSON.stringify(baseline, null, 2) + "\n");
   console.log(`\nwrote ${outPath}`);
   console.log(JSON.stringify(summary, null, 2));

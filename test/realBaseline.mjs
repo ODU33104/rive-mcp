@@ -15,6 +15,7 @@
 //   数値は記録するが、それを見て閾値を動かした時点で holdout の意味が消える。
 //   そのため既定では holdout の内訳を表示しない（SHOW_HOLDOUT=1 で開く）。
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../dist/riveHost.js";
@@ -22,7 +23,28 @@ import { PAGE_SCRIPT } from "../dist/pageScript.js";
 import { buildTree } from "../dist/uiDetect.js";
 import { reconstructionStats, guardrails, truthAlignment } from "./detectorMetrics.mjs";
 
+// baseline は「検出器を変えていない」ことが前提の記録。変更後の数値を既定ファイルへ
+// 書き込むと比較対象そのものが消える。src/ に変更があるときは --out を必須にする。
+function outArgPath() {
+  const i = process.argv.indexOf("--out");
+  return i >= 0 ? process.argv[i + 1] : null;
+}
+function guard(repo) {
+  try {
+    const dirty = execFileSync("git", ["status", "--porcelain", "--", "src"], { cwd: repo, encoding: "utf8" }).trim();
+    if (dirty && !outArgPath()) {
+      console.error("src/ に未コミットの変更があります。--out <path> を付けてください（real-baseline.json を上書きさせない）。");
+      process.exit(1);
+    }
+    return !dirty;
+  } catch (e) {
+    console.error("git status を実行できませんでした: " + e.message);
+    process.exit(1);
+  }
+}
+
 const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC_CLEAN = guard(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 const FIXTURE_DIR = resolve(process.env.RIVE_UI_FIXTURES || join(HERE, "..", ".claude", "ui-fixtures"));
 
 // 合成ベースラインと同じ設定でなければ比較にならない。
@@ -122,7 +144,8 @@ const holdout = results.filter((r) => r.split === "holdout");
 
 const out = {
   generatedAt: new Date().toISOString(),
-  note: "実画像に対する現行(未変更)検出器のベースライン。画像とオーバーレイは公開除外側にあり、ここには数値だけを置く。",
+  note: "実画像に対する検出器のベースライン。画像とオーバーレイは公開除外側にあり、ここには数値だけを置く。",
+  srcClean: SRC_CLEAN,
   capturedAt: manifest.capturedAt,
   detectOpts: DETECT_OPTS,
   maxElements: MAX_ELEMENTS,
@@ -130,7 +153,7 @@ const out = {
   summaryHoldout: sum(holdout),
   perImage: results,
 };
-writeFileSync(join(HERE, "fixtures", "real-baseline.json"), JSON.stringify(out, null, 2) + "\n");
+writeFileSync(outArgPath() ? resolve(outArgPath()) : join(HERE, "fixtures", "real-baseline.json"), JSON.stringify(out, null, 2) + "\n");
 
 console.log("\n--- tuning set ---");
 console.log(JSON.stringify(out.summaryTuning, null, 2));

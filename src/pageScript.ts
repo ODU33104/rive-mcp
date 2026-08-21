@@ -284,6 +284,29 @@ window.riveApi = {
   async detectUiRegions(b64, opts) {
     const minArea = opts?.minArea ?? 576;
     const workingMax = opts?.workingMax ?? 1280;
+    // 境界コントラスト gate のパラメータ。**MCP ツールの引数としては公開していない。**
+    // 閾値を「妥当そうな値」で決めないために、計測ハーネス側から掃引できるようにしてある
+    // (test/fixtures/gateSweep.mjs)。既定値の根拠はその掃引の実測。
+    // 既定値の根拠（2026-08-21 の掃引実測。test/fixtures/gateSweep.mjs で再現できる）:
+    //
+    //   min sides |  合成: gradPanel  recall  leakMax |  実画像: recall  leakMax
+    //     0   3   |       29.8   1.000   0.678       |    0.417   0.221   ← gate 無し
+    //     8   3   |        0.7   1.000   0.018       |    0.417   0.006
+    //    10   3   |        0.7   1.000   0.018       |    0.417   0.006
+    //    14   3   |        0.7   1.000   0.018       |    0.417   0.006
+    //    16   3   |        0.7   1.000   0.018       |    0.375   0.006   ← 実画像が落ち始める
+    //     8   4   |        0.0   1.000   0.000       |    0.292   0.000   ← グラデーションは0だが代償が大きい
+    //
+    // 辺3本・閾値 8〜14 は品質指標が完全に平坦で、その範囲では**実画像の recall が
+    // 1件も落ちない**。10 を採る理由: 8 は 5bit 量子化のバケット幅そのもので
+    // アンチエイリアスの揺れに対する余裕が無く、12 は計測側の正解アンカーの
+    // admissibility 閾値と一致するため gate に無条件の合格点を与えてしまう。
+    //
+    // 辺4本にすればグラデーションのベクターパネルは 0 になるが、実画像の recall が
+    // 0.417 → 0.292 に落ちる。実画像では検出器が元々ベクターパネルをほとんど
+    // 作れていない(記事1ページで候補3件)ので、この取引は割に合わない。
+    const boundaryContrastMin = opts?.boundaryContrastMin ?? 10;
+    const boundarySidesRequired = opts?.boundarySidesRequired ?? 3;
     const bitmap = await createImageBitmap(new Blob([b64ToBytes(b64)], { type: "image/png" }));
     const W0 = bitmap.width, H0 = bitmap.height;
     const scale = Math.min(1, workingMax / Math.max(W0, H0));
@@ -295,6 +318,10 @@ window.riveApi = {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(bitmap, 0, 0, W, H);
     const data = ctx.getImageData(0, 0, W, H).data;
+
+    // 境界の外側をどれだけ離れて測るか。1px の枠線と 1〜2px のアンチエイリアスを
+    // 跨ぐ必要があり、かつ隣接要素を跨いでしまうほど離せない。
+    const BOUNDARY_OFFSET_PX = 3;
 
     // 5bit 量子化。UI の平坦塗りは同じバケットに落ちる
     const q = new Int32Array(W * H);
@@ -358,9 +385,63 @@ window.riveApi = {
       let semanticHint = fillRatio >= 0.85 ? "panel" : "image";
       // 細長く薄いものは区切り線
       if (semanticHint === "panel" && (h <= 3 * scale || w <= 3 * scale)) semanticHint = "line";
-      // panel/line はベクター矩形として再構築できる形。renderMode はあくまで「資格」で、
-      // 実際にベクター化されるかは fill の有無で uiPrototype.ts 側が決める
-      const renderMode = (semanticHint === "panel" || semanticHint === "line") ? "vector-panel" : "raster";
+
+      // --- 境界コントラスト gate ---
+      // 充填率だけでは**グラデーションの縞を絶対に落とせない**。縞は内部が平坦で
+      // 矩形度も高く直線性も角丸フィットも良い(合成シーンの実測: 1本の帯が
+      // 平坦な vector-panel 32枚に砕ける)。落とせる可能性があるのは境界だけ。
+      //
+      // ただし「コントラストが低ければ落とす」という単純な閾値にすると、実画像の
+      // 淡いパネル(例 #ECF4FE を白地に置いたもの = 差 19)も巻き添えで落ちる。
+      // **辺の本数で見る。** グラデーションの縞は左右が隣の縞(差は量子化バケット幅
+      // ≒8 程度)、上下が地(高コントラスト)なので **4辺中2辺しか contrast を持たない**。
+      // 本物のパネルは4辺すべてで地から浮いている。
+      //
+      // 判定を通らなかったものは renderMode を raster に落とすだけで、
+      // semanticHint は保つ(意味の推定と描き方の判断は別問題)。エラーにはしない。
+      // 非対称損失: 誤ってラスタにしても見た目は保たれ編集性が落ちるだけだが、
+      // 誤ってベクター化すると見た目そのものが壊れる。迷ったらラスタへ倒す。
+      let renderMode = (semanticHint === "panel" || semanticHint === "line") ? "vector-panel" : "raster";
+      if (renderMode === "vector-panel") {
+        const inside = [c.r, c.g, c.b];
+        // 外側 3px を7点サンプル。角丸のコーナーと1pxの枠線を避けるため辺の 15%〜85% を使う。
+        const sideContrast = (pts) => {
+          let sum = 0, n = 0;
+          for (let i = 0; i < pts.length; i++) {
+            const x = pts[i][0], y = pts[i][1];
+            if (x < 0 || y < 0 || x >= W || y >= H) continue;
+            const o = (y * W + x) * 4;
+            sum += Math.max(
+              Math.abs(data[o] - inside[0]),
+              Math.abs(data[o + 1] - inside[1]),
+              Math.abs(data[o + 2] - inside[2])
+            );
+            n++;
+          }
+          // 半分以上が画面外なら「測れない辺」として扱う(端に接するパネルを不利にしない)
+          return n >= 4 ? sum / n : null;
+        };
+        const top = [], bottom = [], left = [], right = [];
+        for (let t = 0; t < 7; t++) {
+          const f = 0.15 + (t * 0.7) / 6;
+          const fx = Math.round(c.minX + (c.maxX - c.minX) * f);
+          const fy = Math.round(c.minY + (c.maxY - c.minY) * f);
+          top.push([fx, c.minY - BOUNDARY_OFFSET_PX]);
+          bottom.push([fx, c.maxY + BOUNDARY_OFFSET_PX]);
+          left.push([c.minX - BOUNDARY_OFFSET_PX, fy]);
+          right.push([c.maxX + BOUNDARY_OFFSET_PX, fy]);
+        }
+        let measurable = 0, contrasting = 0;
+        for (const pts of [top, bottom, left, right]) {
+          const d = sideContrast(pts);
+          if (d === null) continue;
+          measurable++;
+          if (d >= boundaryContrastMin) contrasting++;
+        }
+        // 測れる辺が3未満なら、測れた辺すべてに contrast を要求する。
+        // 4辺とも測れない(画面全体を覆う成分 = 背景)場合は素通しする。
+        if (contrasting < Math.min(boundarySidesRequired, measurable)) renderMode = "raster";
+      }
 
       let cornerRadius = 0;
       if (semanticHint === "panel") {

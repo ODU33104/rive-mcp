@@ -263,5 +263,80 @@ function walkParentChain(elements, startId, maxSteps) {
     String(nest2.elements[1].parent));
 }
 
+// --- 境界コントラスト gate（Task 13） ---
+// gate を外すと必ず落ちるテストにしてある（gate 無しの実測: グラデーション帯1本が
+// 平坦な vector-panel 約30枚に砕ける）。
+const hostGate = new RiveHost(PAGE_SCRIPT);
+try {
+  // 1) グラデーション帯は縞に割ってもベクターパネルにしない。
+  //    縞は内部が平坦で矩形度も高いので、充填率の判定だけでは絶対に落ちない。
+  const gradPng = await hostGate.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="600" height="300">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#FF3366"/><stop offset="0.5" stop-color="#33CCFF"/>
+        <stop offset="1" stop-color="#33FF66"/>
+      </linearGradient></defs>
+      <rect width="600" height="300" fill="#F4F5F7"/>
+      <rect x="40" y="100" width="520" height="100" fill="url(#g)"/>
+    </svg>`);
+  // 同じ画像を gate 無し(min=0)と既定で比べる。効果を「約30枚」のような
+  // 覚え書きの数字ではなく、その場の実測差として固定する。
+  const gdOff = await hostGate.detectUiRegions(gradPng, { minArea: 576, workingMax: 1280, boundaryContrastMin: 0 });
+  const gd = await hostGate.detectUiRegions(gradPng, { minArea: 576, workingMax: 1280 });
+  const band = [40, 100, 520, 100];
+  const inBand = (r) => r.rect[0] >= band[0] - 4 && r.rect[1] >= band[1] - 4 &&
+    r.rect[0] + r.rect[2] <= band[0] + band[2] + 4 && r.rect[1] + r.rect[3] <= band[1] + band[3] + 4;
+  const vOff = gdOff.regions.filter((r) => inBand(r) && r.renderMode === "vector-panel").length;
+  const vOn = gd.regions.filter((r) => inBand(r) && r.renderMode === "vector-panel").length;
+  check("gate 無しではグラデーションが多数のベクターパネルに砕ける", vOff >= 10, String(vOff));
+  check("gate はそれを桁で減らす", vOn * 10 <= vOff, `${vOff} → ${vOn}`);
+  // 帯の端に接する縞だけは3辺(外側+上下)で地から浮くので残り得る。
+  // 実測(2026-08-21): 右端の 544,100,14,100 が1枚残る。これは帯の縁の細い一片で、
+  // leak 面積としては 0.018 に留まる（合成ベースラインの実測値）。0 にするには
+  // 4辺すべてを要求することになるが、それは実画像の recall を 0.417→0.292 に落とす。
+  check("残るのは帯の端に接するものだけ（2枚以内）", vOn <= 2, String(vOn));
+  check("帯の成分自体は検出されている(消してはいない)", gd.regions.filter(inBand).length > 0,
+    String(gd.regions.filter(inBand).length));
+
+  // 2) コントラストが弱くても4辺すべてで地から浮いているパネルは残す。
+  //    「薄い色を一律に落とす」gate になっていないことの確認。
+  //    #ECF4FE を白地に置くと最大チャンネル差は 19（実画像の実測値と同程度）。
+  const faintPng = await hostGate.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+      <rect width="400" height="300" fill="#FFFFFF"/>
+      <rect x="60" y="80" width="240" height="90" fill="#ECF4FE"/>
+    </svg>`);
+  const fd = await hostGate.detectUiRegions(faintPng, { minArea: 576, workingMax: 1280 });
+  const faint = fd.regions.find((r) => Math.abs(r.rect[2] - 240) <= 3 && Math.abs(r.rect[3] - 90) <= 3);
+  check("淡いが4辺で浮いているパネルは残る", faint && faint.renderMode === "vector-panel",
+    faint ? `${faint.fill} ${faint.renderMode}` : "見つからない");
+
+  // 3) 左右が同系色に挟まれたもの（＝縞と同じ状況）は落とす。上下は地に接するので
+  //    2辺しか contrast を持たない。色は 5bit 量子化のバケット境界をまたぐように選ぶ
+  //    (R = 63/64/72 → バケット 7/8/9)。同じバケットに入れると連結成分が融合して
+  //    そもそも3枚に分かれない（最初にこれで失敗した）。隣接差は 1 と 8 で、
+  //    実測したグラデーションの隣接差(中央値 6・範囲 3〜16)と同じ水準。
+  const stripePng = await hostGate.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+      <rect width="400" height="300" fill="#FFFFFF"/>
+      <rect x="100" y="90" width="60" height="110" fill="#3F50C8"/>
+      <rect x="160" y="90" width="60" height="110" fill="#4050C8"/>
+      <rect x="220" y="90" width="60" height="110" fill="#4850C8"/>
+    </svg>`);
+  const sd = await hostGate.detectUiRegions(stripePng, { minArea: 576, workingMax: 1280 });
+  const middle = sd.regions.find((r) => Math.abs(r.rect[0] - 160) <= 3 && Math.abs(r.rect[2] - 60) <= 3);
+  check("両隣が同系色の中央の帯は raster へ落とす",
+    middle && middle.renderMode === "raster", middle ? `${middle.fill} ${middle.renderMode}` : "見つからない");
+  const edge = sd.regions.find((r) => Math.abs(r.rect[0] - 100) <= 3 && Math.abs(r.rect[2] - 60) <= 3);
+  check("端の帯は3辺で浮くので残る（gate が一律に落としていない）",
+    edge && edge.renderMode === "vector-panel", edge ? `${edge.fill} ${edge.renderMode}` : "見つからない");
+
+  // 4) gate は semanticHint を書き換えない（意味の推定と描き方の判断は別問題）
+  check("落としても semanticHint は panel のまま",
+    middle && middle.semanticHint === "panel", middle && middle.semanticHint);
+} finally {
+  await hostGate.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
