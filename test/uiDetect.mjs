@@ -281,8 +281,10 @@ try {
     </svg>`);
   // 同じ画像を gate 無し(min=0)と既定で比べる。効果を「約30枚」のような
   // 覚え書きの数字ではなく、その場の実測差として固定する。
-  const gdOff = await hostGate.detectUiRegions(gradPng, { minArea: 576, workingMax: 1280, boundaryContrastMin: 0 });
-  const gd = await hostGate.detectUiRegions(gradPng, { minArea: 576, workingMax: 1280 });
+  // gate 単体の効果を見るため統合は切る（statuMinRun を極端に大きく）
+  const NO_MERGE = { minArea: 576, workingMax: 1280, stripeMinRun: 99999 };
+  const gdOff = await hostGate.detectUiRegions(gradPng, { ...NO_MERGE, boundaryContrastMin: 0 });
+  const gd = await hostGate.detectUiRegions(gradPng, NO_MERGE);
   const band = [40, 100, 520, 100];
   const inBand = (r) => r.rect[0] >= band[0] - 4 && r.rect[1] >= band[1] - 4 &&
     r.rect[0] + r.rect[2] <= band[0] + band[2] + 4 && r.rect[1] + r.rect[3] <= band[1] + band[3] + 4;
@@ -323,7 +325,7 @@ try {
       <rect x="160" y="90" width="60" height="110" fill="#4050C8"/>
       <rect x="220" y="90" width="60" height="110" fill="#4850C8"/>
     </svg>`);
-  const sd = await hostGate.detectUiRegions(stripePng, { minArea: 576, workingMax: 1280 });
+  const sd = await hostGate.detectUiRegions(stripePng, NO_MERGE);
   const middle = sd.regions.find((r) => Math.abs(r.rect[0] - 160) <= 3 && Math.abs(r.rect[2] - 60) <= 3);
   check("両隣が同系色の中央の帯は raster へ落とす",
     middle && middle.renderMode === "raster", middle ? `${middle.fill} ${middle.renderMode}` : "見つからない");
@@ -334,6 +336,69 @@ try {
   // 4) gate は semanticHint を書き換えない（意味の推定と描き方の判断は別問題）
   check("落としても semanticHint は panel のまま",
     middle && middle.semanticHint === "panel", middle && middle.semanticHint);
+
+  // --- 縞ファミリの統合（Task 15） ---
+  // gate は「ベクター化しない」ようにするだけで、帯が細かいラスタに砕けたままである点は
+  // 直さない。統合が無いと 1本の帯が数十枚の画像アセットとして出力される。
+  const MERGE = { minArea: 576, workingMax: 1280 };
+
+  // 5) グラデーション帯は少数のラスタにまとまる
+  const gm = await hostGate.detectUiRegions(gradPng, MERGE);
+  const bandCount = (regions) => regions.filter(inBand).length;
+  check("統合前の帯は多数の領域に砕けている", bandCount(gd.regions) >= 20, String(bandCount(gd.regions)));
+  check("統合で帯の領域数が桁で減る", bandCount(gm.regions) * 10 <= bandCount(gd.regions),
+    `${bandCount(gd.regions)} → ${bandCount(gm.regions)}`);
+  check("統合しても帯は消えない", bandCount(gm.regions) >= 1, String(bandCount(gm.regions)));
+
+  // 6) 3枚の縞は1枚に統合される（union がちょうど矩形で埋まる）
+  const sm = await hostGate.detectUiRegions(stripePng, MERGE);
+  const merged = sm.regions.filter((r) => r.rect[1] >= 86 && r.rect[1] + r.rect[3] <= 204 &&
+    r.rect[0] >= 96 && r.rect[0] + r.rect[2] <= 284);
+  check("3枚の縞が1枚に統合される", merged.length === 1, `${merged.length}枚 ${merged.map((r) => r.rect.join(",")).join(" / ")}`);
+  check("統合結果は union の矩形になる",
+    merged.length === 1 && Math.abs(merged[0].rect[0] - 100) <= 3 && Math.abs(merged[0].rect[2] - 180) <= 4,
+    merged.length === 1 ? merged[0].rect.join(",") : "-");
+  check("統合結果は raster", merged.length === 1 && merged[0].renderMode === "raster",
+    merged.length === 1 ? merged[0].renderMode : "-");
+
+  // 7) **隣接していても色が離れていれば統合しない。**
+  //    実画像(Wikipedia の比較表)にある隣り合う4枚のセルがこの形。隙間 0〜1px・同じ帯だが
+  //    隣接する色差は 63〜97 あり、これらは正当な個別パネル（実画像 positive の hit 4件）。
+  //    single-linkage で色をつないでいく実装にすると、ここでカード群を丸ごと飲み込む。
+  const cellsPng = await hostGate.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="600" height="300">
+      <rect width="600" height="300" fill="#FFFFFF"/>
+      <rect x="60"  y="100" width="120" height="90" fill="#F4E3FF"/>
+      <rect x="180" y="100" width="120" height="90" fill="#FFEEDD"/>
+      <rect x="300" y="100" width="120" height="90" fill="#9EFF9E"/>
+      <rect x="420" y="100" width="120" height="90" fill="#DDFFFF"/>
+    </svg>`);
+  const cm = await hostGate.detectUiRegions(cellsPng, MERGE);
+  const cells = cm.regions.filter((r) => r.rect[1] >= 96 && r.rect[1] + r.rect[3] <= 194 && r.rect[2] <= 130);
+  check("色が離れた隣接セルは統合しない", cells.length === 4, `${cells.length}枚`);
+  // 8) **最も重要な安全側のテスト。** 同じ色のカードが余白を挟んで3枚並ぶ形。
+  //    色差は 0 なので色の条件は素通りし、隙間も許容内。ここで統合してしまうと
+  //    「等間隔に並んだカード群を1枚の画像に潰す」という最悪の壊れ方をする。
+  //    防いでいるのは隙間の**実画素**の判定だけ: 余白には地の色が写っており、
+  //    両隣のカードの色の範囲から外れる。
+  const spacedPng = await hostGate.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="600" height="300">
+      <rect width="600" height="300" fill="#FFFFFF"/>
+      <rect x="60"  y="100" width="140" height="90" fill="#4050C8"/>
+      <rect x="216" y="100" width="140" height="90" fill="#4050C8"/>
+      <rect x="372" y="100" width="140" height="90" fill="#4050C8"/>
+    </svg>`);
+  const spm = await hostGate.detectUiRegions(spacedPng, MERGE);
+  const spaced = spm.regions.filter((r) => r.rect[1] >= 96 && r.rect[1] + r.rect[3] <= 194 && r.rect[2] <= 150);
+  check("余白を挟んだ同色カードは統合しない", spaced.length === 3,
+    `${spaced.length}枚 ${spm.regions.filter((r) => r.rect[1] >= 96 && r.rect[1] + r.rect[3] <= 194).map((r) => r.rect.join(",")).join(" / ")}`);
+  check("余白を挟んだカードはベクターパネルのまま",
+    spaced.length === 3 && spaced.every((r) => r.renderMode === "vector-panel"),
+    spaced.map((r) => r.renderMode).join(","));
+
+  check("隣接セルはベクターパネルのまま",
+    cells.length === 4 && cells.every((r) => r.renderMode === "vector-panel"),
+    cells.map((r) => r.renderMode).join(","));
 } finally {
   await hostGate.close();
 }

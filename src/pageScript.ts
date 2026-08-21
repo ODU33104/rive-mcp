@@ -487,6 +487,189 @@ window.riveApi = {
       });
     }
 
+    // --- 縞ファミリの統合 ---
+    // 境界コントラスト gate はグラデーションを「ベクター化しない」ようにはしたが、
+    // 帯が細かいラスタに砕けたままである点は直さない（実測: 1本の帯が 38.7 枚の
+    // ラスタ領域として残り、重複描画は 0.137 → 0.208 に増えた）。
+    // 39枚の画像アセットは独立した意味を持たず、動かす単位としても間違っている。
+    //
+    // **無制限の色マージは禁止。** single-linkage で色をつないでいくと、隣接する
+    // カード群まで芋づるで飲み込む。実画像には隣り合う4枚のセル（隙間 0〜1px・同じ帯）
+    // があり、それらは正当な個別パネルなので、統合してはならない。
+    // 守っているのは色の刻み幅: グラデーションの隣接縞は実測で中央値 6・最大 16 なのに対し、
+    // 上記のセルは隣接同士で 63〜97 離れている。
+    // 隙間の許容。実測: グラデーション帯の隣接成分の隙間は 1〜13px（-4 の重なりも出る）。
+    // これは minArea(既定576px²)未満で捨てられた細い縞の跡で、帯の高さが100pxなら
+    // 幅 5.8px 未満の縞が消えるため必然的に空く。
+    // **ただし隙間を広く許すだけでは、同色のカードが等間隔に3枚並んだ場合に
+    // 丸ごと飲み込む**（計画が禁じている single-linkage chaining）。
+    // そこで隙間の**実画素**を見る（下の gapContinuesRamp）。
+    // 24。掃引では 24〜80 で結果が一切変わらなかった（＝拘束条件になっていない）。
+    // 実際に連鎖を切っていたのは色差のほうだった。上限は暴走防止として残す。
+    const STRIPE_GAP_MAX_PX = opts?.stripeGapMax ?? 24;
+    const STRIPE_OVERLAP_MAX_PX = 8;      // 量子化の境目で成分同士がわずかに重なることがある
+    const STRIPE_GAP_RAMP_TOL = 12;       // 隙間の色が両隣の色の「間」に収まっているかの許容
+    const STRIPE_BAND_TOL_PX = 4;         // 同じ帯とみなす直交方向の位置/太さのズレ
+    // 隣接する縞の色差の上限。**絶対値で固定するのは誤り**だった。
+    // 隙間を挟んだ相手との色差は当然その分だけ大きくなる（実測: 隙間 15/16/24/27px の
+    // ところで色差 17/18/24/24 となり、絶対上限 16 で連鎖が切れていた）。
+    // グラデーションが持つのは単位距離あたりの変化率なので、隙間の幅に比例させる。
+    // 隙間の実画素は gapContinuesRamp が別途1件ずつ検証しているので、ここを距離で
+    // 緩めてもカードの余白を橋渡しすることにはならない。
+    const STRIPE_COLOR_STEP_MAX = 16;
+    // 0.4/px。掃引の実測: 0(絶対上限のみ) → 6.00 ／ 0.2 → 3.83 ／ 0.4 → 3.33 で頭打ち。
+    // 実測の必要量: 隙間 27px で色差 24 を通す必要があり (24-16)/27 = 0.30。余裕を見て 0.4。
+    const STRIPE_COLOR_RATE_PER_PX = opts?.stripeColorRate ?? 0.4;
+    // 2枚では「並び」と言えない。テストから極端な値を渡して統合だけを切り、
+    // 境界コントラスト gate 単体の挙動を検証できるようにしてある（MCP ツールの引数としては未公開）。
+    const STRIPE_MIN_RUN = opts?.stripeMinRun ?? 3;
+    // union のうち「実際には成分が無く、隙間の画素判定だけで橋渡しした」割合の上限。
+    // 充填率で run 方向の隙間を測るのは誤り（隙間は gapContinuesRamp が1件ずつ
+    // 検証済みで、そこを二重に罰すると統合が一切成立しなくなる。実測でそうなった）。
+    // ここで見たいのは「推測で埋めた部分が多すぎないか」だけ。
+    // 0.45。掃引の実測（6シーン平均のグラデーション残存ラスタ数）:
+    //   0.25/0.30/0.35 → 4.67 ／ 0.45 → 3.33。0.45 を超えても変わらない。
+    //   実画像の recall・leak・要素数はこの範囲で**一切動かない**。
+    const STRIPE_BRIDGED_FRACTION_MAX = opts?.stripeBridgedMax ?? 0.45;
+    // 帯の太さ方向の穴を防ぐ。全メンバーが union の太さをほぼ占めていること。
+    const STRIPE_MEMBER_THICKNESS_MIN = 0.8;
+    const STRIPE_MEMBER_MAX_SHARE = 0.5;  // 1枚が union の半分超なら「大きな面＋薄片」であって縞ではない
+
+    const parseHex = (h) => [
+      parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16),
+    ];
+    const colorStep = (a, b) =>
+      Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
+    const areaOfRect = (r) => Math.max(0, r[2]) * Math.max(0, r[3]);
+
+    /**
+     * 隙間の画素が「両隣の色の間」に収まっているか。
+     *
+     * グラデーションの隙間は捨てられた縞の跡なので、そこには両隣の中間色が写っている。
+     * カードの余白には**地の色**が写っており、両隣の色の範囲から外れる。
+     * これが「縞の連なり」と「等間隔に並んだカード」を分ける唯一の確かな信号。
+     *
+     * 例: #F4E3FF と #FFEEDD のカードが白の余白を挟む場合、G チャンネルは
+     * 両隣が 227〜238 なのに隙間は 255 で範囲外 → 連鎖を切る。
+     * グラデーションでは定義上どのチャンネルも両隣の間に入る。
+     *
+     * 座標は元解像度で来るので scale を掛けて作業解像度へ戻す。
+     */
+    const gapContinuesRamp = (axis, prevRect, curRect, prevColor, curColor) => {
+      const lo0 = (prevRect[axis] + prevRect[axis + 2]) * scale;
+      const hi0 = curRect[axis] * scale;
+      const other = 1 - axis;
+      const oMid = (Math.max(prevRect[other], curRect[other]) +
+        Math.min(prevRect[other] + prevRect[other + 2], curRect[other] + curRect[other + 2])) / 2 * scale;
+      let sr = 0, sg = 0, sb = 0, n = 0;
+      for (let t = 0; t < 5; t++) {
+        const f = 0.2 + t * 0.15;
+        const a = Math.round(lo0 + (hi0 - lo0) * f);
+        const b = Math.round(oMid + ((t - 2) * 3));
+        const x = axis === 0 ? a : b;
+        const y = axis === 0 ? b : a;
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const o = (y * W + x) * 4;
+        sr += data[o]; sg += data[o + 1]; sb += data[o + 2]; n++;
+      }
+      if (n === 0) return false;
+      const mid = [sr / n, sg / n, sb / n];
+      for (let ch = 0; ch < 3; ch++) {
+        const lo = Math.min(prevColor[ch], curColor[ch]) - STRIPE_GAP_RAMP_TOL;
+        const hi = Math.max(prevColor[ch], curColor[ch]) + STRIPE_GAP_RAMP_TOL;
+        if (mid[ch] < lo || mid[ch] > hi) return false;
+      }
+      return true;
+    };
+
+    const removedIdx = new Set();
+    const mergedRegions = [];
+
+    const tryMergeRun = (run, axis) => {
+      if (run.length < STRIPE_MIN_RUN) return;
+      const size = axis + 2, otherSize = 3 - axis;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, sumArea = 0;
+      let spanCovered = 0, wr = 0, wg = 0, wb = 0;
+      for (const i of run) {
+        const r = regions[i].rect;
+        x0 = Math.min(x0, r[0]); y0 = Math.min(y0, r[1]);
+        x1 = Math.max(x1, r[0] + r[2]); y1 = Math.max(y1, r[1] + r[3]);
+        const a = areaOfRect(r);
+        sumArea += a;
+        spanCovered += r[size];
+        const c = parseHex(regions[i].fill);
+        wr += c[0] * a; wg += c[1] * a; wb += c[2] * a;
+      }
+      const union = [x0, y0, x1 - x0, y1 - y0];
+      const ua = areaOfRect(union);
+      if (ua <= 0 || sumArea <= 0) return;
+      // 推測で埋めた割合（重なりがあると spanCovered > union になるので下限0で切る）
+      const bridged = Math.max(0, (union[size] - spanCovered) / Math.max(1, union[size]));
+      if (bridged > STRIPE_BRIDGED_FRACTION_MAX) return;
+      let maxShare = 0;
+      for (const i of run) {
+        const r = regions[i].rect;
+        maxShare = Math.max(maxShare, areaOfRect(r) / ua);
+        // 太さ方向に痩せたメンバーが混じるなら、それは帯ではなく別物の集まり
+        if (r[otherSize] < union[otherSize] * STRIPE_MEMBER_THICKNESS_MIN) return;
+      }
+      if (maxShare > STRIPE_MEMBER_MAX_SHARE) return;
+      for (const i of run) removedIdx.add(i);
+      mergedRegions.push({
+        renderMode: "raster",
+        semanticHint: "image",
+        rect: union,
+        cornerRadius: 0,
+        fill: hex(wr / sumArea, wg / sumArea, wb / sumArea),
+      });
+    };
+
+    // axis 0: 横に並ぶ縞（縦グラデーション帯は縦に並ぶので axis 1 で拾う）
+    for (const axis of [0, 1]) {
+      const pos = axis, size = axis + 2, other = 1 - axis, otherSize = 3 - axis;
+      const groups = new Map();
+      for (let i = 0; i < regions.length; i++) {
+        if (removedIdx.has(i)) continue;
+        const r = regions[i].rect;
+        const k =
+          Math.round(r[other] / STRIPE_BAND_TOL_PX) + ":" + Math.round(r[otherSize] / STRIPE_BAND_TOL_PX);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(i);
+      }
+      for (const idxs of groups.values()) {
+        if (idxs.length < STRIPE_MIN_RUN) continue;
+        idxs.sort((a, b) => regions[a].rect[pos] - regions[b].rect[pos]);
+        let run = [idxs[0]];
+        for (let i = 1; i < idxs.length; i++) {
+          const prev = regions[run[run.length - 1]].rect;
+          const cur = regions[idxs[i]].rect;
+          const gap = cur[pos] - (prev[pos] + prev[size]);
+          const pc = parseHex(regions[run[run.length - 1]].fill);
+          const cc = parseHex(regions[idxs[i]].fill);
+          const step = colorStep(pc, cc);
+          const spanOk = gap >= -STRIPE_OVERLAP_MAX_PX && gap <= STRIPE_GAP_MAX_PX;
+          // 2px を超える隙間は「捨てられた縞の跡」かもしれないし「カードの余白」かもしれない。
+          // 実画素で判定する。2px 以下は丸め誤差の範囲なので調べない。
+          const bridgeOk = gap <= 2 ? true : gapContinuesRamp(pos, prev, cur, pc, cc);
+          const stepAllowed = STRIPE_COLOR_STEP_MAX + Math.max(0, gap) * STRIPE_COLOR_RATE_PER_PX;
+          if (spanOk && step <= stepAllowed && bridgeOk) {
+            run.push(idxs[i]);
+          } else {
+            tryMergeRun(run, pos);
+            run = [idxs[i]];
+          }
+        }
+        tryMergeRun(run, pos);
+      }
+    }
+
+    if (removedIdx.size > 0) {
+      const kept = regions.filter((_, i) => !removedIdx.has(i));
+      regions.length = 0;
+      for (const r of kept) regions.push(r);
+      for (const r of mergedRegions) regions.push(r);
+    }
+
     // 文字は minArea 未満に量子化で散った成分の集まりになる。行として束ねて拾い直す
     const glyphs = [];
     for (const c of comps) {
