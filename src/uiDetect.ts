@@ -38,6 +38,10 @@ export interface RawRegion {
   /** alpha が 0.2〜0.8 に入る画素の割合。テキストは2峰性なので小さい(中央 0.246)、
    *  写真は全域に散るので大きい(中央 0.319)。fit と併せて初めて分離できる。 */
   matteMidAlpha?: number;
+  /** インク(alpha>0.5)を行高×0.25 で erosion して残る割合。**fit と matteMidAlpha が
+   *  見ていない空間配置**を測る指標で、細いストロークの集まり(文字)なら 0、
+   *  塊(写真の平坦部)なら大きい。同じ alpha ヒストグラムでも値が変わるのが要点。 */
+  matteInkThick?: number;
   /** eligible のときだけ入る。sliceImage がこの2色で alpha を作る。 */
   matte?: { fg: string; bg: string; space: "srgb" | "linear" };
 }

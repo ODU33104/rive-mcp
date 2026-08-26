@@ -619,5 +619,109 @@ try {
   await hostCf.close();
 }
 
+// --- 角丸半径を角ごとに 3 本（行・列・対角）で測る（2026-08-26） ---
+//
+// 対角 1 本だけだと整数格子の ±1px が半径では ±3.4px に増幅され、相対誤差 10〜17% になる
+// （半径 6/8/10 がすべて 1px 外れていた）。角の行・列に沿う走査は円弧の始まりがそのまま
+// 半径なので増幅が無い。ここは「±1px 以内」を要求する — 旧実装は 6/8/10/20 で落ちる。
+const hostRadius = new RiveHost(PAGE_SCRIPT);
+try {
+  for (const r of [6, 12, 20]) {
+    const png = await hostRadius.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">
+      <rect width="320" height="240" fill="#1E1E2E"/>
+      <rect x="40" y="60" width="180" height="100" rx="${r}" fill="#6C7BFF"/>
+    </svg>`);
+    const det = await hostRadius.detectUiRegions(png, { minArea: 576, workingMax: 1280 });
+    const btn = det.regions.find((x) => x.fill === "#6C7BFF");
+    check(`角R ${r}px を ±1px で測る`, btn && Math.abs(btn.cornerRadius - r) <= 1,
+      btn && String(btn.cornerRadius));
+  }
+} finally {
+  await hostRadius.close();
+}
+
+// --- matte: インクの太さで写真の平坦部を落とす（2026-08-26） ---
+//
+// fit も中間 alpha も alpha のヒストグラムしか見ていないので、平坦な2階調の塊
+// （水面など）は本物の文字と同じ値を出す。空間配置で分ける: alpha>0.5 のインクを
+// 行高×0.25 で erosion して残る割合 Q は、細いストロークの集まりなら 0、塊なら大きい。
+const hostThick = new RiveHost(PAGE_SCRIPT);
+try {
+  const textPng = await hostThick.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="420" height="200">
+      <rect width="420" height="200" fill="#F3F5F6"/>
+      <rect x="20" y="40" width="380" height="90" rx="10" fill="#194878"/>
+      <text x="44" y="98" font-family="Arial, sans-serif" font-size="30" fill="#FFFFFF">Revenue</text>
+    </svg>`);
+  const td = await hostThick.detectUiRegions(textPng, { minArea: 576, workingMax: 1280 });
+  const line = td.regions.filter((r) => r.semanticHint === "text")
+    .sort((a, b) => b.rect[2] * b.rect[3] - a.rect[2] * a.rect[3])[0];
+  check("文字はストロークが細いので erosion で消える (Q=0)",
+    line && line.matteInkThick === 0, line && String(line.matteInkThick));
+  check("文字は matteEligible のまま", line && line.matteEligible === true,
+    line && `thick=${line.matteInkThick} fit=${line.matteFit}`);
+
+  // 行と同じ形・同じ alpha ヒストグラムを持つ平坦な塊。fit も中間 alpha も文字より良い値を出す
+  const blobPng = await hostThick.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="420" height="200">
+      <rect width="420" height="200" fill="#F3F5F6"/>
+      <rect x="20" y="40" width="380" height="120" fill="#4E6E86"/>
+      <rect x="60" y="80" width="50" height="11" fill="#9FC0D4"/>
+    </svg>`);
+  const bd = await hostThick.detectUiRegions(blobPng, { minArea: 576, workingMax: 1280 });
+  const blob = bd.regions.filter((r) => r.semanticHint === "text")
+    .sort((a, b) => b.rect[2] * b.rect[3] - a.rect[2] * a.rect[3])[0];
+  check("平坦な塊も「テキスト行」として検出され得る", !!blob,
+    bd.regions.map((r) => r.semanticHint).join(","));
+  check("その塊は fit では落とせない（旧判定を通る）", blob && blob.matteFit >= 0.9,
+    blob && `fit=${blob.matteFit} mid=${blob.matteMidAlpha}`);
+  check("塊は erosion で残るので matteEligible false",
+    blob && blob.matteInkThick > 0.2 && blob.matteEligible === false,
+    blob && `thick=${blob.matteInkThick} eligible=${blob.matteEligible}`);
+  check("落ちた塊に matte は付かない", blob && !blob.matte);
+} finally {
+  await hostThick.close();
+}
+
+// --- patch の粒度: 統合するのは同じ行/列に並ぶ塊だけ（2026-08-26） ---
+//
+// 距離だけで統合すると、斜めに 8px 離れただけのアイコンが連鎖して 1 塊になり、
+// ツールバーが丸ごと 1 枚の切り抜きになる（動かす単位として間違っている）。
+// 破線（同じ行に並ぶ）は 1 本にまとめたままにする — 上の反実仮想判定のテストが見ている。
+const hostGrain = new RiveHost(PAGE_SCRIPT);
+try {
+  // 縦横それぞれ 8px 以内だが、どちらの軸でも重なっていない 2 本（gx=6 / gy=6）
+  const diagPng = await hostGrain.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">
+      <rect width="480" height="240" fill="#F4F5F7"/>
+      <rect x="270" y="80" width="180" height="56" rx="8" fill="#CBE1FF"/>
+      <rect x="300" y="92" width="60" height="3" fill="#5A5A5A"/>
+      <rect x="366" y="101" width="60" height="3" fill="#5A5A5A"/>
+    </svg>`);
+  const dg = await detectUiElements(hostGrain, diagPng, { minArea: 576, workingMax: 1280, maxElements: 120 });
+  const dgPanel = dg.elements.find((e) => e.rect[0] >= 265 && e.rect[0] <= 275 && e.rect[2] > 150);
+  check("斜めに並ぶ塊のパネルも risk が閾値超", dgPanel && dgPanel.renderRisk > RENDER_RISK_TAU,
+    dgPanel && `risk=${dgPanel.renderRisk}`);
+  const dgPatches = dg.elements.filter((e) => e.renderPatch);
+  check("斜めに離れた 2 本は統合しない", dgPatches.length === 2,
+    dgPatches.map((p) => p.rect.join(",")).join(" | "));
+
+  // 同じ行に並ぶ 2 本（縦に重なり、隙間 6px）は 1 本にまとまる
+  const rowPng = await hostGrain.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">
+      <rect width="480" height="240" fill="#F4F5F7"/>
+      <rect x="270" y="80" width="180" height="56" rx="8" fill="#CBE1FF"/>
+      <rect x="300" y="101" width="60" height="3" fill="#5A5A5A"/>
+      <rect x="366" y="101" width="60" height="3" fill="#5A5A5A"/>
+    </svg>`);
+  const rg = await detectUiElements(hostGrain, rowPng, { minArea: 576, workingMax: 1280, maxElements: 120 });
+  const rgPatches = rg.elements.filter((e) => e.renderPatch);
+  check("同じ行に並ぶ 2 本は 1 つの patch にまとまる", rgPatches.length === 1,
+    rgPatches.map((p) => p.rect.join(",")).join(" | "));
+} finally {
+  await hostGrain.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

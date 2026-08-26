@@ -41,15 +41,30 @@ line lands on top of the rectangle it crosses. Otherwise, as for a photograph,
 the whole element becomes a crop. The value stays on the element either way
 so you can see why.
 
+Clusters within 8px of each other are merged into one patch, but only when they
+overlap on the other axis — a dashed line is one patch because its dashes share
+their rows, while two icons offset diagonally stay two. Merging on distance
+alone chained a toolbar into a single crop, which is the wrong unit to move.
+Both tools report how many fills the check moved: `demoted` for the ones that
+became crops, `patched` for the ones that kept their fill and got cut-outs on
+top. `riv_ui_prototype` also says it in its warnings.
+
 ## Rectangles are estimates, not measurements
 
 Detection runs on a downscaled copy — anything above 1280px on its long side is
 reduced, analysed, and the results scaled back. Coordinates come back in the
 original resolution but they are recovered, not measured. Expect a pixel or two.
 
-Corner radii are inferred by probing diagonally into each corner, and carry a
-relative error of roughly 10–17%: a 12px radius reads back somewhere between 10
-and 14.
+Corner radii are read by probing three ways into each corner — along the
+corner's row, along its column, and diagonally — and taking the median of the
+twelve numbers. Along the row the arc starts at the radius itself, so the
+quantisation grid costs a pixel; on the diagonal the same pixel is multiplied by
+3.4, which is where the old estimate's 10–17% relative error came from. On a
+clean rounded rectangle the radius now comes back exactly for every radius from
+4 to 20; the single diagonal probe was a pixel out on six of those seven. Over
+the synthetic scenes the mean error on matched panels is 0.5px where it was
+0.9px, and over the tuning screenshots 0.3px where it was 0.5px. Small radii are
+still the hard case — one pixel on a 6px corner is 17%.
 
 ## Known limitations
 
@@ -163,8 +178,8 @@ what differs is what moves independently.
 background, and the bottom layer of the prototype is the original screenshot, so
 moving such a crop shows the same pixels in two places. Elements without a matte
 therefore fade in place, lose their looping idle, and get no hover or press. The
-warnings say how many were restricted. 88% of real text runs get a matte; the
-rest stay legible and static.
+warnings say how many were restricted. 80% of the text runs found on the sixteen
+real pages get a matte; the rest stay legible and static.
 
 **Some flat parts of photographs get matted anyway.** Of six picture regions that
 qualified across twelve pages, four turned out to be text sitting on top of an
@@ -174,6 +189,18 @@ fit the model as well as text does. Neither confidence nor shape separates them:
 those two scored 0.93 and 0.96, above every real text line measured, and their
 crops are 55x11 and 77x10, exactly the shape of a line of text. Being flat to
 begin with, matting them reproduces them accurately where they sit.
+
+What does separate them is where the ink sits, not how much of it there is. The
+alpha map is thresholded at 0.5 and eroded by a quarter of the line height,
+which is wider than any stem: a letter is a set of thin strokes and disappears,
+a flat patch is a slab and survives. The share that survives has to stay under
+0.2. Two runs with identical alpha histograms can differ here, which is what the
+fit and the mid-alpha share cannot do. Measured: ordinary text 0.000, a synthetic
+two-tone patch shaped like a line of text 0.35–0.40 — it fits the colour model
+perfectly, at 1.00, and is refused anyway. It costs something: an ultra-bold slab
+heading reads 0.26–0.30 and loses its matte, which is 2 runs in 853 across the
+sixteen pages. That is the cheap direction to be wrong in — a run without a matte
+is still drawn, it just fades instead of moving.
 
 **Text rectangles are grown to reach the ink.** A line's box starts as the union
 of surviving glyph fragments, and quantisation swallows round letters whole, so a

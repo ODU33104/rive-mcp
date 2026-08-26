@@ -1111,6 +1111,17 @@ try {
         JSON.stringify(pr.warnings));
       check("要素数が riv_ui_detect と一致", pr.elements === parsed.elements.length,
         `${pr.elements} vs ${parsed.elements.length}`);
+      // 反実仮想判定の結果は両ツールで同じでなければならない（検出をもう一度走らせているので、
+      // ずれたら「同じ引数なら同じ結果」という前提が壊れている）。
+      check("demoted / patched が両ツールで一致",
+        pr.demoted === parsed.demoted && pr.patched === parsed.patched,
+        `detect ${parsed.demoted}/${parsed.patched} vs prototype ${pr.demoted}/${pr.patched}`);
+      // 使う側が見るのは warnings。件数があるのに黙っていないか、無いのに言っていないかを両方見る
+      const warnsAbout = (s) => pr.warnings.some((w) => w.includes(s));
+      check("demoted / patched は warnings にも出る",
+        (pr.demoted > 0) === warnsAbout("turned into crops") &&
+        (pr.patched > 0) === warnsAbout("cut-out"),
+        `demoted=${pr.demoted} patched=${pr.patched} warnings=${JSON.stringify(pr.warnings)}`);
       check("出力が RIVE で始まる", fsMod2Sig(outRiv) === "52495645", fsMod2Sig(outRiv));
       check("アニメーションが1つ以上ある", pr.animations.length >= 1, JSON.stringify(pr.animations));
 

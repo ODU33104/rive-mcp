@@ -499,35 +499,59 @@ window.riveApi = {
 
       let cornerRadius = 0;
       if (semanticHint === "panel") {
-        // 四隅から対角に走査し、成分に入るまでの距離 d を測る。
-        // 半径 r の丸角では中心が (r, r) にあり、対角上の点 (t, t) が図形内に入るのは
-        // 中心からの距離² = 2(t-r)² <= r² を解いて t >= r(1 - 1/√2) のとき。
-        // つまり最初にヒットする d ≈ 0.2929r なので、r に戻す係数は 1/(1 - 1/√2) = 2+√2 ≈ 3.414
-        // であって √2 ではない（誤って √2 に「簡略化」しないこと。過去に係数を取り違えて
-        // 真の半径の 41% しか報告できていなかった実績あり）。
-        // 整数格子の probe は d を切り上げて返すため、-0.5 の半格子補正を掛けてから係数を掛ける。
-        const probe = (cx, cy, dx, dy) => {
-          for (let d = 0; d < Math.min(w, h) / 2; d++) {
+        // 四隅からそれぞれ 3 方向（角の行・角の列・対角）に走査し、成分に入るまでの距離から
+        // 半径を出して、12 本の推定の中央値を採る。
+        //
+        // 中心 (r, r) の丸角では、角から j 離れた行で図形が始まる横位置 u が
+        //   (r-u)² + (r-j)² = r²  →  **r = u + j + √(2uj)**
+        // を満たす。角の行に沿う走査は j=0 なので **r = u**（円弧の始まりがそのまま半径）、
+        // 対角は u=j なので r = (2+√2)u ≈ 3.414u になる。同じ式の両端。
+        // 係数を √2 に「簡略化」しないこと（過去に取り違えて真の半径の 41% しか
+        // 報告できていなかった実績あり）。
+        //
+        // **対角 1 本だけを見ていた頃の相対誤差は 10〜17%**（合成シーンの実測: 半径 6/8/10 が
+        // すべて 1px 外れる）。原因は増幅で、整数格子の ±1px が半径では ±3.4px になる。
+        // 行・列の走査は増幅が無いぶん精度が高い代わりに、**角の 1 行/1 列を量子化が別成分に
+        // 落とすと j が 0 でなくなり、その 1 本だけ大きく外れる**。12 本の中央値を採るのは
+        // その外れ値を捨てるため（1 本ずつの値を信じない）。
+        const probeD = (cx, cy, dx, dy) => {
+          const lim = Math.min(w, h) / 2;
+          for (let d = 0; d < lim; d++) {
             const x = cx + dx * d, y = cy + dy * d;
-            if (x < 0 || y < 0 || x >= W || y >= H) return 0;
+            if (x < 0 || y < 0 || x >= W || y >= H) return -1;
             if (label[y * W + x] === c.id) return d;
           }
-          return 0;
+          return -1;
         };
-        const ds = [
-          probe(c.minX, c.minY, 1, 1),
-          probe(c.maxX, c.minY, -1, 1),
-          probe(c.minX, c.maxY, 1, -1),
-          probe(c.maxX, c.maxY, -1, -1),
-        ];
-        // d=0（直角の角）は「半径0のサンプル」ではなく「丸くない角」の意味。
-        // 上だけ丸い等の非対称な角Rでは直角側の0が中央値を押し下げるので、中央値の前に除外する
-        const rounded = ds.filter((d) => d > 0).sort((a, b) => a - b);
-        if (rounded.length > 0) {
-          const mid = rounded.length >> 1;
-          const median =
-            rounded.length % 2 === 1 ? rounded[mid] : (rounded[mid - 1] + rounded[mid]) / 2;
-          cornerRadius = Math.round(Math.min(24, Math.max(0, median - 0.5) * (2 + Math.SQRT2) * inv));
+        const rOf = (u, j) => u + j + Math.sqrt(2 * u * j);
+        const ests = [];
+        for (const corner of [
+          [c.minX, c.minY, 1, 1],
+          [c.maxX, c.minY, -1, 1],
+          [c.minX, c.maxY, 1, -1],
+          [c.maxX, c.maxY, -1, -1],
+        ]) {
+          const cx = corner[0], cy = corner[1], dx = corner[2], dy = corner[3];
+          const row = probeD(cx, cy, dx, 0);
+          const col = probeD(cx, cy, 0, dy);
+          const diag = probeD(cx, cy, dx, dy);
+          // d=0（角の画素が既に成分の中）は「半径0のサンプル」ではなく「丸くない角」の意味。
+          // 上だけ丸い等の非対称な角Rでは直角側の0が中央値を押し下げるので、中央値の前に除外する
+          //
+          // 半格子補正が行/列と対角で違うのは、円弧の交わり方が違うから。
+          // **角の行では円弧が辺に接している**ので、x = r の 1 つ手前の画素も面積の大半が
+          // 図形側に入り、量子化バケットとしては「中」になる。実測（rx = 4/6/8/10/12/16/20 の
+          // 矩形、2026-08-26）でも最初の画素は常に r-1 だった。だから +1 を戻す。
+          // 対角は円弧を横切るので普通の半格子補正 -0.5 でよい（同じ実測で誤差 -1.2〜-0.05）。
+          if (row > 0) ests.push(rOf(row + 1, 0));
+          if (col > 0) ests.push(rOf(col + 1, 0));
+          if (diag > 0) ests.push(rOf(diag - 0.5, diag - 0.5));
+        }
+        if (ests.length > 0) {
+          ests.sort((a, b) => a - b);
+          const mid = ests.length >> 1;
+          const median = ests.length % 2 === 1 ? ests[mid] : (ests[mid - 1] + ests[mid]) / 2;
+          cornerRadius = Math.round(Math.min(24, median * inv));
           if (cornerRadius < 2) cornerRadius = 0;
         }
       }
@@ -845,6 +869,25 @@ window.riveApi = {
     // 2峰性スコアが 0 になる中間 alpha 割合。分布の実測は
     // テキスト中央 0.246 / p90 0.322、写真中央 0.319 / p75 0.447。
     const MATTE_BIMODAL_ZERO = 0.60;
+    // --- インクの「太さ」で写真の平坦部を落とす ---
+    // fit も中間 alpha の割合も **alpha のヒストグラムしか見ていない**。水面のような
+    // 2階調で平坦な写真は、そのヒストグラムが文字とほとんど同じ形をしていて分離できない
+    // （上の表の「写真の誤通過 10%」の下げ止まりがこれ）。違うのは**空間配置**のほう:
+    // 文字は細いストロークの集まりで、写真の塊は太い。
+    // alpha>0.5 のインクマスクを半径 r で erosion して残る割合 Q を測る。
+    // r は行高から出す: 欧文の縦線幅は 0.06〜0.12em、行の箱はアセンダ+ディセンダで
+    // 約 1.25em なので、ストロークは行高の 0.1 倍前後にしかならない。
+    // r = 行高×0.25 の正方形（一辺 ≥ 行高×0.5）はどんなストロークにも入らないので、
+    // 理想的な文字なら Q = 0 になる。
+    const MATTE_ERODE_RATIO = 0.25;
+    // 0.2 は「文字なら 0」という幾何の予測に対する余裕。実測（2026-08-26）:
+    //   通常の文字 0.000 ／ 極太スラブの見出し "Rust"(37px) 0.264〜0.297 ／
+    //   行と同じ形の平坦な2階調の塊 0.352〜0.400（幅 w・高さ h の塊は理論上 0.5(1-h/w) 前後）
+    // **極太の見出しは巻き添えで落ちる**（実画像 16 枚で 853 行中 2 行）。それを救うには
+    // 閾値を 0.3 まで上げることになり、塊の 0.35 との間隔がほぼ無くなる。
+    // 誤りの代償は非対称 — matte を取り損ねた文字は矩形ラスタ + fade で見た目は保たれるが、
+    // 写真を matte にすると大量の画素が透明になって見た目が壊れる。だから低い側に置く。
+    const MATTE_INK_THICK_MAX = opts?.matteInkThickMax ?? 0.2;
 
     const SRGB_TO_LIN = new Float32Array(256);
     for (let i = 0; i < 256; i++) {
@@ -856,6 +899,42 @@ window.riveApi = {
       const a = Float64Array.from(arr).sort();
       const m = a.length >> 1;
       return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+    };
+
+    /**
+     * インクマスク(alpha>0.5)を一辺 2k+1 の正方形で erosion して残る割合。
+     * 距離変換ではなく分離可能な min フィルタ（横→縦）で掛ける。同じ答えが O(n·k) で出る。
+     * 箱の外は背景として扱う。外へ続く塊は縁で削られるが、内部が太ければ残る。
+     */
+    const thickFraction = (ink, bw, bh, k) => {
+      let total = 0;
+      for (let i = 0; i < ink.length; i++) total += ink[i];
+      if (total === 0) return 0;
+      if (k < 1) return 1;   // 1px 未満の erosion は「削っていない」= 判定に使えない
+      const hmin = new Uint8Array(bw * bh);
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          let on = 1;
+          for (let dx = -k; dx <= k; dx++) {
+            const xx = x + dx;
+            if (xx < 0 || xx >= bw || !ink[y * bw + xx]) { on = 0; break; }
+          }
+          hmin[y * bw + x] = on;
+        }
+      }
+      let kept = 0;
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          if (!hmin[y * bw + x]) continue;
+          let on = 1;
+          for (let dy = -k; dy <= k; dy++) {
+            const yy = y + dy;
+            if (yy < 0 || yy >= bh || !hmin[yy * bw + x]) { on = 0; break; }
+          }
+          if (on) kept++;
+        }
+      }
+      return kept / total;
     };
 
     const estimateMatte = (line) => {
@@ -939,6 +1018,8 @@ window.riveApi = {
         // matte モデルが主張しているのは「切り出す矩形の**全画素**が F と B の混合である」
         // ことなので、その主張をそのまま bbox 上で検証する。文字なら地の画素は alpha=0 として
         // 直線に乗るが、写真は乗らない。
+        const bw = line.maxX - line.minX + 1, bh = line.maxY - line.minY + 1;
+        const ink = new Uint8Array(bw * bh);
         let sum = 0, n = 0, mid = 0;
         for (let y = line.minY; y <= line.maxY; y++) {
           for (let x = line.minX; x <= line.maxX; x++) {
@@ -949,11 +1030,15 @@ window.riveApi = {
             const e0 = c0 - a * d[0], e1 = c1 - a * d[1], e2 = c2 - a * d[2];
             sum += Math.sqrt(e0 * e0 + e1 * e1 + e2 * e2);
             if (a > 0.2 && a < 0.8) mid++;
+            if (a > 0.5) ink[(y - line.minY) * bw + (x - line.minX)] = 1;
             n++;
           }
         }
         if (n === 0) return null;
-        return { residual: sum / n, len: Math.sqrt(len2), midFraction: mid / n };
+        return {
+          residual: sum / n, len: Math.sqrt(len2), midFraction: mid / n,
+          thick: thickFraction(ink, bw, bh, Math.round(bh * MATTE_ERODE_RATIO)),
+        };
       };
       const srgb = evalSpace(false), lin = evalSpace(true);
       if (!srgb && !lin) return null;
@@ -979,9 +1064,11 @@ window.riveApi = {
         confidence,
         fit,
         midFraction: chosen.midFraction,
+        inkThick: chosen.thick,
         contrast,
         eligible: contrast >= MATTE_MIN_CONTRAST &&
-          fit >= MATTE_FIT_MIN && chosen.midFraction <= MATTE_MID_ALPHA_MAX,
+          fit >= MATTE_FIT_MIN && chosen.midFraction <= MATTE_MID_ALPHA_MAX &&
+          chosen.thick <= MATTE_INK_THICK_MAX,
       };
     };
 
@@ -1106,6 +1193,7 @@ window.riveApi = {
         matteConfidence: m ? Math.round(m.confidence * 1000) / 1000 : 0,
         matteFit: m ? Math.round(m.fit * 1000) / 1000 : 0,
         matteMidAlpha: m ? Math.round(m.midFraction * 1000) / 1000 : 1,
+        matteInkThick: m ? Math.round(m.inkThick * 1000) / 1000 : 1,
         matte: m && m.eligible ? { fg: m.fg, bg: m.bg, space: m.space } : undefined,
         _wr: [gx0, gy0, gx1, gy1],
       });
@@ -1204,7 +1292,7 @@ window.riveApi = {
     const exposed = new Int32Array(ordered.length);
     const off = new Int32Array(ordered.length);
     const sum = new Float64Array(ordered.length);
-    // 要素の矩形の縁 edge px は数えない。縁は角丸の推定誤差(相対 10〜17%)と 1px の枠線・
+    // 要素の矩形の縁 edge px は数えない。縁は角丸の推定誤差(±1px 程度)と 1px の枠線・
     // アンチエイリアスで必ず外れ、小さな要素ほどその割合が支配的になる（実測 2026-08-26:
     // 39x22 のボタンで縁込み risk 0.07、内側だけなら後述）。ここで測りたいのは
     // 「塗りつぶすと消える中身」であって縁の精度ではない。
@@ -1236,7 +1324,11 @@ window.riveApi = {
     const PATCH_DILATE = 1;
     // 近い塊は 1 つの patch にまとめる（破線 → 1 本、文字の点 → 1 文字）。切り抜きは
     // 元画素なので、間の塗り部分を含んでも見た目は変わらない。8px: 破線の隙間(6)より広く、
-    // 別のアイコン同士が並ぶ間隔(通常 12px 以上)より狭い
+    // 別のアイコン同士が並ぶ間隔(通常 12px 以上)より狭い。
+    // **統合するのは同じ行か同じ列に並ぶ塊だけ**（bbox が縦または横に重なっているもの）。
+    // 距離だけで見ると、斜めに 8px 離れただけのアイコンが連鎖して 1 塊になり、
+    // ツールバーが丸ごと 1 枚の切り抜きになる（動かす単位として間違っている）。
+    // 破線は同じ行に並ぶので縦に重なり、統合される。
     const PATCH_MERGE_GAP = opts?.patchMergeGap ?? 8;
     const PATCH_MIN_PIXELS = 4;
     const mergeClusters = (cs) => {
@@ -1248,7 +1340,11 @@ window.riveApi = {
             const a = cs[i].rect, b = cs[j].rect;
             const gx = Math.max(a[0], b[0]) - Math.min(a[0] + a[2], b[0] + b[2]);
             const gy = Math.max(a[1], b[1]) - Math.min(a[1] + a[3], b[1] + b[3]);
-            if (gx > PATCH_MERGE_GAP || gy > PATCH_MERGE_GAP) continue;
+            // gx/gy が負 = その軸で重なっている。「横に重なって縦が近い」か
+            // 「縦に重なって横が近い」だけを統合し、斜めの隣接は統合しない
+            const sameColumn = gx <= 0 && gy <= PATCH_MERGE_GAP;
+            const sameRow = gy <= 0 && gx <= PATCH_MERGE_GAP;
+            if (!sameColumn && !sameRow) continue;
             const x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]);
             const x1 = Math.max(a[0] + a[2], b[0] + b[2]), y1 = Math.max(a[1] + a[3], b[1] + b[3]);
             cs[i] = { rect: [x0, y0, x1 - x0, y1 - y0], pixels: cs[i].pixels + cs[j].pixels };

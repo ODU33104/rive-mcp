@@ -1666,7 +1666,7 @@ server.registerTool(
   {
     title: "Detect UI elements in a screenshot",
     description:
-      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii around 10-17% relative error. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
+      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii within about a pixel. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
     inputSchema: {
       imagePath: z.string().describe("Screenshot or design comp (PNG/JPEG)"),
       overlayPath: z.string().optional().describe("Where to write the numbered overlay PNG"),
@@ -1701,6 +1701,10 @@ server.registerTool(
           palette,
           overlayPath,
           dropped,
+          // 反実仮想判定の結果。要素の renderRisk と対で読む数字なので、
+          // 要素の中だけでなく要約としても返す（何件が判定で動いたかが一目で分かる）
+          demoted: det.demoted,
+          patched: det.patched,
           next: "Assign a role to each element, then call riv_ui_prototype.",
         }, null, 1),
       }],
@@ -1794,6 +1798,22 @@ server.registerTool(
     if (dropped > 0) {
       warnings.push(`${dropped} smaller elements were dropped by the maxElements cap.`);
     }
+    // 反実仮想判定で動いた件数。要素の renderMode を見れば分かるが、**使う側が見るのは
+    // warnings** なので、「編集できるはずのものが切り抜きになった」理由をここに出す。
+    if (det.demoted > 0) {
+      warnings.push(
+        `${det.demoted} flat ${det.demoted === 1 ? "fill was" : "fills were"} turned into crops ` +
+          `because the screenshot disagreed with painting them flat. Their renderRisk says by how much.`
+      );
+    }
+    if (det.patched > 0) {
+      const patchCount = elements.filter((e) => e.renderPatch).length;
+      warnings.push(
+        `${det.patched} ${det.patched === 1 ? "fill was" : "fills were"} kept as vectors with ` +
+          `${patchCount} cut-out ${patchCount === 1 ? "patch" : "patches"} on top ` +
+          `(an accent bar, a dashed line or an icon that nothing else covers).`
+      );
+    }
 
     const roleCounts: Record<string, number> = {};
     for (const e of withRoles) roleCounts[e.role] = (roleCounts[e.role] ?? 0) + 1;
@@ -1806,6 +1826,8 @@ server.registerTool(
           bytes: bytes.length,
           source: { width: det.width, height: det.height },
           elements: withRoles.length,
+          demoted: det.demoted,
+          patched: det.patched,
           rasterAssets: sliced.parts.length,
           animations: built.spec.animations?.map((an) => an.name) ?? [],
           stateMachines: (Array.isArray(built.spec.stateMachine)
