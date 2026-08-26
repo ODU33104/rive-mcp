@@ -550,5 +550,56 @@ try {
   await hostLabel.close();
 }
 
+// --- 反実仮想判定（2026-08-26）: 要素を実際に合成し、塗りが露出する画素の誤差で決める ---
+//
+// 形から「写真かパネルか」を当てるのをやめ、平坦に塗った結果が元と合うかを測る。
+// ラベルは上のテキスト行が覆うので誤差に寄与しない。覆われない中身（アイコン・線）は
+// 露出して外れ、risk が閾値を超えたらラスタに落ちる。
+import { detectUiElements, applyRenderCheck, zOrder, RENDER_RISK_TAU } from "../dist/uiDetect.js";
+const hostCf = new RiveHost(PAGE_SCRIPT);
+try {
+  const cfPng = await hostCf.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">
+      <rect width="480" height="240" fill="#F4F5F7"/>
+      <!-- 左: ラベル入りボタン。文字は行として上に乗るので平坦塗りで成立する -->
+      <rect x="30" y="80" width="180" height="56" rx="8" fill="#1E6FD9"/>
+      <text x="120" y="118" font-family="Arial, sans-serif" font-size="26" font-weight="bold"
+            fill="#FFFFFF" text-anchor="middle">SIGN IN</text>
+      <!-- 右: 平坦な矩形の上を破線が横切る。破線は要素にならないので塗ると消える -->
+      <rect x="270" y="80" width="180" height="56" rx="8" fill="#CBE1FF"/>
+      <line x1="250" y1="108" x2="470" y2="108" stroke="#7A7A7A" stroke-width="3" stroke-dasharray="8 6"/>
+    </svg>`);
+  const cf = await detectUiElements(hostCf, cfPng, { minArea: 576, workingMax: 1280, maxElements: 120 });
+  const left = cf.elements.find((e) => e.rect[0] >= 25 && e.rect[0] <= 35 && e.rect[2] > 150 && e.rect[2] < 200);
+  const right = cf.elements.find((e) => e.rect[0] >= 265 && e.rect[0] <= 275 && e.rect[2] > 150 && e.rect[2] < 200);
+  check("ラベル入りボタンは vector-panel のまま（risk が閾値未満）",
+    left && left.renderMode === "vector-panel" && left.renderRisk <= RENDER_RISK_TAU,
+    left && `${left.renderMode} risk=${left.renderRisk}`);
+  check("破線が横切る矩形はラスタに落ちる（risk が閾値超）",
+    right && right.renderMode === "raster" && right.renderRisk > RENDER_RISK_TAU,
+    right && `${right.renderMode} risk=${right.renderRisk}`);
+  check("落とした要素にも renderRisk が残る", right && typeof right.renderRisk === "number");
+  check("demoted を数える", cf.demoted >= 1, String(cf.demoted));
+
+  // renderCheck:false なら判定を通さない（切り分け用）
+  const raw = await detectUiElements(hostCf, cfPng, { minArea: 576, workingMax: 1280, maxElements: 120, renderCheck: false });
+  const rawRight = raw.elements.find((e) => e.rect[0] >= 265 && e.rect[0] <= 275 && e.rect[2] > 150 && e.rect[2] < 200);
+  check("renderCheck:false では破線の矩形も vector-panel", rawRight && rawRight.renderMode === "vector-panel", rawRight && rawRight.renderMode);
+
+  // applyRenderCheck は純関数として: 閾値ちょうどは残し、超えたら落とす
+  const els = [
+    { id: 1, parent: null, children: [], renderMode: "vector-panel", semanticHint: "panel", rect: [0, 0, 10, 10], fill: "#000000", cornerRadius: 3, coveredByText: true },
+    { id: 2, parent: null, children: [], renderMode: "vector-panel", semanticHint: "panel", rect: [20, 0, 10, 10], fill: "#000000" },
+  ];
+  const r = applyRenderCheck(els, [{ id: 1, exposed: 100, risk: RENDER_RISK_TAU }, { id: 2, exposed: 100, risk: RENDER_RISK_TAU + 0.001 }]);
+  check("閾値ちょうどは vector-panel のまま", els[0].renderMode === "vector-panel" && els[0].coveredByText === true);
+  check("閾値超はラスタ・image・角丸0・coveredByText 無し",
+    els[1].renderMode === "raster" && els[1].semanticHint === "image" && els[1].cornerRadius === 0 && !("coveredByText" in els[1]) && r.demoted === 1);
+  check("zOrder は親を子より前に置く",
+    (() => { const o = zOrder(cf.elements); const pos = new Map(o.map((e, i) => [e.id, i])); return cf.elements.every((e) => e.parent === null || pos.get(e.parent) < pos.get(e.id)); })());
+} finally {
+  await hostCf.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../dist/pageScript.js";
-import { buildTree } from "../dist/uiDetect.js";
+import { detectUiElements } from "../dist/uiDetect.js";
 import { reconstructionStats, guardrails, truthAlignment } from "./detectorMetrics.mjs";
 
 // baseline は「検出器を変えていない」ことが前提の記録。変更後の数値を既定ファイルへ
@@ -71,8 +71,8 @@ try {
   mkdirSync(join(FIXTURE_DIR, "overlays"), { recursive: true });
   for (const fx of manifest.fixtures) {
     const png = readFileSync(join(FIXTURE_DIR, fx.image));
-    const det = await host.detectUiRegions(png, DETECT_OPTS);
-    const { elements, dropped } = buildTree(det.regions, MAX_ELEMENTS);
+    const det = await detectUiElements(host, png, { ...DETECT_OPTS, maxElements: MAX_ELEMENTS });
+    const { elements, dropped } = det;
 
     const truth = { width: fx.width, height: fx.height, elements: fx.anchors };
     const inkProbes = fx.anchors.filter((a) => a.inkColor)

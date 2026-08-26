@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { RiveHost } from "../../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../../dist/pageScript.js";
-import { buildTree } from "../../dist/uiDetect.js";
+import { detectUiElements } from "../../dist/uiDetect.js";
 import { buildPrototypeScene, attachRasterAssets } from "../../dist/uiPrototype.js";
 import { createRiv } from "../../dist/rivWriter.js";
 import { encodeGif } from "../../dist/gif.js";
@@ -52,8 +52,8 @@ try {
   const png = await host.rasterize(svg);
   writeFileSync(`${OUT}/ui-prototype-source.png`, png);
 
-  const det = await host.detectUiRegions(png, { minArea: 576, workingMax: 1280 });
-  const { elements } = buildTree(det.regions, 120);
+  const det = await detectUiElements(host, png, { ...{ minArea: 576, workingMax: 1280 }, maxElements: 120 });
+  const { elements } = det;
   console.log(`検出 ${elements.length} 要素 / vector-panel ${elements.filter(e => e.renderMode === "vector-panel").length}`);
 
   // ロール付けは本来モデルがやる部分。デモでは幾何から素直に割り当てる。

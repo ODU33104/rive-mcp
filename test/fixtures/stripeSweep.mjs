@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../../dist/pageScript.js";
-import { buildTree } from "../../dist/uiDetect.js";
+import { detectUiElements } from "../../dist/uiDetect.js";
 import { generateScene } from "./synth.mjs";
 import { truthAlignment, guardrails } from "../detectorMetrics.mjs";
 
@@ -40,8 +40,8 @@ try {
   const run = async (items, opts) => {
     const out = [];
     for (const it of items) {
-      const det = await host.detectUiRegions(it.png, opts);
-      const { elements, dropped } = buildTree(det.regions, 120);
+      const det = await detectUiElements(host, it.png, { ...opts, maxElements: 120 });
+      const { elements, dropped } = det;
       const t = truthAlignment(elements, it.truth);
       const g = guardrails(elements, { width: det.width, height: det.height }, { dropped });
       const grad = t.perNegative.find((n) => /grad/.test(n.label)) || {};

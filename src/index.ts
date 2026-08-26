@@ -22,7 +22,7 @@ import { extractAssets } from "./rivAssets.js";
 import { startStudio, stopStudio, takeStudioNotes, postStudioReply } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, paletteFromColors, type Mood } from "./designTokens.js";
-import { buildTree } from "./uiDetect.js";
+import { detectUiElements } from "./uiDetect.js";
 import { buildPrototypeScene, attachRasterAssets, ROLE_MOTION, type Role } from "./uiPrototype.js";
 import { overlayLabels } from "./uiOverlay.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
@@ -1666,7 +1666,7 @@ server.registerTool(
   {
     title: "Detect UI elements in a screenshot",
     description:
-      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii around 10-17% relative error. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
+      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii around 10-17% relative error. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card.",
     inputSchema: {
       imagePath: z.string().describe("Screenshot or design comp (PNG/JPEG)"),
       overlayPath: z.string().optional().describe("Where to write the numbered overlay PNG"),
@@ -1678,14 +1678,14 @@ server.registerTool(
     const src = resolve(a.imagePath);
     if (!existsSync(src)) return err(`Image not found: ${src}`);
     const png = readFileSync(src);
-    const det = await host.detectUiRegions(png, { minArea: a.minArea ?? 576, workingMax: 1280 });
+    const det = await detectUiElements(host, png, { minArea: a.minArea ?? 576, maxElements: a.maxElements ?? 120 });
     if (!det.regions.length) {
       return err(
         `No UI elements detected in ${src}. The image may be a photograph, a gradient, or too small. ` +
           `Try lowering minArea (current ${a.minArea ?? 576}).`
       );
     }
-    const { elements, dropped } = buildTree(det.regions, a.maxElements ?? 120);
+    const { elements, dropped } = det;
     const palette = paletteFromColors(det.sampledColors);
     let overlayPath: string | undefined;
     if (a.overlayPath) {
@@ -1750,13 +1750,13 @@ server.registerTool(
     const src = resolve(a.imagePath);
     if (!existsSync(src)) return err(`Image not found: ${src}`);
     const png = readFileSync(src);
-    const det = await host.detectUiRegions(png, { minArea: a.minArea ?? 576, workingMax: 1280 });
+    const det = await detectUiElements(host, png, { minArea: a.minArea ?? 576, maxElements: a.maxElements ?? 120 });
     if (!det.regions.length) {
       return err(
         `No UI elements detected in ${src}. Run riv_ui_detect first to see what this image gives you.`
       );
     }
-    const { elements, dropped } = buildTree(det.regions, a.maxElements ?? 120);
+    const { elements, dropped } = det;
 
     const roleById = new Map(a.roles.map((r) => [r.id, r]));
     const unknownIds = a.roles.filter((r) => !elements.some((e) => e.id === r.id)).map((r) => r.id);

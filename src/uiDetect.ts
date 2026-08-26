@@ -46,6 +46,9 @@ export interface UiElement extends RawRegion {
   id: number;
   parent: number | null;
   children: number[];
+  /** 反実仮想判定の結果(0〜1)。露出画素のうち塗りが元と 8 超で外れた割合。
+   *  RENDER_RISK_TAU を超えた要素はラスタに落とされ、その値がここに残る */
+  renderRisk?: number;
 }
 
 const area = (r: RawRegion) => r.rect[2] * r.rect[3];
@@ -94,12 +97,18 @@ export function buildTree(
     if (reserved.has(r)) { keptSet.add(r); continue; }
     if (slots >= maxElements) continue;
     let region = r;
-    if (r.coveredByText && r.renderMode === "vector-panel") {
+    // 席の予約は fill を持つ vector-panel 全部に掛ける（coveredByText に限らない）。
+    // 充填率が素で 0.85 を超えるセルでも中の文字は行として上に乗って初めて残る。
+    // 実測 2026-08-26: dense-table の見出しセル(充填 0.88)の 2 行が上限で落ち、
+    // 反実仮想判定で risk 0.056（＝平坦に塗ると文字が消える）になった。
+    if (r.renderMode === "vector-panel" && r.fill) {
       const need = textsIn(r).filter((t) => !reserved.has(t) && !keptSet.has(t));
       if (slots + 1 + need.length <= maxElements) {
         for (const t of need) reserved.add(t);
         slots += need.length;
       } else {
+        // 席が無い。背景のような巨大パネルは中の行が上限を超えるので必ずここに来る:
+        // 平坦塗りの下で行が消えるより、元画素のままのラスタの方が見た目は正しい
         const { coveredByText: _c, ...rest } = r;
         region = { ...rest, renderMode: "raster", semanticHint: "image", cornerRadius: 0 };
         demoted.set(r, region);
@@ -157,4 +166,76 @@ export function buildTree(
   }
 
   return { elements, dropped };
+}
+
+/** z 順（背面→前面）。uiPrototype.ts の assignZ と同じ規則: ルートを y→x で並べ、深さ優先(pre-order) */
+export function zOrder(elements: UiElement[]): UiElement[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const roots = elements.filter((e) => e.parent === null)
+    .sort((a, b) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0]);
+  const out: UiElement[] = [];
+  const seen = new Set<number>();
+  const visit = (e: UiElement): void => {
+    if (seen.has(e.id)) return;
+    seen.add(e.id);
+    out.push(e);
+    for (const cid of e.children) { const c = byId.get(cid); if (c) visit(c); }
+  };
+  roots.forEach(visit);
+  for (const e of elements) if (!seen.has(e.id)) { seen.add(e.id); out.push(e); }
+  return out;
+}
+
+/** 反実仮想判定の閾値。risk = 露出画素のうち量子化幅(8)を超えて外れた割合 */
+export const RENDER_RISK_TAU = 0.02;
+
+/**
+ * 反実仮想判定の結果を要素に適用する。risk が tau を超えるベクター塗りはラスタに落とす。
+ * ラスタは同じ位置の元画素なので、落とした要素の誤差は 0 になり、他の要素の露出には
+ * 影響しない（z 順も矩形も変わらない）。だから 1 パスで済む。
+ * 各要素には renderRisk を記録する（落とした要素にも、判断の根拠として残す）。
+ */
+export function applyRenderCheck(
+  elements: UiElement[],
+  report: Array<{ id: number; exposed: number; risk: number }>,
+  tau: number = RENDER_RISK_TAU
+): { demoted: number } {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  let demoted = 0;
+  for (const r of report) {
+    const el = byId.get(r.id);
+    if (!el) continue;
+    el.renderRisk = Math.round(r.risk * 10000) / 10000;
+    if (r.risk > tau) {
+      el.renderMode = "raster";
+      el.semanticHint = "image";
+      el.cornerRadius = 0;
+      delete el.coveredByText;
+      demoted++;
+    }
+  }
+  return { demoted };
+}
+
+/**
+ * 検出 → ツリー → 反実仮想判定 → 適用。**riv_ui_detect と riv_ui_prototype と計測ハーネスは
+ * 必ずこれを通る。** 別々に組むと、検出ツールが「vector-panel」と言った要素を生成側が
+ * ラスタにする（または逆）ズレが出て、id とロールの突き合わせが意味を失う。
+ */
+export async function detectUiElements(
+  host: {
+    detectUiRegions(png: Buffer, opts: { minArea?: number; workingMax?: number }): Promise<{ width: number; height: number; regions: RawRegion[]; sampledColors: Array<{ hex: string; weight: number }> }>;
+    assessVectorFills(png: Buffer, ordered: UiElement[], delta?: number): Promise<Array<{ id: number; exposed: number; risk: number; meanDiff: number }>>;
+  },
+  png: Buffer,
+  opts: { minArea?: number; workingMax?: number; maxElements?: number; renderCheck?: boolean; tau?: number }
+): Promise<{ width: number; height: number; regions: RawRegion[]; sampledColors: Array<{ hex: string; weight: number }>; elements: UiElement[]; dropped: number; demoted: number }> {
+  const det = await host.detectUiRegions(png, { minArea: opts.minArea ?? 576, workingMax: opts.workingMax ?? 1280 });
+  const { elements, dropped } = buildTree(det.regions, opts.maxElements ?? 120);
+  let demoted = 0;
+  if (opts.renderCheck !== false && elements.some((e) => e.renderMode === "vector-panel" && e.fill)) {
+    const report = await host.assessVectorFills(png, zOrder(elements));
+    demoted = applyRenderCheck(elements, report, opts.tau).demoted;
+  }
+  return { ...det, elements, dropped, demoted };
 }

@@ -1055,7 +1055,12 @@ window.riveApi = {
           for (let d = 1; d <= maxGrowY && rowHasInk(l.maxY + d); d++) gy1 = l.maxY + d;
           // 伸ばす上限は確定した行高の 1.6 倍。1文字ぶんを拾うには足りて、隣の語まで
           // 無条件に届くほどではない距離。
-          const maxGrow = Math.max(4, Math.round((gy1 - gy0 + 1) * 1.6));
+          // 上限は行高の 8 倍。以前は 1.6 倍だったが、それは「範囲内のインクを飛び飛びに
+          // 拾う」走査で隣の語を巻き込まないための値。今は空白（行高×0.35）で止まるので
+          // 上限は安全弁でしかなく、1.6 倍では先頭の複数文字が丸ごと呑まれた行に届かない
+          // （実測 2026-08-26: "(discontinued)" が "continued" から検出され、"(dis" が
+          // 平坦塗りに消えて反実仮想 risk 0.026）。
+          const maxGrow = Math.max(4, Math.round((gy1 - gy0 + 1) * 8));
           // **始点は伸ばす前の端に固定する。** gx1 を足しながら進める書き方にすると
           // 1回の走査が上限を超えて伸び続け、隣の語まで飲み込む。実測: 重複描画が
           // 1.76 → 10.85 に爆発した（同じ単語を覆う矩形が何枚も積み上がる）。
@@ -1074,6 +1079,10 @@ window.riveApi = {
           for (let d = 1, gap = 0; d <= maxGrow && gap <= maxGapX; d++) {
             if (colHasInk(l.maxX + d)) { gx1 = l.maxX + d; gap = 0; } else gap++;
           }
+          // アンチエイリアスの縁 1px。isInk は alpha>0.5 なので縁の薄い画素は「インク無し」
+          // と判定され、箱がその 1 行/1 列手前で止まる。切り出しは元画素なので広げても害は無く、
+          // 狭いと平坦塗りの上に縁が露出する（実測 2026-08-26: 行の下端 1 行が risk に数えられた）。
+          gx0 -= 1; gy0 -= 1; gx1 += 1; gy1 += 1;
           gx0 = Math.max(0, gx0); gy0 = Math.max(0, gy0);
           gx1 = Math.min(W - 1, gx1); gy1 = Math.min(H - 1, gy1);
         }
@@ -1143,6 +1152,91 @@ window.riveApi = {
     for (const r of regions) { delete r._comp; delete r._wr; }
 
     return { width: W0, height: H0, regions, sampledColors };
+  },
+
+  // 反実仮想判定: 要素を実際に z 順で合成し、ベクター塗りの各要素について
+  // 「最終合成で自分が最前面に露出している画素」だけの誤差を測る。
+  // ボタンのラベルは上のテキスト要素が覆うので誤差に寄与せず、写真やイラストの
+  // 上に置かれた平坦塗りは覆われないぶんだけ外れる。穴の意味を推測する必要が無い。
+  //
+  // 検出器の中では正しく測れない（z 順・要素数上限・角丸・matte が確定していない。
+  // 2026-08-22 に検出器側で試して recall 7→4 に落ちた）。ここは buildTree の後、
+  // つまり最終的な要素とその順序が決まった後に呼ぶ。合成の規則は test/detectorMetrics.mjs の
+  // reconstructionStats と同じ（base 全面 → 塗り矩形は roundRect、ラスタは同位置に切り出し）。
+  //
+  // opts.ordered: z 順（背面→前面）に並んだ要素。opts.delta: 「外れた」とみなす
+  // チャンネル最大差の下限（8 = 5bit 量子化のバケット幅。それ未満は量子化の揺れ）。
+  async assessVectorFills(b64, opts) {
+    const bitmap = await createImageBitmap(new Blob([b64ToBytes(b64)], { type: "image/png" }));
+    const W = bitmap.width, H = bitmap.height;
+    const delta = opts?.delta ?? 8;
+    const src = document.createElement("canvas");
+    src.width = W; src.height = H;
+    const sctx = src.getContext("2d", { willReadFrequently: true });
+    sctx.drawImage(bitmap, 0, 0);
+    const srcData = sctx.getImageData(0, 0, W, H).data;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0);
+    const owner = new Int32Array(W * H).fill(-1);
+    const ordered = opts.ordered;
+    for (let k = 0; k < ordered.length; k++) {
+      const el = ordered[k];
+      const [x, y, w, h] = el.rect;
+      if (w <= 0 || h <= 0) continue;
+      if (el.renderMode === "vector-panel" && el.fill) {
+        ctx.fillStyle = el.fill;
+        ctx.beginPath();
+        const r = Math.max(0, Math.min(el.cornerRadius || 0, w / 2, h / 2));
+        ctx.roundRect(x, y, w, h, r);
+        ctx.fill();
+      } else if (el.renderMode === "raster") {
+        const sx = Math.max(0, Math.min(W, x)), sy = Math.max(0, Math.min(H, y));
+        const sw = Math.max(0, Math.min(W - sx, w)), sh = Math.max(0, Math.min(H - sy, h));
+        if (sw > 0 && sh > 0) ctx.drawImage(bitmap, sx, sy, sw, sh, sx, sy, sw, sh);
+      } else continue;
+      const x0 = Math.max(0, Math.round(x)), y0 = Math.max(0, Math.round(y));
+      const x1 = Math.min(W, Math.round(x + w)), y1 = Math.min(H, Math.round(y + h));
+      for (let yy = y0; yy < y1; yy++) owner.fill(k, yy * W + x0, yy * W + x1);
+    }
+    const rec = ctx.getImageData(0, 0, W, H).data;
+    const exposed = new Int32Array(ordered.length);
+    const off = new Int32Array(ordered.length);
+    const sum = new Float64Array(ordered.length);
+    // 要素の矩形の縁 edge px は数えない。縁は角丸の推定誤差(相対 10〜17%)と 1px の枠線・
+    // アンチエイリアスで必ず外れ、小さな要素ほどその割合が支配的になる（実測 2026-08-26:
+    // 39x22 のボタンで縁込み risk 0.07、内側だけなら後述）。ここで測りたいのは
+    // 「塗りつぶすと消える中身」であって縁の精度ではない。
+    const edge = opts?.edge ?? 2;
+    const bounds = ordered.map((el) => {
+      const [x, y, w, h] = el.rect;
+      return [Math.round(x) + edge, Math.round(y) + edge, Math.round(x + w) - edge, Math.round(y + h) - edge];
+    });
+    for (let p = 0, i = 0; p < W * H; p++, i += 4) {
+      const k = owner[p];
+      if (k < 0) continue;
+      const px = p % W, py = (p / W) | 0, b = bounds[k];
+      if (px < b[0] || py < b[1] || px >= b[2] || py >= b[3]) continue;
+      const d = Math.max(
+        Math.abs(rec[i] - srcData[i]), Math.abs(rec[i + 1] - srcData[i + 1]), Math.abs(rec[i + 2] - srcData[i + 2]));
+      exposed[k]++;
+      sum[k] += d;
+      if (d > delta) off[k]++;
+    }
+    const out = [];
+    for (let k = 0; k < ordered.length; k++) {
+      const el = ordered[k];
+      if (!(el.renderMode === "vector-panel" && el.fill)) continue;
+      out.push({
+        id: el.id,
+        exposed: exposed[k],
+        // 露出画素のうち delta を超えて外れた割合。露出が無い(完全に覆われた)要素は 0
+        risk: exposed[k] ? off[k] / exposed[k] : 0,
+        meanDiff: exposed[k] ? sum[k] / exposed[k] / 255 : 0,
+      });
+    }
+    return out;
   },
 
   // 検出結果に通し番号を焼き込む。ラベル位置は uiOverlay.ts（Node側の純関数）が決める

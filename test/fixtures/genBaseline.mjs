@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../../dist/pageScript.js";
-import { buildTree } from "../../dist/uiDetect.js";
+import { detectUiElements } from "../../dist/uiDetect.js";
 import { generateScene } from "./synth.mjs";
 import { reconstructionStats, guardrails, truthAlignment } from "../detectorMetrics.mjs";
 
@@ -89,8 +89,8 @@ async function main() {
     for (const { seed, pixelScale } of SCENES) {
       const { svg, truth } = generateScene(seed, { pixelScale });
       const png = await host.rasterize(svg);
-      const det = await host.detectUiRegions(png, DETECT_OPTS);
-      const { elements, dropped } = buildTree(det.regions, MAX_ELEMENTS);
+      const det = await detectUiElements(host, png, { ...DETECT_OPTS, maxElements: MAX_ELEMENTS });
+      const { elements, dropped } = det;
 
       // インク probe: テキストの GT bbox は近似だが、インク色の画素は画素厳密。
       // これが無いと「テキストを一切検出しない検出器」がどの gate にも掛からない

@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../dist/pageScript.js";
-import { buildTree } from "../dist/uiDetect.js";
+import { detectUiElements } from "../dist/uiDetect.js";
 import { truthAlignment, guardrails } from "./detectorMetrics.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -108,8 +108,8 @@ try {
   const rows = [];
   for (const fx of manifest.fixtures) {
     const png = readFileSync(join(FIXTURE_DIR, fx.image));
-    const det = await host.detectUiRegions(png, DETECT_OPTS);
-    const { elements, dropped } = buildTree(det.regions, MAX_ELEMENTS);
+    const det = await detectUiElements(host, png, { ...DETECT_OPTS, maxElements: MAX_ELEMENTS });
+    const { elements, dropped } = det;
     const t = truthAlignment(elements, { width: fx.width, height: fx.height, elements: fx.anchors });
     const g = guardrails(elements, { width: det.width, height: det.height }, { dropped });
     rows.push({ id: fx.id, split: fx.split, t, g, elements, png, size: { width: det.width, height: det.height } });
@@ -187,8 +187,8 @@ try {
     for (const kind of KINDS) {
       const tr = await page.evaluate(TRANSFORM, { b64: r.png.toString("base64"), kind });
       const buf = Buffer.from(tr.b64, "base64");
-      const det = await host.detectUiRegions(buf, DETECT_OPTS);
-      const { elements } = buildTree(det.regions, MAX_ELEMENTS);
+      const det = await detectUiElements(host, buf, { ...DETECT_OPTS, maxElements: MAX_ELEMENTS });
+      const { elements } = det;
       // 元の座標系へ戻す
       const back = elements.map((e) => ({
         ...e,
@@ -262,7 +262,11 @@ try {
     console.log("recorded metamorphic-baseline.json");
     writeFileSync(leakPath, JSON.stringify({
       recordedAt: out.recordedAt,
-      note: "2026-08-26 テキスト行の暴走を止めた後の実測。旧記録(2026-08-21: tuning 0/0, holdout 0.0686/0.0055)は、" +
+      note: "2026-08-26 反実仮想判定(detectUiElements)を通した後の実測。同日それ以前(テキスト行の暴走を止めた直後)は tuning 0.14 / holdout 0.46 で、" +
+        "その内訳(gallery-antd のイラスト内の角丸 2 枚・dark-mode の入力欄の断片)は反実仮想判定が risk 0.023〜0.036 でラスタに落とした。" +
+        "変換不変性の renderMode 一致率は判定を入れて 5〜13pt 下がる(jpeg 44→39, scale75 46→33, scale125 57→48, pad1 71→66)。" +
+        "塗りが元と合うかを画素で測って決めているので、摂動で合わなくなればラスタへ倒れるのは意図した応答。PNG 再エンコードは 100% のまま。" +
+        "以下は 2026-08-21 記録の経緯: 旧記録(2026-08-21: tuning 0/0, holdout 0.0686/0.0055)は、" +
         "画面の 50〜140% を覆う『テキスト行』(1440x513 など)がラスタとして最前面に乗り、その下のベクター leak と再構成誤差を隠していた値。" +
         "今回の値のうち holdout 0.46 は gallery-antd のイラスト内の平坦な角丸 2 枚(旧ビルドでも vector-panel)、" +
         "tuning 0.14 は dark-mode の入力欄の平坦な断片(再構成誤差 p99=0)。" +

@@ -227,6 +227,15 @@ export class RiveHost {
     return this.call("detectUiRegions", pngBytes.toString("base64"), opts);
   }
 
+  /** 反実仮想判定（uiDetect.ts の detectUiElements から呼ぶ）。ordered は z 順(背面→前面) */
+  assessVectorFills(
+    pngBytes: Buffer,
+    ordered: Array<{ id: number; renderMode: string; rect: [number, number, number, number]; fill?: string; cornerRadius?: number }>,
+    delta?: number
+  ): Promise<Array<{ id: number; exposed: number; risk: number; meanDiff: number }>> {
+    return this.call("assessVectorFills", pngBytes.toString("base64"), { ordered, delta });
+  }
+
   async imageSize(pngBytes: Buffer): Promise<{ width: number; height: number }> {
     return this.call("imageSize", pngBytes.toString("base64"), {});
   }
