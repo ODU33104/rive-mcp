@@ -420,6 +420,21 @@ window.riveApi = {
       const rectH = Math.round(h * inv);
       sampledColors.push({ hex: color, weight: rectW * rectH });
 
+      const cls = classifyComp(c, w, h, fillRatio);
+      regions.push({
+        renderMode: cls.renderMode,
+        semanticHint: cls.semanticHint,
+        rect: [Math.round(c.minX * inv), Math.round(c.minY * inv), rectW, rectH],
+        cornerRadius: cls.cornerRadius,
+        fill: color,
+        // テキスト行が確定した後の再分類（下の「文字で覆われた穴」参照）で使う。出力前に消す
+        _comp: c,
+      });
+    }
+
+    // 充填率と境界から「面」か「非矩形の絵」かを決め、面なら角丸も測る。
+    // 最初の分類とテキスト行確定後の再分類の両方から呼ぶので、判断はここ1か所に置く。
+    function classifyComp(c, w, h, fillRatio) {
       // 充填率で「面」か「非矩形の絵」かを分ける
       let semanticHint = fillRatio >= 0.85 ? "panel" : "image";
       // 細長く薄いものは区切り線
@@ -517,13 +532,7 @@ window.riveApi = {
         }
       }
 
-      regions.push({
-        renderMode,
-        semanticHint,
-        rect: [Math.round(c.minX * inv), Math.round(c.minY * inv), rectW, rectH],
-        cornerRadius,
-        fill: color,
-      });
+      return { semanticHint, renderMode, cornerRadius };
     }
 
     // --- 縞ファミリの統合 ---
@@ -708,12 +717,26 @@ window.riveApi = {
 
     // 文字は minArea 未満に量子化で散った成分の集まりになる。行として束ねて拾い直す
     const glyphs = [];
+    const strips = [];
+    const GLYPH_MAX_H = 40 * scale;
+    // 切り分け用（計測ハーネスからのみ。MCP ツールの引数としては未公開）
+    const DEFER_STRIPS = opts?.deferStrips ?? true;
+    const TEXT_COVERED_HOLES = opts?.textCoveredHoles ?? true;
     for (const c of comps) {
       const w = c.maxX - c.minX + 1;
       const h = c.maxY - c.minY + 1;
       if (w * h * inv * inv >= minArea) continue;
-      if (h < 4 || h > 40 * scale) continue;          // 行として無理のない高さだけ
+      if (h < 4 || h > GLYPH_MAX_H) continue;         // 行として無理のない高さだけ
       if (w > 60 * scale) continue;                    // 1文字にしては横長すぎる
+      // 幅 1〜2px で背の高い断片は、行の先頭に入れない。パネルの縁のアンチエイリアスが
+      // ちょうどこの形（実測 2026-08-26: dark-mode のボタン左右縁が 1x31 と 1x33）で、
+      // x 昇順の処理ではボタン左縁が**行の最初の断片**になる。行高 31 から始まった行は
+      // 縦の許容 18px・横の許容 62px でラベルも隣の要素も呑み込む。
+      // 本物の文字の縦棒（"l" "i" の 1px 断片）もここに入るが、それらは行が確定した後に
+      // 行の縦範囲に収まるものだけ後付けする（下の strips ループ）。
+      // 16px: 1x 表示でストローク幅 1px の書体の cap-height は 14px 程度まで。それより高い
+      // 1px 断片は太いストロークが量子化で 1px 列に割れたもので、後付けと ink 伸長で戻る。
+      if (DEFER_STRIPS && w <= 2 && h >= 16) { strips.push({ ...c, w, h }); continue; }
       glyphs.push({ ...c, w, h });
     }
     // 読み順(x昇順)で束ねる。y優先でソートすると同じ単語内の断片が処理順で入れ違い、
@@ -729,6 +752,13 @@ window.riveApi = {
         // フォントの実際のcap-heightを表す。しきい値はどちらか大きい方を使う
         const H = Math.max(g.h, lh);
         return (
+          // 束ねた結果が「1文字として許した最大の高さ」を超えるなら、それは別の行を
+          // 巻き込んでいる。この上限が無いと行高が正帰還で膨らむ: 一度背の高い断片を
+          // 取り込んだ行は H が大きくなり、縦の許容(H*0.6)と横の許容(H*2)が広がって
+          // さらに遠くの断片を取り込む。実測(2026-08-26): dark-mode で 1222x393、
+          // photo-rich で 1440x513 の「テキスト行」ができ、ボタンのラベルはその中に
+          // 呑まれて独立要素として出てこなかった（取りこぼしパネル 13 件中 9 件が内包要素 0）。
+          Math.max(l.maxY, g.maxY) - Math.min(l.minY, g.minY) + 1 <= GLYPH_MAX_H &&
           Math.abs((l.minY + l.maxY) / 2 - (g.minY + g.maxY) / 2) <= Math.max(4, H * 0.6) &&
           // 係数はブリーフの1.2ではなく2.0固定。理由は「もっと厳密な値が未検証」ではなく、
           // 意図してこの側に倒している: 量子化器は丸い/曲線の文字(o,bなど)を背景の連結成分に
@@ -761,6 +791,20 @@ window.riveApi = {
         lines.push({ minX: g.minX, minY: g.minY, maxX: g.maxX, maxY: g.maxY,
                      r: g.r, g: g.g, b: g.b, n: 1, ids: [g.id] });
       }
+    }
+    // 保留した縦長断片を、縦範囲が行に収まるものだけ後付けする。行の高さは変えない
+    // （上下 25% は行の縦範囲の推定誤差ぶん）。収まらない断片はパネルの縁なので捨てる。
+    for (const g of strips) {
+      const line = lines.find((l) => {
+        const lh = l.maxY - l.minY + 1, tol = lh * 0.25;
+        return g.minY >= l.minY - tol && g.maxY <= l.maxY + tol &&
+          g.minX <= l.maxX + Math.max(8, lh * 2.0) && g.maxX >= l.minX - Math.max(8, lh * 2.0);
+      });
+      if (!line) continue;
+      line.minX = Math.min(line.minX, g.minX);
+      line.maxX = Math.max(line.maxX, g.maxX);
+      line.r += g.r; line.g += g.g; line.b += g.b; line.n++;
+      line.ids.push(g.id);
     }
     // --- テキストの alpha matte（色直線への射影） ---
     //
@@ -1002,8 +1046,13 @@ window.riveApi = {
           // 実測(2026-08-21): "Active" の末尾の e は x=427..428 に alpha 1.0 の
           // インクがあるのに上限の外に落ち、切り出すと "Activ" になった
           // （同じ6文字の "Errors" は 35px、"Active" は 32px）。
-          for (let d = 1; d <= maxGrowY; d++) if (rowHasInk(l.minY - d)) gy0 = l.minY - d;
-          for (let d = 1; d <= maxGrowY; d++) if (rowHasInk(l.maxY + d)) gy1 = l.maxY + d;
+          // **インクの無い行に当たったら止める。** 範囲内の行を飛び飛びに拾うと、空白を
+          // 跨いで隣の行のインクまで届く。実測(2026-08-26): gradient-boxes の
+          // "linear-gradient()" 行が 16px 上の "light-dark()" 行まで伸び、
+          // 行高 32 → 47 になってパネルの外へはみ出した。アセンダ/ディセンダは
+          // 本体のインクと縦に連続しているので、連続走査で十分拾える。
+          for (let d = 1; d <= maxGrowY && rowHasInk(l.minY - d); d++) gy0 = l.minY - d;
+          for (let d = 1; d <= maxGrowY && rowHasInk(l.maxY + d); d++) gy1 = l.maxY + d;
           // 伸ばす上限は確定した行高の 1.6 倍。1文字ぶんを拾うには足りて、隣の語まで
           // 無条件に届くほどではない距離。
           const maxGrow = Math.max(4, Math.round((gy1 - gy0 + 1) * 1.6));
@@ -1014,8 +1063,17 @@ window.riveApi = {
             for (let y = gy0; y <= gy1; y++) if (x >= 0 && x < W && isInk(x, y)) return true;
             return false;
           };
-          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.minX - d)) gx0 = l.minX - d;
-          for (let d = 1; d <= maxGrow; d++) if (colHasInk(l.maxX + d)) gx1 = l.maxX + d;
+          // 横も連続走査。ただし文字間の隙間（数px）は跨ぐ必要があるので、インクの無い列が
+          // 続いた長さで止める。許容は行高の 0.35（文字間は cap-height の 1/4 前後、
+          // 単語間は 1/2 以上なので、その間）。上限 maxGrow まで飛び飛びに拾う書き方だと
+          // 単語間の空白を越えて隣の語を巻き込む。
+          const maxGapX = Math.max(2, Math.round((gy1 - gy0 + 1) * 0.35));
+          for (let d = 1, gap = 0; d <= maxGrow && gap <= maxGapX; d++) {
+            if (colHasInk(l.minX - d)) { gx0 = l.minX - d; gap = 0; } else gap++;
+          }
+          for (let d = 1, gap = 0; d <= maxGrow && gap <= maxGapX; d++) {
+            if (colHasInk(l.maxX + d)) { gx1 = l.maxX + d; gap = 0; } else gap++;
+          }
           gx0 = Math.max(0, gx0); gy0 = Math.max(0, gy0);
           gx1 = Math.min(W - 1, gx1); gy1 = Math.min(H - 1, gy1);
         }
@@ -1040,8 +1098,49 @@ window.riveApi = {
         matteFit: m ? Math.round(m.fit * 1000) / 1000 : 0,
         matteMidAlpha: m ? Math.round(m.midFraction * 1000) / 1000 : 1,
         matte: m && m.eligible ? { fg: m.fg, bg: m.bg, space: m.space } : undefined,
+        _wr: [gx0, gy0, gx1, gy1],
       });
     }
+
+    // --- 文字で覆われた穴を充填率に算入して再分類 ---
+    //
+    // ラベル入りのボタンは、文字のぶんだけ充填率が 0.85 を割って "image" に落ちる
+    // （実測 2026-08-26: 取りこぼした正解パネル 13 件の充填率は 0.63〜0.84）。
+    // ただし穴を無条件に許すと写真の穴も通る（§5-3 で取り下げた案）。
+    // ここで許すのは**このパネルの内側に収まるテキスト行が覆う穴だけ**。
+    // 覆う要素が上に乗るなら、パネルを平坦に塗ってもその画素は最終合成に露出しない。
+    // 閾値は最初の分類と同じ 0.85 を使い、新しい閾値は足さない。
+    // 内側に収まる行に限るのは z-order のため: bbox に含まれない行は buildTree で
+    // 子にならず、面積次第ではパネルの下に描かれてラベルが消える。
+    const textWr = regions.filter((r) => r._wr).map((r) => r._wr);
+    for (const reg of regions) {
+      const c = reg._comp;
+      if (!TEXT_COVERED_HOLES || !c || reg.semanticHint !== "image") continue;
+      const w = c.maxX - c.minX + 1, h = c.maxY - c.minY + 1;
+      const inside = textWr.filter((t) =>
+        t[0] >= c.minX && t[1] >= c.minY && t[2] <= c.maxX && t[3] <= c.maxY);
+      if (inside.length === 0) continue;
+      let covered = 0;
+      for (const t of inside) {
+        for (let y = t[1]; y <= t[3]; y++) {
+          for (let x = t[0]; x <= t[2]; x++) if (label[y * W + x] !== c.id) covered++;
+        }
+      }
+      // 行同士が重なると二重に数えるので、穴の総数で頭打ちにする
+      covered = Math.min(covered, w * h - c.count);
+      const fillRatio = (c.count + covered) / (w * h);
+      if (fillRatio < 0.85) continue;
+      const cls = classifyComp(c, w, h, fillRatio);
+      reg.semanticHint = cls.semanticHint;
+      reg.renderMode = cls.renderMode;
+      reg.cornerRadius = cls.cornerRadius;
+      // このパネルが平坦塗りで成立するのは、内側のテキスト行が上に乗る前提。
+      // buildTree はこの印を見て、要素数上限で行を落とすときも行をパネルと一緒に残す
+      // （行だけ落ちると、ラベルが消えたボタンが出来上がる。実測: dark-mode の
+      // ボタン内ラベルが上限 120 で落ち、インク被覆 1.00 → 0.75）。
+      if (cls.renderMode === "vector-panel") reg.coveredByText = true;
+    }
+    for (const r of regions) { delete r._comp; delete r._wr; }
 
     return { width: W0, height: H0, regions, sampledColors };
   },

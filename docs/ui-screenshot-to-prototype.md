@@ -50,10 +50,10 @@ the element count. Measured across six real pages:
 | change | classifications unchanged | element count |
 |---|---|---|
 | PNG re-encode | 100% | 1.00x |
-| 1px pad / crop | 71% / 59% | 1.05x |
-| JPEG q95 | 49% | up to 1.57x |
-| 0.75x / 1.25x resize | 39% / 51% | 1.03x / 1.10x |
-| RGB ±2 | 15% | up to 2.73x |
+| 1px pad / crop | 71% / 64% | 1.04x |
+| JPEG q95 | 44% | up to 1.93x |
+| 0.75x / 1.25x resize | 46% / 57% | 1.01x / 1.05x |
+| RGB ±2 | 17% | up to 2.73x |
 
 Feed it the original file rather than a screenshot of a screenshot, and expect a
 different element tree if you re-export at another size.
@@ -93,13 +93,35 @@ three sides to be filled lifts panel recall from 7 of 20 to 19 of 20 and admits 
 that but sets a third threshold on twenty examples. The orderings overlap: the
 lowest fill among real panels is 0.628 and there are photographs at 0.715.
 
-**A panel with a label in it is often classified as a picture.** Whether
+**A panel with a label in it used to be classified as a picture.** Whether
 something can be rebuilt as a vector rectangle is decided by how much of its
-bounding box the shape fills, and text punches holes: a button with a caption can
-drop under the threshold and come back as a crop. It is still found — geometry
-recall is 1.0 across every page tested, at IoU 0.8 or better — but it arrives as
-an image rather than an editable rectangle. On a dark GitHub page this leaves no
-vector panels at all among a hundred and twenty elements.
+bounding box the shape fills, and text punches holes: a button with a caption
+dropped under the threshold and came back as a crop. Holes are now allowed when
+a text run that lies entirely inside the panel covers them — the run is drawn on
+top, so painting the panel flat exposes nothing — and the panel is marked
+`coveredByText`. That took labelled panels on the tuning pages from 7 of 20 to
+15 of 20 and on the held-back pages from 4 of 8 to 5 of 8, without any panel
+losing its label: a panel that owes its vector status to its runs is kept only
+together with them, and is dropped back to a crop when the element cap has no
+room for both. Holes covered by runs that spill outside the panel are still
+holes; such a run may be drawn underneath, and the label would vanish.
+
+What had hidden this was a runaway in the text grouping. A run's tolerance is
+proportional to its height, and its height was allowed to grow without limit, so
+one tall fragment — the anti-aliased edge of a button is a 1x31 sliver, and in
+left-to-right order it is the first fragment of the row — made a run that then
+swallowed everything at that height. Real pages produced "text runs" of
+1440x513 and 1222x393 covering 50–140% of the screen. Those were pasted back as
+crops, so every fidelity number was flattered: error under them was invisible,
+vector fills under them did not count as leaks, and the button labels inside
+them were never independent elements. Runs are now capped at the height
+allowed for one glyph, thin tall fragments are attached to a row only after it
+exists, and the box grows outward only while ink stays contiguous. The numbers
+below are the ones measured after that fix; they are worse than the ones it
+replaced, and they are the real ones. The worst leak on the held-back pages,
+0.46 of one 156x87 region, is two flat rounded rectangles inside an
+illustration, vectorised in the old build as well and previously hidden under
+such a run; the dashed line crossing them is lost.
 
 **Touching areas of the same colour cannot be separated.** Two cards of identical
 fill with no gap between them are one connected region, and there is no boundary
@@ -143,7 +165,10 @@ letter: "Active" was cropped to "Activ" while "Errors", the same six characters
 one card over, came through whole. Growing the box vertically first and taking
 the limit from the result fixed it. Growing it by advancing the edge instead of
 measuring from the original one does not — the box then runs past its own limit
-into the next word, and overdraw rose from 1.8x to 10.8x when it did.
+into the next word, and overdraw rose from 1.8x to 10.8x when it did. The scan
+also stops at the first row without ink, and sideways at a gap wider than about
+a third of the line height: picking up any inked row within reach let a box jump
+across a blank line into the row above it.
 
 **Gradients become one picture, not thirty.** A band is detected as many flat
 strips, and adjacent strips whose colour steps slowly are folded back into a
@@ -163,7 +188,11 @@ set had met: worst-region leak 0.069 against a target of 0.02, and geometry
 recall 0.875 against 0.9. Nothing about the detector changed; the earlier pass
 was a property of those three pages. The targets are still printed, still unmet,
 and the gate now checks that a change does not make the measurement worse rather
-than pretending the bar is cleared.
+than pretending the bar is cleared. The recorded baseline was replaced once more
+when the runaway text runs were fixed, since the numbers it held — leak 0 on the
+tuning pages, 0.069 on the held-back ones — had been measured under crops that
+covered most of the screen. The current record is leak 0.14 and 0.46 by the same
+definition, on the same pages, with the reasons for each written into the file.
 
 ## Demo
 

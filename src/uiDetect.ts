@@ -29,6 +29,9 @@ export interface RawRegion {
    *  アンチエイリアスの縁が必ず中間 alpha になるので 1 には到達しない。
    *  実測(2026-08-21): 本物のテキストで 0.6〜0.8、写真の誤検出で 0.0〜0.24。 */
   matteConfidence?: number;
+  /** vector-panel の資格が「内側のテキスト行が穴を覆う」ことに依っている印。
+   *  この行が落ちるとラベルの消えたボタンになるので、buildTree は行をパネルと一緒に残す */
+  coveredByText?: boolean;
   /** 色直線モデルの当てはまり(0〜1)。**これだけでは写真と分離できない** —
    *  彩度の低い写真は色空間でほぼ1次元なので本当によく当てはまる(実測 0.84)。 */
   matteFit?: number;
@@ -60,10 +63,53 @@ export function buildTree(
   regions: RawRegion[],
   maxElements: number
 ): { elements: UiElement[]; dropped: number } {
-  const sorted = [...regions].sort((a, b) => area(b) - area(a));
-  const dropped = Math.max(0, sorted.length - maxElements);
-  const kept = sorted.slice(0, maxElements);
-
+  // 面積上位を残す。ただし「文字で覆われた穴」を根拠にベクター化したパネル
+  // (coveredByText) は、内側のテキスト行と**一緒にしか**残さない。行は小さいので
+  // 素直に面積順に切ると真っ先に落ち、平坦に塗ったパネルからラベルだけが消える。
+  //
+  // 行を無条件にパネルの上へ繰り上げる案は取り下げた: 画面全体の背景が promote されると
+  // その内側の行（＝ページ上のほぼ全行）が上限を占有し、本物のボタンが 1 件も残らなくなった
+  // （実測 2026-08-26: photo-hero の幾何 recall 1.0 → 0.0）。
+  // ここでは面積順に見ていき、パネルと未確保の行が枠に収まるなら行の席を予約し、
+  // 収まらないならパネルの方をラスタに落とす（promote 前と同じ状態に戻す）。
+  const byArea = [...regions].sort((a, b) => area(b) - area(a));
+  // 残す優先順位。面積だけで切ると、テキスト行が正しく細かく分かれた画面ほど
+  // 小さなボタンが押し出される（実測 2026-08-26: photo-hero の 39x22 のボタン 2 件が
+  // 面積順 121/122 位で落ち、幾何 recall 1.0 → 0.5）。
+  //   1. 編集できるもの — vector-panel と、色直線モデルに乗った本物のテキスト行
+  //   2. ラスタの絵（image）
+  //   3. モデルに乗らない「テキスト行」— 写真の粒子などの誤検出が大半で、動かし方も fade のみ
+  // 同じ段の中では面積順。id の付与（z 順・親子）は選別後に面積順でやり直す。
+  const tier = (r: RawRegion) =>
+    r.renderMode === "vector-panel" || (r.semanticHint === "text" && r.matteEligible) ? 0
+      : r.semanticHint === "text" ? 2 : 1;
+  const byPriority = [...byArea].sort((a, b) => tier(a) - tier(b) || area(b) - area(a));
+  const textsIn = (p: RawRegion) =>
+    regions.filter((t) => t.semanticHint === "text" && contains(p, t));
+  const reserved = new Set<RawRegion>();
+  const keptSet = new Set<RawRegion>();
+  let slots = 0;
+  const demoted = new Map<RawRegion, RawRegion>();
+  for (const r of byPriority) {
+    if (reserved.has(r)) { keptSet.add(r); continue; }
+    if (slots >= maxElements) continue;
+    let region = r;
+    if (r.coveredByText && r.renderMode === "vector-panel") {
+      const need = textsIn(r).filter((t) => !reserved.has(t) && !keptSet.has(t));
+      if (slots + 1 + need.length <= maxElements) {
+        for (const t of need) reserved.add(t);
+        slots += need.length;
+      } else {
+        const { coveredByText: _c, ...rest } = r;
+        region = { ...rest, renderMode: "raster", semanticHint: "image", cornerRadius: 0 };
+        demoted.set(r, region);
+      }
+    }
+    keptSet.add(r);
+    slots++;
+  }
+  const kept = byArea.filter((r) => keptSet.has(r)).map((r) => demoted.get(r) ?? r);
+  const dropped = regions.length - kept.length;
   const elements: UiElement[] = kept.map((r, i) => ({
     ...r,
     id: i + 1,

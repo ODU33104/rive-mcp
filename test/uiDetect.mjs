@@ -488,5 +488,67 @@ try {
   await hostMatte.close();
 }
 
+// --- ラベル入りボタン: 文字で覆われた穴を充填率に算入してベクター化する（2026-08-26） ---
+//
+// 文字のぶんだけ充填率が 0.85 を割る（実画像で 0.63〜0.84）。穴を無条件に許すと写真も
+// 通るので、許すのは「内側に収まるテキスト行が覆う穴」だけ。
+const hostLabel = new RiveHost(PAGE_SCRIPT);
+try {
+  const labelPng = await hostLabel.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="360" height="200">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#1B1F3A"/><stop offset="1" stop-color="#2E2A5C"/></linearGradient></defs>
+      <rect width="360" height="200" fill="url(#g)"/>
+      <rect x="60" y="70" width="180" height="48" rx="8" fill="#0E8A3C"/>
+      <text x="150" y="104" font-family="Arial, sans-serif" font-size="28" font-weight="bold"
+            fill="#FFFFFF" text-anchor="middle">SIGN IN</text>
+    </svg>`);
+  const ld = await hostLabel.detectUiRegions(labelPng, { minArea: 576, workingMax: 1280 });
+  const btn = ld.regions.find((r) => r.semanticHint !== "text" && r.rect[2] > 150 && r.rect[2] < 200 && r.rect[3] > 36 && r.rect[3] < 60);
+  check("ラベル入りボタンを検出", !!btn, ld.regions.map((r) => `${r.semanticHint}/${r.renderMode}@${r.rect.join(",")}`).join(" "));
+  check("ラベル入りでも vector-panel", btn && btn.renderMode === "vector-panel", btn && `${btn.semanticHint}/${btn.renderMode}`);
+  check("角丸を測っている", btn && btn.cornerRadius >= 5 && btn.cornerRadius <= 11, btn && String(btn.cornerRadius));
+  check("文字で覆われた穴を根拠にしている印", btn && btn.coveredByText === true);
+  const inside = (t) => btn && t.rect[0] >= btn.rect[0] && t.rect[1] >= btn.rect[1] &&
+    t.rect[0] + t.rect[2] <= btn.rect[0] + btn.rect[2] && t.rect[1] + t.rect[3] <= btn.rect[1] + btn.rect[3];
+  const labels = ld.regions.filter((r) => r.semanticHint === "text" && inside(r));
+  check("ラベルがボタン内側のテキスト行として独立している", labels.length >= 1,
+    ld.regions.filter((r) => r.semanticHint === "text").map((r) => r.rect.join(",")).join(" | "));
+  check("ラベル行は1行の高さ（縁のストリップを巻き込んで膨らんでいない）",
+    labels.every((r) => r.rect[3] <= 34), labels.map((r) => r.rect.join(",")).join(" | "));
+
+  // 要素数上限で行が落ちるとラベルの消えたボタンになる。行はパネルの直前に並ぶ
+  // 編集できるもの（vector-panel と本物のテキスト行）を先に残すので、上限 2 では
+  // ボタンとラベルが残り、背景のラスタが落ちる
+  const two = buildTree(ld.regions, 2);
+  check("上限2: ボタンとラベル行が残る（背景ラスタより優先）",
+    two.elements.some((e) => e.coveredByText) && two.elements.some((e) => e.semanticHint === "text"),
+    two.elements.map((e) => `${e.semanticHint}/${e.renderMode}@${e.rect.join(",")}`).join(" "));
+  const one = buildTree(ld.regions, 1);
+  const oneBtn = one.elements.find((e) => e.rect[2] === btn.rect[2] && e.rect[3] === btn.rect[3]);
+  check("上限1: ラベル行の席が無いパネルはラスタに落ちる（ラベルの消えたボタンを作らない）",
+    oneBtn && oneBtn.renderMode === "raster" && !oneBtn.coveredByText && !one.elements.some((e) => e.semanticHint === "text"),
+    one.elements.map((e) => `${e.semanticHint}/${e.renderMode}@${e.rect.join(",")}`).join(" "));
+  const full = buildTree(ld.regions, 120);
+  const btnEl = full.elements.find((e) => e.coveredByText);
+  check("上限なし: ラベル行はパネルの子", btnEl && btnEl.children.length >= 1, btnEl && String(btnEl.children));
+
+  // 縦長 1px のストリップ（パネルの縁のアンチエイリアス）が行の先頭になると行高が膨らむ。
+  // 文字の左に 1x60 の縦線を置き、行がそれを取り込まないことを確認する
+  const stripPng = await hostLabel.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="360" height="200">
+      <rect width="360" height="200" fill="#FFFFFF"/>
+      <rect x="40" y="60" width="1" height="80" fill="#9AA0A6"/>
+      <text x="52" y="106" font-family="Arial, sans-serif" font-size="18" fill="#202124">Settings</text>
+    </svg>`);
+  const sd = await hostLabel.detectUiRegions(stripPng, { minArea: 576, workingMax: 1280 });
+  const stripTexts = sd.regions.filter((r) => r.semanticHint === "text");
+  check("縦線の隣の1語が1行のまま（高さが文字の高さに収まる）",
+    stripTexts.length >= 1 && stripTexts.every((r) => r.rect[3] <= 30),
+    stripTexts.map((r) => r.rect.join(",")).join(" | "));
+} finally {
+  await hostLabel.close();
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

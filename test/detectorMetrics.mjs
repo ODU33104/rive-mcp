@@ -659,11 +659,28 @@ export function truthAlignment(elements, truth) {
     const y0 = Math.max(0, Math.round(y) + er);
     const x1 = Math.min(size.width, Math.round(x + w) - er);
     const y1 = Math.min(size.height, Math.round(y + h) - er);
+    // negative の内側に positive（ベクター化してよいと明示された矩形）が重なっている
+    // 画素は negative の画素ではない。実画像の DOM 由来アンカーでは、グラデーション背景の
+    // 上に置かれたボタンがこの形になる（dark-mode: grad@395_507_424_56 の中に
+    // panel@665_511_150_48）。除外しないと、正解どおりボタンをベクター化した瞬間に
+    // 「グラデーションへの leak 0.27」が立ち、positive と negative が互いに矛盾する。
+    // 除外するのは negative の**内側に収まる** positive だけ。逆向き（positive のパネルの
+    // 上に乗った text negative）は「文字がパネルに埋もれていないか」を測る本来の対象なので、
+    // そちらの画素は外さない。
+    const posIn = positives.map((p) => p.rect).filter((r) =>
+      areaOf(r) < areaOf(neg.rect) && intersectArea(r, neg.rect) / areaOf(r) >= 0.95);
+    const inPositive = (xx, yy) => {
+      for (const [px, py, pw, ph] of posIn) {
+        if (xx >= px && xx < px + pw && yy >= py && yy < py + ph) return true;
+      }
+      return false;
+    };
     let leaked = 0;
     let total = 0;
     for (let yy = y0; yy < y1; yy++) {
       const row = yy * size.width;
       for (let xx = x0; xx < x1; xx++) {
+        if (posIn.length && inPositive(xx, yy)) continue;
         total++;
         if (labels[row + xx] === LABEL_VECTOR_FILL) leaked++;
       }
@@ -936,6 +953,31 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     check("正しい検出: negative の vectorPanelCount は0", t.perNegative[0].vectorPanelCount === 0);
     check("正しい検出: negative の rasterCount は1", t.perNegative[0].rasterCount === 1, String(t.perNegative[0].rasterCount));
     check("cornerRadiusMAE 0", t.cornerRadiusMAE === 0, String(t.cornerRadiusMAE));
+
+    // negative の中に positive が重なっている場合、その画素は negative の分母から外れる
+    {
+      const nested = {
+        width: 200, height: 100,
+        elements: [
+          { label: "grad-negative", rect: [0, 0, 200, 100], expectVectorPanel: false, semanticHint: "image" },
+          { label: "button-positive", rect: [50, 25, 100, 50], expectVectorPanel: true, semanticHint: "panel", fill: "#123456", cornerRadius: 0 },
+        ],
+      };
+      const els = [
+        el({ id: 1, renderMode: "raster", semanticHint: "image", rect: [0, 0, 200, 100] }),
+        el({ id: 2, renderMode: "vector-panel", rect: [50, 25, 100, 50], fill: "#123456", cornerRadius: 0, parent: 1 }),
+      ];
+      const tn = truthAlignment(els, nested);
+      check("negative 内の positive を正しくベクター化しても leak にならない",
+        tn.perNegative[0].leakRatio === 0, String(tn.perNegative[0].leakRatio));
+      const spill = [
+        el({ id: 1, renderMode: "raster", semanticHint: "image", rect: [0, 0, 200, 100] }),
+        el({ id: 2, renderMode: "vector-panel", rect: [0, 25, 200, 50], fill: "#123456", cornerRadius: 0, parent: 1 }),
+      ];
+      const ts = truthAlignment(spill, nested);
+      check("positive の外へはみ出したベクターは依然 leak に数える（分母は positive を除いた画素）",
+        Math.abs(ts.perNegative[0].leakRatio - 5000 / 15000) < 1e-9, String(ts.perNegative[0].leakRatio));
+    }
 
     // 抜け道1「全部 raster」— 見た目は完璧だが recall が 0 になる
     const allRaster = [

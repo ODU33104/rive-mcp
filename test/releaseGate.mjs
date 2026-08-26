@@ -262,7 +262,10 @@ try {
     console.log("recorded metamorphic-baseline.json");
     writeFileSync(leakPath, JSON.stringify({
       recordedAt: out.recordedAt,
-      note: "未見のページを holdout に入れ替えた時点(2026-08-21)の、検出器を変えていない状態の実測。" +
+      note: "2026-08-26 テキスト行の暴走を止めた後の実測。旧記録(2026-08-21: tuning 0/0, holdout 0.0686/0.0055)は、" +
+        "画面の 50〜140% を覆う『テキスト行』(1440x513 など)がラスタとして最前面に乗り、その下のベクター leak と再構成誤差を隠していた値。" +
+        "今回の値のうち holdout 0.46 は gallery-antd のイラスト内の平坦な角丸 2 枚(旧ビルドでも vector-panel)、" +
+        "tuning 0.14 は dark-mode の入力欄の平坦な断片(再構成誤差 p99=0)。" +
         "絶対目標(leakMax<=0.02 / leakAll<=0.005 / 幾何 recall>=0.9)には届いていない。" +
         "この記録は目標ではなく、退行検知の基準として置いている。",
       ...leakNow,

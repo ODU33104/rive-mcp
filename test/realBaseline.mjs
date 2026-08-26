@@ -48,7 +48,9 @@ const SRC_CLEAN = guard(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 const FIXTURE_DIR = resolve(process.env.RIVE_UI_FIXTURES || join(HERE, "..", ".claude", "ui-fixtures"));
 
 // 合成ベースラインと同じ設定でなければ比較にならない。
-const DETECT_OPTS = { minArea: 576, workingMax: 1280 };
+const DETECT_OPTS = { minArea: 576, workingMax: 1280,
+  // 切り分け実験用。ベースラインを更新するときは必ず未設定で走らせること
+  ...(process.env.RIVE_DETECT_OPTS ? JSON.parse(process.env.RIVE_DETECT_OPTS) : {}) };
 const MAX_ELEMENTS = 120;
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
