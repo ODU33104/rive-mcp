@@ -217,7 +217,13 @@ export function buildPrototypeScene(input: PrototypeInput): {
       // capability が merge の要素は**そもそも切り出さない**。切り出さなければ
       // 背景画像の中に残り、周囲と一緒に動く。信頼度が極端に低い小片を
       // 独立した画像アセットにしても、動かせば壊れるものが1つ増えるだけ。
-      const cap = motionCapabilityOf(el);
+      let cap = motionCapabilityOf(el);
+      // 「背景に残す」は、背景がその場所で見えているときにしか成立しない。親が塗りを持つ
+      // vector-panel なら、その塗りが base を隠すので、残した画素は消える。
+      // 反実仮想判定が乗せた patch（アクセントバー・破線）がまさにこれで、
+      // 信頼度の低い小さなテキスト行も同じ経路で消えていた。fade-only に格下げして切り出す。
+      const parent = el.parent === null ? undefined : byId.get(el.parent);
+      if (cap === "merge" && parent && parent.renderMode === "vector-panel" && parent.fill) cap = "fade-only";
       capabilityOf.set(el.id, cap);
       if (cap === "merge") {
         mergedIntoBase++;

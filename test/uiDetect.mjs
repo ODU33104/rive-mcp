@@ -575,11 +575,29 @@ try {
   check("ラベル入りボタンは vector-panel のまま（risk が閾値未満）",
     left && left.renderMode === "vector-panel" && left.renderRisk <= RENDER_RISK_TAU,
     left && `${left.renderMode} risk=${left.renderRisk}`);
-  check("破線が横切る矩形はラスタに落ちる（risk が閾値超）",
-    right && right.renderMode === "raster" && right.renderRisk > RENDER_RISK_TAU,
-    right && `${right.renderMode} risk=${right.renderRisk}`);
-  check("落とした要素にも renderRisk が残る", right && typeof right.renderRisk === "number");
-  check("demoted を数える", cf.demoted >= 1, String(cf.demoted));
+  check("破線が横切る矩形は risk が閾値超", right && right.renderRisk > RENDER_RISK_TAU, right && `risk=${right.renderRisk}`);
+  // 外れた塊が少なく小さければ、パネルは vector のまま残し、塊だけを切り抜きの子として乗せる
+  check("破線の矩形は vector-panel のまま（破線は patch として上に乗る）",
+    right && right.renderMode === "vector-panel", right && right.renderMode);
+  const patchesR = cf.elements.filter((e) => e.renderPatch && e.parent === (right && right.id));
+  check("破線が 1 つの patch にまとまる（塊の統合）", patchesR.length === 1, patchesR.map((p) => p.rect.join(",")).join(" | "));
+  check("patch はパネルの塗りを背景にした matte を持つ（独立して動かせる）",
+    patchesR.every((p) => p.matteEligible && p.matte && p.matte.bg === right.fill),
+    patchesR.map((p) => `${p.matteEligible} fit=${p.matteFit} bg=${p.matte && p.matte.bg}`).join(" | "));
+  check("patched を数える", cf.patched >= 1, String(cf.patched));
+  // 塊が多すぎる（写真）ならパネルごとラスタへ
+  const photoPng = await hostCf.rasterize(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">
+      <defs><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="3"/>
+        <feColorMatrix type="saturate" values="0.3"/></filter></defs>
+      <rect width="480" height="240" fill="#F4F5F7"/>
+      <rect x="60" y="40" width="360" height="160" fill="#8899AA"/>
+      <rect x="80" y="60" width="320" height="120" filter="url(#n)"/>
+    </svg>`);
+  const ph = await detectUiElements(hostCf, photoPng, { minArea: 576, workingMax: 1280, maxElements: 120 });
+  check("写真を含む矩形は patch にせずラスタへ落とす",
+    ph.elements.filter((e) => e.renderPatch).length === 0 && !ph.elements.some((e) => e.renderMode === "vector-panel" && e.rect[2] > 300 && e.rect[3] > 100 && e.rect[3] < 200),
+    ph.elements.map((e) => `${e.semanticHint}/${e.renderMode}@${e.rect.join(",")}${e.renderPatch ? "P" : ""}`).join(" "));
 
   // renderCheck:false なら判定を通さない（切り分け用）
   const raw = await detectUiElements(hostCf, cfPng, { minArea: 576, workingMax: 1280, maxElements: 120, renderCheck: false });

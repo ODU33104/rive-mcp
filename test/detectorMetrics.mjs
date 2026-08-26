@@ -187,8 +187,8 @@ export async function reconstructionStats(host, sourcePng, elements, inkProbes =
   const labels = topLayerLabels(elements, size);
   const labelsB64 = Buffer.from(labels).toString("base64");
 
-  return await page.evaluate(
-    async ({ srcB64, elements, labelsB64, inkProbes, INK_TOL }) => {
+  const result = await page.evaluate(
+    async ({ srcB64, elements, labelsB64, inkProbes, INK_TOL, WRONG_DELTA }) => {
       function b64ToBytes(b64) {
         const bin = atob(b64);
         const bytes = new Uint8Array(bin.length);
@@ -268,15 +268,26 @@ export async function reconstructionStats(host, sourcePng, elements, inkProbes =
       let sum = 0;
       let vecSum = 0;
       let vecCount = 0;
+      // wrongMask: チャンネル最大差が WRONG_DELTA(8 = 5bit 量子化のバケット幅)を超えた画素。
+      // truthAlignment に渡すと「ベクター塗りが元と違う画素」だけを leak に数えられる。
+      const wrongMask = new Uint8Array(N);
       for (let p = 0; p < N; p++) {
         const i = p * 4;
-        const e =
-          Math.abs(reconData[i] - srcData[i]) +
-          Math.abs(reconData[i + 1] - srcData[i + 1]) +
-          Math.abs(reconData[i + 2] - srcData[i + 2]);
+        const d0 = Math.abs(reconData[i] - srcData[i]);
+        const d1 = Math.abs(reconData[i + 1] - srcData[i + 1]);
+        const d2 = Math.abs(reconData[i + 2] - srcData[i + 2]);
+        const e = d0 + d1 + d2;
         sum += e;
         hist[e]++;
         if (labels[p] === 1) { vecSum += e; vecCount++; }
+        if (Math.max(d0, d1, d2) > WRONG_DELTA) wrongMask[p] = 1;
+      }
+      let wrongB64 = "";
+      {
+        // Uint8Array → base64（大きいので分割して btoa）
+        let bin = "";
+        for (let i = 0; i < N; i += 32768) bin += String.fromCharCode.apply(null, wrongMask.subarray(i, Math.min(N, i + 32768)));
+        wrongB64 = btoa(bin);
       }
       const percentile = (q) => {
         const target = q * N;
@@ -325,6 +336,7 @@ export async function reconstructionStats(host, sourcePng, elements, inkProbes =
 
       return {
         inkCoverage,
+        wrongMaskB64: wrongB64,
         mae: sum / (N * 765),
         p95: percentile(0.95),
         p99: percentile(0.99),
@@ -334,8 +346,11 @@ export async function reconstructionStats(host, sourcePng, elements, inkProbes =
         height: H,
       };
     },
-    { srcB64, elements, labelsB64, inkProbes, INK_TOL: INK_MATCH_TOL }
+    { srcB64, elements, labelsB64, inkProbes, INK_TOL: INK_MATCH_TOL, WRONG_DELTA: WRONG_PIXEL_DELTA }
   );
+  // JSON に大きなマスクを残さない。Node 側で Uint8Array に戻し、フィールドを差し替える
+  const { wrongMaskB64, ...rest } = result;
+  return { ...rest, wrongMask: new Uint8Array(Buffer.from(wrongMaskB64, "base64")) };
 }
 
 /** 後方互換の薄いラッパ(平均だけ欲しい呼び出し用)。 */
@@ -350,6 +365,8 @@ export async function reconstructionError(host, sourcePng, elements) {
 // 実画像ノイズにも耐えつつ「別の色」を拾わない幅。合成シーンのインクは可逆PNGなので
 // 実質厳密一致で拾える。
 export const INK_MATCH_TOL = 32;
+/** 「元と違う」画素の下限（チャンネル最大差）。8 = 5bit 量子化のバケット幅 */
+export const WRONG_PIXEL_DELTA = 8;
 
 // 44px は Apple/Material のタップ領域下限。20x20=400px^2 はその半分以下で、意図的なUI
 // 要素としてはまず小さすぎるサイズ。detectUiRegions の panel/image 経路は minArea
@@ -634,9 +651,20 @@ function median(nums) {
  *
  * **leak は最前面レイヤーで判定する。** 矩形交差の素朴な足し算ではない(topLayerLabels 参照)。
  */
-export function truthAlignment(elements, truth) {
+/**
+ * opts.wrongMask (Uint8Array width*height, reconstructionStats の返り値) を渡すと、
+ * negative leak は「最前面がベクター塗り **かつ その画素が元と違う**」だけを数える。
+ * 渡さなければ従来どおり「最前面がベクター塗り」を数える（合成シーンの単体テストはこちら）。
+ *
+ * 2026-08-26 に変えた理由: 反実仮想判定が、平坦に塗って合わない塊を切り抜きで上に乗せる
+ * ようになった。イラスト内の平坦な角丸を塗り、破線だけ切り抜きで戻せば見た目は完全に
+ * 一致する(再構成 p99 = 0)が、「DOM が image と呼んだ領域を塗ったか」という代理指標は
+ * それを leak 0.40 と数える。代理指標の値は negativeLeakProxy* に残す。
+ */
+export function truthAlignment(elements, truth, opts = {}) {
   const size = { width: truth.width, height: truth.height };
   const labels = topLayerLabels(elements, size);
+  const wrongMask = opts.wrongMask && opts.wrongMask.length === size.width * size.height ? opts.wrongMask : null;
   const negatives = truth.elements.filter((e) => !e.expectVectorPanel);
   const positives = truth.elements.filter((e) => e.expectVectorPanel);
 
@@ -676,16 +704,21 @@ export function truthAlignment(elements, truth) {
       return false;
     };
     let leaked = 0;
+    let proxy = 0;
     let total = 0;
     for (let yy = y0; yy < y1; yy++) {
       const row = yy * size.width;
       for (let xx = x0; xx < x1; xx++) {
         if (posIn.length && inPositive(xx, yy)) continue;
         total++;
-        if (labels[row + xx] === LABEL_VECTOR_FILL) leaked++;
+        if (labels[row + xx] === LABEL_VECTOR_FILL) {
+          proxy++;
+          if (!wrongMask || wrongMask[row + xx]) leaked++;
+        }
       }
     }
     const ratio = total > 0 ? leaked / total : 0;
+    const proxyRatio = total > 0 ? proxy / total : 0;
     if (neg.leakGate !== false) {
       leakedTotal += leaked;
       negAreaTotal += total;
@@ -694,6 +727,7 @@ export function truthAlignment(elements, truth) {
       label: neg.label,
       leakGate: neg.leakGate !== false,
       leakRatio: ratio,
+      leakProxyRatio: proxyRatio,
       // 「1枚の誤 panel」か「20枚に砕けた」かを区別する。理想は vectorPanelCount 0 / rasterCount 1。
       vectorPanelCount: elements.filter((e) => e.renderMode === "vector-panel" && e.fill).filter(memberOf(neg.rect)).length,
       rasterCount: elements.filter((e) => e.renderMode === "raster").filter(memberOf(neg.rect)).length,
@@ -782,6 +816,7 @@ export function truthAlignment(elements, truth) {
     negativeLeakOverall: negAreaTotal > 0 ? leakedTotal / negAreaTotal : 0,
     negativeLeakMeanPerRegion: leakRatios.length ? leakRatios.reduce((a, b) => a + b, 0) / leakRatios.length : 0,
     negativeLeakMaxPerRegion: leakRatios.length ? Math.max(...leakRatios) : 0,
+    negativeLeakProxyMaxPerRegion: (() => { const v = perNegative.filter((p) => p.leakGate).map((p) => p.leakProxyRatio); return v.length ? Math.max(...v) : 0; })(),
     negativeRegionsWithAnyLeak: leakRatios.filter((r) => r > NEGATIVE_LEAK_ANY_EPS).length,
     negativeLeakCount: leakRatios.filter((r) => r > NEGATIVE_LEAK_THRESHOLD).length,
     negativeLeakMaxPerRegionAll: leakRatiosAll.length ? Math.max(...leakRatiosAll) : 0,
@@ -953,6 +988,25 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     check("正しい検出: negative の vectorPanelCount は0", t.perNegative[0].vectorPanelCount === 0);
     check("正しい検出: negative の rasterCount は1", t.perNegative[0].rasterCount === 1, String(t.perNegative[0].rasterCount));
     check("cornerRadiusMAE 0", t.cornerRadiusMAE === 0, String(t.cornerRadiusMAE));
+
+    // wrongMask を渡すと「塗って合わない画素」だけが leak。全画素が合っていれば 0
+    {
+      const els2 = [
+        el({ id: 1, renderMode: "vector-panel", rect: [0, 0, 100, 100], fill: "#123456", cornerRadius: 8 }),
+        el({ id: 2, renderMode: "vector-panel", semanticHint: "panel", rect: [100, 0, 100, 100], fill: "#ABCDEF" }),
+      ];
+      const allRight = new Uint8Array(200 * 200);
+      const tw = truthAlignment(els2, truth, { wrongMask: allRight });
+      check("wrongMask 全て一致: 塗っても leak 0、代理指標は 1.0",
+        tw.perNegative[0].leakRatio === 0 && tw.perNegative[0].leakProxyRatio === 1,
+        `${tw.perNegative[0].leakRatio} / ${tw.perNegative[0].leakProxyRatio}`);
+      const half = new Uint8Array(200 * 200);
+      for (let y = 0; y < 50; y++) for (let x = 100; x < 200; x++) half[y * 200 + x] = 1;
+      const th = truthAlignment(els2, truth, { wrongMask: half });
+      check("wrongMask 半分: leak 0.5", Math.abs(th.perNegative[0].leakRatio - 0.5) < 1e-9, String(th.perNegative[0].leakRatio));
+      check("寸法が合わない wrongMask は無視して従来どおり",
+        truthAlignment(els2, truth, { wrongMask: new Uint8Array(10) }).perNegative[0].leakRatio === 1);
+    }
 
     // negative の中に positive が重なっている場合、その画素は negative の分母から外れる
     {

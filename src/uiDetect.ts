@@ -47,8 +47,10 @@ export interface UiElement extends RawRegion {
   parent: number | null;
   children: number[];
   /** 反実仮想判定の結果(0〜1)。露出画素のうち塗りが元と 8 超で外れた割合。
-   *  RENDER_RISK_TAU を超えた要素はラスタに落とされ、その値がここに残る */
+   *  RENDER_RISK_TAU を超えた要素はラスタに落とされる（または塊が patch として乗る）。値はここに残る */
   renderRisk?: number;
+  /** 反実仮想判定が「平坦に塗ると消える塊」として親パネルの上に乗せた切り抜き */
+  renderPatch?: boolean;
 }
 
 const area = (r: RawRegion) => r.rect[2] * r.rect[3];
@@ -188,6 +190,28 @@ export function zOrder(elements: UiElement[]): UiElement[] {
 
 /** 反実仮想判定の閾値。risk = 露出画素のうち量子化幅(8)を超えて外れた割合 */
 export const RENDER_RISK_TAU = 0.02;
+/** パネルを残したまま「外れた塊」を切り抜きで乗せる上限。塊がこれより多い/大きいならパネルごとラスタへ */
+export const PATCH_MAX_COUNT = 8;
+export const PATCH_MAX_AREA_RATIO = 0.25;
+
+export interface RenderPatch {
+  rect: [number, number, number, number];
+  pixels: number;
+  matteEligible: boolean;
+  matteConfidence: number;
+  matteFit: number;
+  matteMidAlpha: number;
+  matte?: { fg: string; bg: string; space: "srgb" | "linear" };
+}
+
+export interface RenderAssessment {
+  id: number;
+  exposed: number;
+  risk: number;
+  meanDiff: number;
+  /** null = 塊が多すぎて数えなかった（写真） */
+  patches: RenderPatch[] | null;
+}
 
 /**
  * 反実仮想判定の結果を要素に適用する。risk が tau を超えるベクター塗りはラスタに落とす。
@@ -197,24 +221,61 @@ export const RENDER_RISK_TAU = 0.02;
  */
 export function applyRenderCheck(
   elements: UiElement[],
-  report: Array<{ id: number; exposed: number; risk: number }>,
+  report: Array<{ id: number; exposed: number; risk: number; patches?: RenderPatch[] | null }>,
   tau: number = RENDER_RISK_TAU
-): { demoted: number } {
+): { demoted: number; patched: number } {
   const byId = new Map(elements.map((e) => [e.id, e]));
-  let demoted = 0;
+  let demoted = 0, patched = 0;
+  let nextId = elements.reduce((m, e) => Math.max(m, e.id), 0) + 1;
   for (const r of report) {
     const el = byId.get(r.id);
     if (!el) continue;
     el.renderRisk = Math.round(r.risk * 10000) / 10000;
-    if (r.risk > tau) {
-      el.renderMode = "raster";
-      el.semanticHint = "image";
-      el.cornerRadius = 0;
-      delete el.coveredByText;
-      demoted++;
+    if (r.risk <= tau) continue;
+    // 外れた塊が少なく小さいなら、パネルは残して塊だけを切り抜きの子として上に乗せる。
+    // 切り抜きは同じ位置の元画素なので、乗せた範囲の誤差は 0 になる。
+    // アクセントバー・破線・小さなアイコンがこれに当たる（実測 2026-08-26: gallery-mui の
+    // 行頭バーで risk 0.084、gallery-antd の破線で 0.023。どちらもパネル自体は平坦）。
+    const area = el.rect[2] * el.rect[3];
+    const patches = r.patches ?? null;
+    const patchArea = patches ? patches.reduce((a, p) => a + p.rect[2] * p.rect[3], 0) : Infinity;
+    if (patches && patches.length > 0 && patches.length <= PATCH_MAX_COUNT && patchArea <= area * PATCH_MAX_AREA_RATIO) {
+      const added: UiElement[] = [];
+      for (const p of patches) {
+        const child: UiElement = {
+          id: nextId++,
+          parent: el.id,
+          children: [],
+          renderMode: "raster",
+          semanticHint: "image",
+          rect: p.rect,
+          cornerRadius: 0,
+          matteEligible: p.matteEligible,
+          matteConfidence: p.matteConfidence,
+          matteFit: p.matteFit,
+          matteMidAlpha: p.matteMidAlpha,
+          matte: p.matte,
+          renderPatch: true,
+        };
+        elements.push(child);
+        byId.set(child.id, child);
+        el.children.push(child.id);
+        added.push(child);
+      }
+      el.children.sort((a, b) => {
+        const ea = byId.get(a)!, eb = byId.get(b)!;
+        return ea.rect[1] - eb.rect[1] || ea.rect[0] - eb.rect[0];
+      });
+      patched++;
+      continue;
     }
+    el.renderMode = "raster";
+    el.semanticHint = "image";
+    el.cornerRadius = 0;
+    delete el.coveredByText;
+    demoted++;
   }
-  return { demoted };
+  return { demoted, patched };
 }
 
 /**
@@ -225,17 +286,17 @@ export function applyRenderCheck(
 export async function detectUiElements(
   host: {
     detectUiRegions(png: Buffer, opts: { minArea?: number; workingMax?: number }): Promise<{ width: number; height: number; regions: RawRegion[]; sampledColors: Array<{ hex: string; weight: number }> }>;
-    assessVectorFills(png: Buffer, ordered: UiElement[], delta?: number): Promise<Array<{ id: number; exposed: number; risk: number; meanDiff: number }>>;
+    assessVectorFills(png: Buffer, ordered: UiElement[], delta?: number): Promise<Array<RenderAssessment>>;
   },
   png: Buffer,
   opts: { minArea?: number; workingMax?: number; maxElements?: number; renderCheck?: boolean; tau?: number }
-): Promise<{ width: number; height: number; regions: RawRegion[]; sampledColors: Array<{ hex: string; weight: number }>; elements: UiElement[]; dropped: number; demoted: number }> {
+): Promise<{ width: number; height: number; regions: RawRegion[]; sampledColors: Array<{ hex: string; weight: number }>; elements: UiElement[]; dropped: number; demoted: number; patched: number }> {
   const det = await host.detectUiRegions(png, { minArea: opts.minArea ?? 576, workingMax: opts.workingMax ?? 1280 });
   const { elements, dropped } = buildTree(det.regions, opts.maxElements ?? 120);
-  let demoted = 0;
+  let demoted = 0, patched = 0;
   if (opts.renderCheck !== false && elements.some((e) => e.renderMode === "vector-panel" && e.fill)) {
     const report = await host.assessVectorFills(png, zOrder(elements));
-    demoted = applyRenderCheck(elements, report, opts.tau).demoted;
+    ({ demoted, patched } = applyRenderCheck(elements, report, opts.tau));
   }
-  return { ...det, elements, dropped, demoted };
+  return { ...det, elements, dropped, demoted, patched };
 }

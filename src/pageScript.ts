@@ -1224,16 +1224,168 @@ window.riveApi = {
       sum[k] += d;
       if (d > delta) off[k]++;
     }
+    // --- 外れた画素の塊（patch 候補） ---
+    // 外れた画素を要素ごとに 8 近傍で塊にまとめ、塊ごとに「パネルの塗り B を背景とした
+    // alpha matte」を推定する。塗りは既知なので B の推定が要らず、行の matte より条件が良い。
+    // モデルと閾値は detectUiRegions の estimateMatte と同じ（fit ≥ 0.78・中間 alpha ≤ 0.35・
+    // コントラスト ≥ 24）。数が多すぎる要素（写真）は塊を数えず null を返し、呼び出し側が
+    // 要素ごとラスタに落とす。
+    // 塊の数の上限は写真の足切り（写真は数百になる）。破線や点線は 1 本で十数個の塊になるので
+    // 少なすぎると本物の線を写真扱いしてしまう（実測 2026-08-26: 8/6 の破線 + 角丸の 4 隅で 17）。
+    const PATCH_MAX_CLUSTERS = opts?.patchMaxClusters ?? 64;
+    const PATCH_DILATE = 1;
+    // 近い塊は 1 つの patch にまとめる（破線 → 1 本、文字の点 → 1 文字）。切り抜きは
+    // 元画素なので、間の塗り部分を含んでも見た目は変わらない。8px: 破線の隙間(6)より広く、
+    // 別のアイコン同士が並ぶ間隔(通常 12px 以上)より狭い
+    const PATCH_MERGE_GAP = opts?.patchMergeGap ?? 8;
+    const PATCH_MIN_PIXELS = 4;
+    const mergeClusters = (cs) => {
+      let merged = true;
+      while (merged) {
+        merged = false;
+        for (let i = 0; i < cs.length && !merged; i++) {
+          for (let j = i + 1; j < cs.length; j++) {
+            const a = cs[i].rect, b = cs[j].rect;
+            const gx = Math.max(a[0], b[0]) - Math.min(a[0] + a[2], b[0] + b[2]);
+            const gy = Math.max(a[1], b[1]) - Math.min(a[1] + a[3], b[1] + b[3]);
+            if (gx > PATCH_MERGE_GAP || gy > PATCH_MERGE_GAP) continue;
+            const x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]);
+            const x1 = Math.max(a[0] + a[2], b[0] + b[2]), y1 = Math.max(a[1] + a[3], b[1] + b[3]);
+            cs[i] = { rect: [x0, y0, x1 - x0, y1 - y0], pixels: cs[i].pixels + cs[j].pixels };
+            cs.splice(j, 1);
+            merged = true;
+            break;
+          }
+        }
+      }
+      return cs;
+    };
+    const clustersOf = (k, el) => {
+      const [ex, ey, ew, eh] = el.rect;
+      const bx0 = Math.max(0, Math.round(ex)), by0 = Math.max(0, Math.round(ey));
+      const bx1 = Math.min(W, Math.round(ex + ew)), by1 = Math.min(H, Math.round(ey + eh));
+      const bw = bx1 - bx0, bh = by1 - by0;
+      if (bw <= 0 || bh <= 0) return [];
+      const mask = new Uint8Array(bw * bh);
+      const b = bounds[k];
+      for (let py = by0; py < by1; py++) {
+        for (let px = bx0; px < bx1; px++) {
+          const p = py * W + px;
+          if (owner[p] !== k) continue;
+          if (px < b[0] || py < b[1] || px >= b[2] || py >= b[3]) continue;
+          const i = p * 4;
+          const d = Math.max(
+            Math.abs(rec[i] - srcData[i]), Math.abs(rec[i + 1] - srcData[i + 1]), Math.abs(rec[i + 2] - srcData[i + 2]));
+          if (d > delta) mask[(py - by0) * bw + (px - bx0)] = 1;
+        }
+      }
+      // 1px 膨張: アンチエイリアスで途切れた線を 1 つの塊にする
+      const dil = new Uint8Array(bw * bh);
+      for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+        if (!mask[y * bw + x]) continue;
+        for (let dy = -PATCH_DILATE; dy <= PATCH_DILATE; dy++) for (let dx = -PATCH_DILATE; dx <= PATCH_DILATE; dx++) {
+          const yy = y + dy, xx = x + dx;
+          if (yy >= 0 && yy < bh && xx >= 0 && xx < bw) dil[yy * bw + xx] = 1;
+        }
+      }
+      const seen = new Uint8Array(bw * bh);
+      const stack = new Int32Array(bw * bh);
+      const clusters = [];
+      for (let s0 = 0; s0 < bw * bh; s0++) {
+        if (!dil[s0] || seen[s0]) continue;
+        let sp = 0, n = 0, x0 = bw, y0 = bh, x1 = -1, y1 = -1;
+        stack[sp++] = s0; seen[s0] = 1;
+        while (sp > 0) {
+          const q = stack[--sp];
+          const qx = q % bw, qy = (q / bw) | 0;
+          if (mask[q]) n++;
+          if (qx < x0) x0 = qx; if (qy < y0) y0 = qy; if (qx > x1) x1 = qx; if (qy > y1) y1 = qy;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const yy = qy + dy, xx = qx + dx;
+            if (yy < 0 || yy >= bh || xx < 0 || xx >= bw) continue;
+            const r = yy * bw + xx;
+            if (dil[r] && !seen[r]) { seen[r] = 1; stack[sp++] = r; }
+          }
+        }
+        clusters.push({ rect: [bx0 + x0, by0 + y0, x1 - x0 + 1, y1 - y0 + 1], pixels: n });
+        if (clusters.length > PATCH_MAX_CLUSTERS) return null;
+      }
+      return clusters;
+    };
+    const parseHexLocal = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const hexLocal = (r, g, b) => "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase();
+    const medianLocal = (arr) => { const a = [...arr].sort((x, y) => x - y); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+    const matteAgainstFill = (rect, fillHex) => {
+      const bg = parseHexLocal(fillHex);
+      const [rx, ry, rw, rh] = rect;
+      const dist = [], px = [];
+      for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) {
+        const o = (y * W + x) * 4;
+        const dr = srcData[o] - bg[0], dg = srcData[o + 1] - bg[1], db = srcData[o + 2] - bg[2];
+        dist.push(dr * dr + dg * dg + db * db); px.push(o);
+      }
+      if (px.length < 8) return null;
+      const order = px.map((_, i) => i).sort((a, b) => dist[b] - dist[a]);
+      const take = Math.max(4, Math.floor(order.length * 0.25));
+      const fr = [], fg = [], fb = [];
+      for (let i = 0; i < take; i++) { const o = px[order[i]]; fr.push(srcData[o]); fg.push(srcData[o + 1]); fb.push(srcData[o + 2]); }
+      const F = [medianLocal(fr), medianLocal(fg), medianLocal(fb)];
+      const d = [F[0] - bg[0], F[1] - bg[1], F[2] - bg[2]];
+      const len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+      const contrast = Math.max(Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2]));
+      if (len2 < 1e-9 || contrast < 24) return { eligible: false, fit: 0, mid: 1, fg: hexLocal(F[0], F[1], F[2]), bg: fillHex };
+      let sum = 0, mid = 0;
+      for (const o of px) {
+        const c0 = srcData[o] - bg[0], c1 = srcData[o + 1] - bg[1], c2 = srcData[o + 2] - bg[2];
+        let a = (c0 * d[0] + c1 * d[1] + c2 * d[2]) / len2;
+        a = a < 0 ? 0 : a > 1 ? 1 : a;
+        const e0 = c0 - a * d[0], e1 = c1 - a * d[1], e2 = c2 - a * d[2];
+        sum += Math.sqrt(e0 * e0 + e1 * e1 + e2 * e2);
+        if (a > 0.2 && a < 0.8) mid++;
+      }
+      const len = Math.sqrt(len2);
+      const fit = Math.max(0, Math.min(1, 1 - (sum / px.length) / (len * 0.5)));
+      const midFraction = mid / px.length;
+      return { eligible: fit >= 0.78 && midFraction <= 0.35, fit, mid: midFraction, fg: hexLocal(F[0], F[1], F[2]), bg: fillHex };
+    };
+
     const out = [];
     for (let k = 0; k < ordered.length; k++) {
       const el = ordered[k];
       if (!(el.renderMode === "vector-panel" && el.fill)) continue;
+      const risk = exposed[k] ? off[k] / exposed[k] : 0;
+      let patches = null;
+      if (off[k] > 0) {
+        const clusters = clustersOf(k, el);
+        if (clusters) {
+          // 数画素の塊は角丸の推定誤差の残り（実測: 角ごとに 1px）。切り抜きにしても
+          // 見えないし、要素が 4 つ増えるだけ
+          patches = mergeClusters(clusters.filter((c) => c.pixels >= PATCH_MIN_PIXELS)).map((c) => {
+            // 塊の bbox を 1px 広げて AA の縁を含める（要素の矩形内に収める）
+            const [ex, ey, ew, eh] = el.rect;
+            const x0 = Math.max(Math.round(ex), c.rect[0] - 1), y0 = Math.max(Math.round(ey), c.rect[1] - 1);
+            const x1 = Math.min(Math.round(ex + ew), c.rect[0] + c.rect[2] + 1), y1 = Math.min(Math.round(ey + eh), c.rect[1] + c.rect[3] + 1);
+            const rect = [x0, y0, x1 - x0, y1 - y0];
+            const m = matteAgainstFill(rect, el.fill);
+            return {
+              rect, pixels: c.pixels,
+              matteEligible: !!(m && m.eligible),
+              matteConfidence: m ? Math.round(m.fit * (1 - Math.min(1, m.mid / 0.35)) * 1000) / 1000 : 0,
+              matteFit: m ? Math.round(m.fit * 1000) / 1000 : 0,
+              matteMidAlpha: m ? Math.round(m.mid * 1000) / 1000 : 1,
+              matte: m && m.eligible ? { fg: m.fg, bg: m.bg, space: "srgb" } : undefined,
+            };
+          });
+        }
+      }
       out.push({
         id: el.id,
         exposed: exposed[k],
         // 露出画素のうち delta を超えて外れた割合。露出が無い(完全に覆われた)要素は 0
-        risk: exposed[k] ? off[k] / exposed[k] : 0,
+        risk,
         meanDiff: exposed[k] ? sum[k] / exposed[k] / 255 : 0,
+        // 外れた画素の塊。null は「塊が多すぎて数えなかった」(写真)
+        patches,
       });
     }
     return out;

@@ -80,7 +80,8 @@ try {
 
     const recon = await reconstructionStats(host, png, elements, inkProbes);
     const g = guardrails(elements, { width: det.width, height: det.height }, { dropped, rawRegions: det.regions });
-    const t = truthAlignment(elements, truth);
+    const t = truthAlignment(elements, truth, { wrongMask: recon.wrongMask });
+    delete recon.wrongMask; // JSON に W*H バイトを残さない
 
     // オーバーレイは元画素を含むので公開除外側にだけ書く。目視確認用。
     const labels = elements.map((e) => ({
@@ -110,7 +111,7 @@ try {
     console.log(
       `${fx.split === "holdout" ? "[holdout] " : "[tuning]  "}${fx.id.padEnd(20)}` +
       (show
-        ? ` elements=${String(elements.length).padStart(3)} leakMax=${t.negativeLeakMaxPerRegion.toFixed(3)} ` +
+        ? ` elements=${String(elements.length).padStart(3)} leakMax=${t.negativeLeakMaxPerRegion.toFixed(3)} (proxy ${t.negativeLeakProxyMaxPerRegion.toFixed(3)}) ` +
           `recall=${t.positivePanelInstanceRecall.toFixed(3)} (${t.positiveHitCount}/${t.positiveTotal}) ` +
           `stripe=${g.stripeRunScore} ink=${mean(recon.inkCoverage.map((i) => i.rasterCoverRatio)).toFixed(2)}`
         : " (Task 19 まで内訳は見ない。SHOW_HOLDOUT=1 で開く)")
@@ -124,6 +125,7 @@ const sum = (rows) => ({
   scenes: rows.length,
   negativeLeakOverallMean: mean(rows.map((r) => r.truthAlignment.negativeLeakOverall)),
   negativeLeakMaxPerRegionWorst: rows.length ? Math.max(...rows.map((r) => r.truthAlignment.negativeLeakMaxPerRegion)) : 0,
+  negativeLeakProxyMaxPerRegionWorst: rows.length ? Math.max(...rows.map((r) => r.truthAlignment.negativeLeakProxyMaxPerRegion)) : 0,
   negativeRegionsWithAnyLeakTotal: rows.reduce((a, r) => a + r.truthAlignment.negativeRegionsWithAnyLeak, 0),
   positivePanelInstanceRecallMean: mean(rows.map((r) => r.truthAlignment.positivePanelInstanceRecall)),
   positivePanelMedianIoUMean: mean(rows.map((r) => r.truthAlignment.positivePanelMedianIoU)),

@@ -14,7 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { RiveHost } from "../dist/riveHost.js";
 import { PAGE_SCRIPT } from "../dist/pageScript.js";
 import { detectUiElements } from "../dist/uiDetect.js";
-import { truthAlignment, guardrails } from "./detectorMetrics.mjs";
+import { truthAlignment, guardrails, reconstructionStats } from "./detectorMetrics.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = resolve(process.env.RIVE_UI_FIXTURES || join(HERE, "..", ".claude", "ui-fixtures"));
@@ -110,7 +110,9 @@ try {
     const png = readFileSync(join(FIXTURE_DIR, fx.image));
     const det = await detectUiElements(host, png, { ...DETECT_OPTS, maxElements: MAX_ELEMENTS });
     const { elements, dropped } = det;
-    const t = truthAlignment(elements, { width: fx.width, height: fx.height, elements: fx.anchors });
+    // leak は「塗って合わない画素」で数える（detectorMetrics.truthAlignment の注記参照）
+    const recon = await reconstructionStats(host, png, elements, []);
+    const t = truthAlignment(elements, { width: fx.width, height: fx.height, elements: fx.anchors }, { wrongMask: recon.wrongMask });
     const g = guardrails(elements, { width: det.width, height: det.height }, { dropped });
     rows.push({ id: fx.id, split: fx.split, t, g, elements, png, size: { width: det.width, height: det.height } });
   }
@@ -262,7 +264,9 @@ try {
     console.log("recorded metamorphic-baseline.json");
     writeFileSync(leakPath, JSON.stringify({
       recordedAt: out.recordedAt,
-      note: "2026-08-26 反実仮想判定(detectUiElements)を通した後の実測。同日それ以前(テキスト行の暴走を止めた直後)は tuning 0.14 / holdout 0.46 で、" +
+      note: "2026-08-26(3) leak を『ベクター塗りで、かつ元と 8 超で違う画素』で数えるようにした後の実測(truthAlignment の wrongMask)。" +
+        "代理指標(塗ったか)は tuning 0.114 / holdout 0.404 で、これは反実仮想判定がイラスト内の平坦な角丸を塗り、破線を切り抜きで戻した結果(再構成 p99 = 0)。" +
+        "以下は同日(2)の経緯: 反実仮想判定(detectUiElements)を通した後の実測。同日それ以前(テキスト行の暴走を止めた直後)は tuning 0.14 / holdout 0.46 で、" +
         "その内訳(gallery-antd のイラスト内の角丸 2 枚・dark-mode の入力欄の断片)は反実仮想判定が risk 0.023〜0.036 でラスタに落とした。" +
         "変換不変性の renderMode 一致率は判定を入れて 5〜13pt 下がる(jpeg 44→39, scale75 46→33, scale125 57→48, pad1 71→66)。" +
         "塗りが元と合うかを画素で測って決めているので、摂動で合わなくなればラスタへ倒れるのは意図した応答。PNG 再エンコードは 100% のまま。" +

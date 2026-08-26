@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-08-26T04:21:33.695Z",
+  "recordedAt": "2026-08-26T04:58:36.707Z",
   "perTransform": {
     "png": {
       "modeAgree": 1,
@@ -7,32 +7,32 @@
       "maxCountRatio": 1
     },
     "jpeg": {
-      "modeAgree": 0.3880597014925373,
-      "medianIou": 0.9667919318966178,
-      "maxCountRatio": 1.9318181818181819
+      "modeAgree": 0.4225352112676056,
+      "medianIou": 0.9466089466089466,
+      "maxCountRatio": 1.8571428571428572
     },
     "scale75": {
-      "modeAgree": 0.3283582089552239,
-      "medianIou": 0.40000000000000396,
-      "maxCountRatio": 1.0084033613445378
+      "modeAgree": 0.39436619718309857,
+      "medianIou": 0.40000000000001595,
+      "maxCountRatio": 1.048780487804878
     },
     "scale125": {
-      "modeAgree": 0.47761194029850745,
-      "medianIou": 0.799859519733108,
-      "maxCountRatio": 1.0526315789473684
+      "modeAgree": 0.5352112676056338,
+      "medianIou": 0.7999999999999949,
+      "maxCountRatio": 1.0789473684210527
     },
     "jitter": {
-      "modeAgree": 0.13432835820895522,
+      "modeAgree": 0.14084507042253522,
       "medianIou": 0.028511362498748624,
-      "maxCountRatio": 2.727272727272727
+      "maxCountRatio": 2.4489795918367347
     },
     "pad1": {
-      "modeAgree": 0.6567164179104478,
+      "modeAgree": 0.6901408450704225,
       "medianIou": 0.9787234042553191,
       "maxCountRatio": 1.0263157894736843
     },
     "crop1": {
-      "modeAgree": 0.6119402985074627,
+      "modeAgree": 0.6338028169014085,
       "medianIou": 0.956864264496965,
       "maxCountRatio": 1.043859649122807
     }

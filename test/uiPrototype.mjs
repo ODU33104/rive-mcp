@@ -214,8 +214,10 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
   const merged = mk(false, 0.01);
   const mergedTiny = buildPrototypeScene({
     elements: [
+      // 親は塗りを持たない vector-panel（何も描かないので base がそのまま見える）。
+      // 塗りを持つ親の下では「背景に残す」が成立しない（下の check 参照）
       el({ id: 1, renderMode: "vector-panel", semanticHint: "panel", role: "background",
-           rect: [0, 0, 400, 300], fill: "#101010", children: [2] }),
+           rect: [0, 0, 400, 300], children: [2] }),
       el({ id: 2, parent: 1, renderMode: "raster", role: "text", rect: [40, 40, 30, 12],
            matteEligible: false, matteConfidence: 0.01 }),
     ],
@@ -225,6 +227,20 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
     merged.rasterRegions.some((r) => r.name === target), merged.rasterRegions.map((r) => r.name).join(","));
   check("小さく信頼度の無い要素は切り出さない（背景に残す）",
     mergedTiny.rasterRegions.length === 0, mergedTiny.rasterRegions.map((r) => r.name).join(","));
+  {
+    const underFill = buildPrototypeScene({
+      source: { width: 400, height: 300 },
+      elements: [
+        el({ id: 1, renderMode: "vector-panel", semanticHint: "panel", role: "background",
+             rect: [0, 0, 400, 300], fill: "#101010", children: [2] }),
+        el({ id: 2, parent: 1, renderMode: "raster", role: "text", rect: [40, 40, 30, 12],
+             matteEligible: false, matteConfidence: 0.01 }),
+      ],
+      motion: { entranceMs: 1000, stagger: 100, interactions: false, ambient: false },
+    });
+    check("塗りを持つ親の下では小片も切り出す（背景に残すと塗りに隠れて消える）",
+      underFill.rasterRegions.some((r) => r.name.startsWith("el2_")), underFill.rasterRegions.map((r) => r.name).join(","));
+  }
   check("背景へ統合したことを警告に出す",
     mergedTiny.warnings.some((w) => w.includes("left in the background")), mergedTiny.warnings.join(" / "));
 }

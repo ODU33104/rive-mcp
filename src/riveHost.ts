@@ -7,6 +7,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 import type { RawRegion } from "./uiDetect.js";
 import type { OverlayLabel } from "./uiOverlay.js";
 import type { WeightedColor } from "./designTokens.js";
+import type { RenderAssessment } from "./uiDetect.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 const ORIGIN = "http://rive-mcp.local";
@@ -232,7 +233,7 @@ export class RiveHost {
     pngBytes: Buffer,
     ordered: Array<{ id: number; renderMode: string; rect: [number, number, number, number]; fill?: string; cornerRadius?: number }>,
     delta?: number
-  ): Promise<Array<{ id: number; exposed: number; risk: number; meanDiff: number }>> {
+  ): Promise<Array<RenderAssessment>> {
     return this.call("assessVectorFills", pngBytes.toString("base64"), { ordered, delta });
   }
 
