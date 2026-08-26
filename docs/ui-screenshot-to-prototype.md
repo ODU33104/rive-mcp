@@ -31,10 +31,15 @@ real transparency. `matteConfidence` grades how well that worked.
 `renderRisk` is measured, not inferred: the elements are composited in draw
 order, and for each flat fill it is the share of the pixels where that fill is
 what you would see that differ from the screenshot by more than one
-quantisation step, ignoring a 2px rim. A fill whose risk exceeds 0.02 is turned
-into a crop, and the value stays on the element so you can see why. A label
-covered by its own text run contributes nothing; an icon or a line that no
-element covers does.
+quantisation step, ignoring a 2px rim. A label covered by its own text run
+contributes nothing; an icon or a line that no element covers does. When the
+risk exceeds 0.02 the offending pixels are clustered: if they form at most
+eight small patches covering no more than a quarter of the fill, each patch is
+cut out as a child element (`renderPatch: true`) with a matte against the
+panel's own colour, and the panel stays a vector — an accent bar or a dashed
+line lands on top of the rectangle it crosses. Otherwise, as for a photograph,
+the whole element becomes a crop. The value stays on the element either way
+so you can see why.
 
 ## Rectangles are estimates, not measurements
 
@@ -58,10 +63,10 @@ the element count. Measured across six real pages:
 | change | classifications unchanged | element count |
 |---|---|---|
 | PNG re-encode | 100% | 1.00x |
-| 1px pad / crop | 66% / 61% | 1.04x |
-| JPEG q95 | 39% | up to 1.93x |
-| 0.75x / 1.25x resize | 33% / 48% | 1.01x / 1.05x |
-| RGB ±2 | 13% | up to 2.73x |
+| 1px pad / crop | 69% / 63% | 1.04x |
+| JPEG q95 | 42% | up to 1.86x |
+| 0.75x / 1.25x resize | 39% / 54% | 1.05x / 1.08x |
+| RGB ±2 | 14% | up to 2.45x |
 
 Feed it the original file rather than a screenshot of a screenshot, and expect a
 different element tree if you re-export at another size.
@@ -92,8 +97,12 @@ scores zero and the finished prototype is wrong anyway. Closing the element cap
 alone moved tuning recall from 7 to 4 while adding p99 error on three held-back
 pages that had none. It now runs after the tree is built, on the elements that
 will actually be drawn, in their actual order — see `renderRisk` above — and
-that version shipped. It is what took the worst held-back leak from 0.46 to
-0.014 and the reconstruction p99 to zero on every page. It costs some stability:
+that version shipped. It is what took the reconstruction p99 to zero on every
+page, and the harmful leak — vector fill over a picture region *where the fill
+is wrong* — to 0.007 at worst. The older proxy (any vector fill over a picture
+region, right or wrong) still reads 0.40 on one held-back page, because two flat
+rounded rectangles inside an illustration are now painted flat with their
+dashed line cut out on top; both numbers are reported. It costs some stability:
 because the decision is made on pixels, a JPEG round trip or a resize changes it
 more often than before (agreement 44% → 39% and 46% → 33%), while a lossless
 re-encode still changes nothing.
@@ -113,10 +122,11 @@ dropped under the threshold and came back as a crop. Holes are now allowed when
 a text run that lies entirely inside the panel covers them — the run is drawn on
 top, so painting the panel flat exposes nothing — and the panel is marked
 `coveredByText`. That took labelled panels on the tuning pages from 7 of 20 to
-15 of 20 and on the held-back pages from 4 of 8 to 5 of 8 (14 and 4 once the
-render check below had turned the ones whose contents it could not cover back
-into crops — a "W3C" cell whose label was never detected, a row with an accent
-bar no element owned), without any panel losing its label: a panel that owes its vector status to its runs is kept only
+15 of 20 and on the held-back pages from 4 of 8 to 5 of 8, without any panel
+losing its label (the render check below found two whose contents nothing
+covered — a "W3C" cell whose label was never detected, a row with an accent bar
+no element owned — and cut those contents out on top rather than giving the
+panel up): a panel that owes its vector status to its runs is kept only
 together with them, and is dropped back to a crop when the element cap has no
 room for both. Holes covered by runs that spill outside the panel are still
 holes; such a run may be drawn underneath, and the label would vanish.
@@ -208,9 +218,9 @@ when the runaway text runs were fixed, since the numbers it held — leak 0 on t
 tuning pages, 0.069 on the held-back ones — had been measured under crops that
 covered most of the screen. The current record is leak 0.14 and 0.46 by the same
 definition, on the same pages, with the reasons for each written into the file.
-With the render check in place the record is 0 and 0.014, under the target for
-the first time; the invariance record was lowered at the same time, for the
-reason given above.
+With the render check in place, and leak counted only where the fill is
+actually wrong, the record is 0 and 0.007, under the target for the first time;
+the invariance record was lowered at the same time, for the reason given above.
 
 ## Demo
 
