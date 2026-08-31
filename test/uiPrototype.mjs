@@ -245,5 +245,88 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
     mergedTiny.warnings.some((w) => w.includes("left in the background")), mergedTiny.warnings.join(" / "));
 }
 
+// --- ベクター入力（vector-shape）の組み立て -----------------------------------
+{
+  const iconShape = {
+    id: "icon", type: "polygon", x: 120, y: 60,
+    subpaths: [{ closed: true, points: [{ x: -20, y: -10 }, { x: 20, y: -10 }, { x: 20, y: 10 }, { x: -20, y: 10 }] }],
+    fill: { color: "#FF0000" },
+  };
+  const vec = buildPrototypeScene({
+    source: { width: 400, height: 300 },
+    elements: [
+      { id: 1, parent: null, children: [2], renderMode: "vector-panel", semanticHint: "panel",
+        rect: [0, 0, 400, 300], fill: "#101010", zIndex: 0, role: "background" },
+      { id: 2, parent: 1, children: [], renderMode: "vector-shape", semanticHint: "panel",
+        rect: [100, 50, 40, 20], zIndex: 1, shapes: [iconShape], role: "icon" },
+    ],
+    interactions: true,
+    motion: { entranceMs: 1000, ambient: true },
+  });
+  const wrapper = vec.spec.groups?.find((g) => g.id === "el2");
+  check("vector-shape はラッパーグループを持つ", !!wrapper);
+  check("ラッパーは要素の中心に置く（拡大の軸が要素の中心になる）",
+    wrapper && wrapper.x === 120 && wrapper.y === 60, wrapper && `${wrapper.x},${wrapper.y}`);
+  const child = vec.spec.shapes.find((s) => s.parent === "el2");
+  check("シェイプはラッパーのローカル座標に移す",
+    child && child.x === 0 && child.y === 0, child && `${child.x},${child.y}`);
+  check("シェイプ id は要素 id で一意化する", child?.id === "el2_icon", child?.id);
+  check("頂点は落とさない", child?.subpaths?.[0].points.length === 4);
+  check("ベクターなので切り出しは作らない", vec.rasterRegions.length === 0);
+  const vecJson = JSON.stringify(vec.spec);
+  check("アニメの対象はラッパーグループ", vecJson.includes('"target":"el2"'), vecJson.slice(0, 0) || "");
+  // 焼き付きが無いので制限しない = hover / press が付く
+  check("vector-shape は自由に動かせる", motionCapabilityOf({ renderMode: "vector-shape", rect: [0, 0, 10, 10] }) === "free");
+  check("vector-shape にも hover が付く", vecJson.includes("hover_2"));
+  check("ベクターだけのシーンでは fade 制限の警告が出ない",
+    !vec.warnings.some((w) => w.includes("fade in place")), vec.warnings.join(" / "));
+}
+
+// z（描画順）: SVG は文書順が描画順そのもの。y→x で並べ替えると後ろに描かれるはずの
+// ものが背面に回る。zIndex を持つ要素だけその順を使う（スクショ経路は従来どおり）
+{
+  const mk = (id, y, zIndex) => ({
+    id, parent: null, children: [], renderMode: "vector-panel", semanticHint: "panel",
+    rect: [0, y, 100, 100], fill: "#123456", role: "panel", ...(zIndex === undefined ? {} : { zIndex }),
+  });
+  const doc = buildPrototypeScene({
+    source: { width: 200, height: 300 },
+    elements: [mk(1, 100, 0), mk(2, 0, 1)],
+    interactions: false, motion: { ambient: false },
+  });
+  const zOf = (id) => doc.spec.shapes.find((s) => s.id === `el${id}`).z;
+  check("zIndex があれば文書順が描画順", zOf(1) < zOf(2), `${zOf(1)} vs ${zOf(2)}`);
+  const noZ = buildPrototypeScene({
+    source: { width: 200, height: 300 },
+    elements: [mk(1, 100), mk(2, 0)],
+    interactions: false, motion: { ambient: false },
+  });
+  const zOf2 = (id) => noZ.spec.shapes.find((s) => s.id === `el${id}`).z;
+  check("zIndex が無ければ従来どおり y 順", zOf2(2) < zOf2(1), `${zOf2(2)} vs ${zOf2(1)}`);
+}
+
+// chart-grow はグループの scaleY を動かす。対象が既にラッパーグループのときは
+// そのグループを grow グループの子にしないと「何も伸びない chart」になる
+{
+  const grown = buildPrototypeScene({
+    source: { width: 400, height: 300 },
+    elements: [{
+      id: 1, parent: null, children: [], renderMode: "vector-shape", semanticHint: "panel",
+      rect: [40, 40, 120, 80], zIndex: 0, role: "chart",
+      shapes: [{ id: "bars", type: "polygon", x: 100, y: 80,
+        subpaths: [{ closed: true, points: [{ x: -60, y: -40 }, { x: 60, y: -40 }, { x: 60, y: 40 }, { x: -60, y: 40 }] }],
+        fill: { color: "#00FF00" } }],
+    }],
+    interactions: false, motion: { ambient: false },
+  });
+  const wrapper = grown.spec.groups.find((g) => g.id === "el1");
+  check("chart のラッパーは grow グループの子になる", wrapper?.parent === "el1_grow", wrapper?.parent);
+  const ids = grown.spec.groups.map((g) => g.id);
+  check("grow グループは使う前に定義される（rivWriter の要求）",
+    ids.indexOf("el1_grow") < ids.indexOf("el1"), ids.join(","));
+  check("伸ばす対象は grow グループ",
+    JSON.stringify(grown.spec.animations).includes('"target":"el1_grow"'));
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

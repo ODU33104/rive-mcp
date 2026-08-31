@@ -1129,6 +1129,54 @@ try {
       const frame = await callTool("riv_render_frame", { path: outRiv, outPath: join(root, "test", "tmp", "ui-prototype.png") });
       check("生成した .riv を描画できる", !frame.isError, textOf(frame).slice(0, 160));
     }
+
+    // --- 同じ2ツールのベクター入力（svgPath）。推定が無いので id は完全に決定的で、
+    // 生成物には元画像が1枚も入らない
+    {
+      const { DASHBOARD_SVG } = await import(pathToFileURL(join(root, "test", "fixtures", "vectorSvg.mjs")).href);
+      const svgFile = join(root, "test", "tmp", "ui-vector.svg");
+      writeFileSync(svgFile, DASHBOARD_SVG);
+      const det = await callTool("riv_ui_detect", { svgPath: svgFile });
+      check("riv_ui_detect が SVG を読む", !det.isError, textOf(det).slice(0, 160));
+      const parsed = JSON.parse(textOf(det));
+      check("SVG の寸法をそのまま返す",
+        parsed.source.width === 640 && parsed.source.height === 420 && parsed.source.kind === "svg",
+        JSON.stringify(parsed.source));
+      check("非矩形は vector-shape で返る",
+        parsed.elements.some((e) => e.renderMode === "vector-shape"),
+        parsed.elements.map((e) => e.renderMode).join(","));
+      check("頂点座標そのものは返さない（要約だけ）",
+        parsed.elements.every((e) => e.shapes === undefined) &&
+        parsed.elements.some((e) => typeof e.vertices === "number"));
+      check("レイヤー名がロールのヒントになる",
+        parsed.elements.some((e) => e.roleHint === "button"),
+        parsed.elements.map((e) => e.roleHint).join(","));
+      const again = JSON.parse(textOf(await callTool("riv_ui_detect", { svgPath: svgFile })));
+      check("同じ SVG からは同じ id が出る",
+        JSON.stringify(again.elements) === JSON.stringify(parsed.elements));
+
+      const outRiv = join(root, "test", "tmp", "ui-vector.riv");
+      const proto = await callTool("riv_ui_prototype", {
+        svgPath: svgFile, outPath: outRiv,
+        roles: parsed.elements.map((e) => ({ id: e.id, role: e.roleHint ?? "panel" })),
+      });
+      check("riv_ui_prototype が SVG から .riv を書く", !proto.isError, textOf(proto).slice(0, 200));
+      const pr = JSON.parse(textOf(proto));
+      check("id が突き合っている（未知idの警告が出ない）",
+        !pr.warnings.some((w) => w.includes("not in the element list")), JSON.stringify(pr.warnings));
+      check("要素数が riv_ui_detect と一致", pr.elements === parsed.elements.length,
+        `${pr.elements} vs ${parsed.elements.length}`);
+      // ベクター経路の要点: 元画像を1枚も埋め込まない
+      check("ラスタアセットが0件", pr.rasterAssets === 0, String(pr.rasterAssets));
+      check("編集可能比率を返す", typeof pr.editable === "string" && pr.editable === parsed.editable,
+        `${pr.editable} vs ${parsed.editable}`);
+      check("出力が RIVE で始まる", fsMod2Sig(outRiv) === "52495645", fsMod2Sig(outRiv));
+      const vframe = await callTool("riv_render_frame", { path: outRiv, outPath: join(root, "test", "tmp", "ui-vector.png") });
+      check("SVG から作った .riv を描画できる", !vframe.isError, textOf(vframe).slice(0, 160));
+      const both = await callTool("riv_ui_detect", { svgPath: svgFile, imagePath: shotPath });
+      check("imagePath と svgPath の同時指定は断る",
+        both.isError && textOf(both).includes("not both"), textOf(both).slice(0, 120));
+    }
   }
 
   // エラー処理: 存在しないアニメ名 → 候補列挙

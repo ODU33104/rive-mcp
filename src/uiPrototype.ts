@@ -153,9 +153,14 @@ export function buildPrototypeScene(input: PrototypeInput): {
   // 「panel を塗りつぶしても子は前面に残る」「テキスト画像はボタン矩形の上に乗る」が
   // ツリーの深さに関係なく成り立つ。z空間は shapes/images 共通(rivWriter.ts の既定値:
   // images=1000+ が shapes より常に前面になる仕様)なので、既定値に頼らずここで明示的に振る。
+  // ルートの並び順がそのまま最背面からの描画順になる。y→x は「上にあるものほど背面」
+  // というスクリーンショット経路の近似で、SVG のように**文書順が描画順そのもの**である
+  // 入力では正解が別にある。両方が zIndex を持つときだけそちらを使う（既存経路は不変）。
   const roots = input.elements
     .filter((e) => e.parent === null)
-    .sort((a, b) => a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0]);
+    .sort((a, b) =>
+      (a.zIndex !== undefined && b.zIndex !== undefined ? a.zIndex - b.zIndex : 0) ||
+      a.rect[1] - b.rect[1] || a.rect[0] - b.rect[0]);
   const zOf = new Map<number, number>();
   let zCounter = 1; // 0 は base 画像（最背面）用に予約
   const assignZ = (el: PrototypeElement): void => {
@@ -213,6 +218,25 @@ export function buildPrototypeScene(input: PrototypeInput): {
       if (el.stroke) shape.stroke = { color: el.stroke.color, thickness: el.stroke.width };
       shapes.push(shape);
       targetIdOf.set(el.id, id);
+    } else if (el.renderMode === "vector-shape" && el.shapes?.length) {
+      // 任意のベジェ形状。**アニメの対象はシェイプ自身ではなくラッパーグループ**にする
+      // （riv_import_svg の imports と同じ方式）。ShapeSpec の座標系は「bbox 中心 = x,y、
+      // 頂点はその相対」なので、グループを要素の中心に置いて子をその分だけ戻すと、
+      // 拡大・回転が要素の中心を軸に起きる。グループを原点(0,0)に置くと
+      // アートボード左上を軸に拡大されて pop 系の入場が崩れる。
+      const gid = `el${el.id}`;
+      groups.push({ id: gid, x: cx, y: cy });
+      el.shapes.forEach((s, i) => {
+        shapes.push({
+          ...s,
+          id: `${gid}_${s.id}`, // SVG 側の id が重複していても .riv 内では一意にする
+          parent: gid,
+          x: s.x - cx,
+          y: s.y - cy,
+          z: z + i * 1e-3,
+        });
+      });
+      targetIdOf.set(el.id, gid);
     } else if (el.renderMode === "raster") {
       // capability が merge の要素は**そもそも切り出さない**。切り出さなければ
       // 背景画像の中に残り、周囲と一緒に動く。信頼度が極端に低い小片を
@@ -275,9 +299,18 @@ export function buildPrototypeScene(input: PrototypeInput): {
       const rect = clamped.get(el.id)!;
       const [rx, ry, rw, rh] = rect;
       const groupId = `${targetId}_grow`;
-      groups.push({ id: groupId, x: rx + rw / 2, y: ry + rh });
+      // rivWriter は「グループは使う前に定義されていること」を求める。対象が既に
+      // グループ(vector-shape のラッパー)のときは、その手前に差し込まないと
+      // 「親が見つからない」で createRiv が落ちる
+      const growGroup: GroupSpec = { id: groupId, x: rx + rw / 2, y: ry + rh };
+      const targetIdx = groups.findIndex((g) => g.id === targetId);
+      if (targetIdx >= 0) groups.splice(targetIdx, 0, growGroup);
+      else groups.push(growGroup);
       const shapeMatch = shapes.find((s) => s.id === targetId);
       const imageMatch = images.find((im) => im.id === targetId);
+      // vector-shape の対象は既にラッパーグループ。そのグループを grow グループの子にする
+      // （見落とすと、頂点を持たない空のグループを伸ばして「何も起きない chart」になる）
+      const groupMatch = groups.find((g) => g.id === targetId);
       if (shapeMatch) {
         shapeMatch.parent = groupId;
         shapeMatch.x = 0;
@@ -286,6 +319,10 @@ export function buildPrototypeScene(input: PrototypeInput): {
         imageMatch.parent = groupId;
         imageMatch.x = 0;
         imageMatch.y = -rh / 2;
+      } else if (groupMatch) {
+        groupMatch.parent = groupId;
+        groupMatch.x = 0;
+        groupMatch.y = -rh / 2;
       }
       const durSec = 0.5;
       const endFrame = atFrame + Math.round(durSec * FPS);

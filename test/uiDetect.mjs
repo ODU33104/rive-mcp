@@ -723,5 +723,117 @@ try {
   await hostGrain.close();
 }
 
+// --- ベクター入力（SVG）→ 要素ツリー -----------------------------------------
+// スクリーンショット経路と違い**推定が一切無い**ので、テストも「だいたい合っている」
+// ではなく属性値との完全一致で見る。ずれたら実装に丸めが混じったということ。
+{
+  const { parseVectorScene, editableRatio } = await import("../dist/vectorScene.js");
+  const { DASHBOARD_SVG, HERO_SVG, ICONS_SVG } = await import("./fixtures/vectorSvg.mjs");
+
+  const dash = parseVectorScene(DASHBOARD_SVG);
+  check("SVG の width/height を取る", dash.width === 640 && dash.height === 420,
+    `${dash.width}x${dash.height}`);
+  const byName = (s, name) => s.elements.find((e) => e.layerName === name);
+  const named = (s, name) => {
+    // 名前はレイヤー(<g>)に付いていて、塗りは中の <rect> にあることが多い。
+    // 「その名前の要素か、その直下で塗りを持つ要素」を取る
+    const g = byName(s, name);
+    return g?.fill ? g : s.elements.find((e) => e.parent === g?.id && e.fill);
+  };
+
+  const card = named(dash, "StatsCard");
+  check("矩形の座標が属性値そのもの",
+    card && card.rect.join() === [24, 80, 280, 180].join(), card && card.rect.join());
+  check("角丸が属性値そのもの", card && card.cornerRadius === 12, card && String(card.cornerRadius));
+  check("塗りが属性値そのもの", card && card.fill === "#FFFFFF", card && card.fill);
+  const button = named(dash, "PrimaryButton");
+  check("角丸 22 の丸ボタンもそのまま",
+    button && button.cornerRadius === 22 && button.rect.join() === [24, 292, 160, 44].join(),
+    button && `${button.rect.join()} r=${button.cornerRadius}`);
+
+  // グラデーション塗りの矩形は vector-panel にしない（fill は単色しか持てない）。
+  // ベジェのまま持てば見た目は SVG と同一で、しかも編集可能なまま
+  const chart = byName(dash, "ChartArea");
+  check("グラデーションの矩形はベジェのまま持つ",
+    chart && chart.renderMode === "vector-shape" && chart.shapes?.length === 1,
+    chart && chart.renderMode);
+  check("グラデーションは失われない", !!chart?.shapes?.[0].fill?.gradient);
+  const logo = byName(dash, "LogoIcon");
+  check("矩形でないパスは vector-shape",
+    logo && logo.renderMode === "vector-shape", logo && logo.renderMode);
+  check("頂点をそのまま保持する",
+    logo?.shapes?.[0].subpaths?.[0].points.length === 4,
+    String(logo?.shapes?.[0].subpaths?.[0].points.length));
+
+  // 親子は <g> の入れ子そのもの。bbox の包含からの推定は使わない
+  const nav = byName(dash, "NavBar");
+  check("グループが親になる",
+    dash.elements.filter((e) => e.parent === nav?.id).length === 2,
+    String(dash.elements.filter((e) => e.parent === nav?.id).length));
+  check("グループはルート", nav?.parent === null, String(nav?.parent));
+  check("親の id は必ず子より小さい（非巡回）",
+    dash.elements.every((e) => e.parent === null || e.parent < e.id));
+  check("zIndex は文書順（＝SVG の描画順）",
+    dash.elements.every((e, i, a) => i === 0 || a[i - 1].zIndex < e.zIndex));
+
+  // レイヤー名 → ロールのヒント。名前が無い要素は名前を持つ祖先から引き継ぐ
+  check("レイヤー名からロールのヒントを付ける",
+    byName(dash, "PrimaryButton")?.roleHint === "button", byName(dash, "PrimaryButton")?.roleHint);
+  check("ヒントは名前の無い子にも引き継ぐ",
+    button && !button.layerName && button.roleHint === "button", button && button.roleHint);
+  check("キャメルケースも語に割る", byName(dash, "AvatarBadge")?.roleHint === "avatar",
+    byName(dash, "AvatarBadge")?.roleHint);
+  check("自動生成名からはヒントを作らない",
+    parseVectorScene(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
+      <g id="Frame 427320"><rect id="Vector" width="10" height="10" fill="#000000"/></g></svg>`)
+      .elements.every((e) => e.roleHint === undefined));
+
+  // 同じ入力からは同じ id・同じ順序が出ること（roles の突き合わせがこれに依存している）
+  check("同一入力 → 同一結果",
+    JSON.stringify(parseVectorScene(DASHBOARD_SVG)) === JSON.stringify(dash));
+
+  const ratio = editableRatio(dash.elements);
+  check("編集可能要素の比率が 80% 以上", ratio.ratio >= 0.8, `${ratio.editable}/${ratio.total}`);
+
+  // 変換つき（Figma はフレームに transform を付けて出す）
+  const hero = parseVectorScene(HERO_SVG);
+  const heroCard = named(hero, "Hero Card");
+  check("グループの translate が座標に乗る",
+    heroCard && heroCard.rect.join() === [40, 30, 320, 160].join() && heroCard.cornerRadius === 16,
+    heroCard && `${heroCard.rect.join()} r=${heroCard.cornerRadius}`);
+  const divider = byName(hero, "Divider");
+  check("パスで書かれた矩形も矩形として読む",
+    divider && divider.renderMode === "vector-panel" && divider.rect.join() === [64, 150, 272, 2].join(),
+    divider && `${divider.renderMode} ${divider.rect.join()}`);
+  check("入れ子の transform（translate + scale）も畳む",
+    byName(hero, "Icon Group")?.rect.join() === [40, 54, 48, 48].join(),
+    byName(hero, "Icon Group")?.rect.join());
+  check("<text> は黙って落とさず警告に出す",
+    hero.warnings.some((w) => w.includes("<text>")), hero.warnings.join(" / "));
+
+  // 「矩形に見えるが矩形として扱ってはいけないもの」
+  const icons = parseVectorScene(ICONS_SVG);
+  const tilted = byName(icons, "Tilted");
+  check("回転した矩形は矩形として読まない（軸平行でない）",
+    tilted && tilted.renderMode === "vector-shape" && tilted.cornerRadius === undefined,
+    tilted && `${tilted.renderMode} r=${tilted.cornerRadius}`);
+  check("不透明度の付いた図形もベジェのまま",
+    byName(icons, "Ghost")?.shapes?.[0].opacity === 0.5,
+    String(byName(icons, "Ghost")?.shapes?.[0].opacity));
+  const chk = byName(icons, "Check");
+  check("塗りの無い開いたパスは line 扱い",
+    chk && chk.semanticHint === "line" && !!chk.shapes?.[0].stroke,
+    chk && chk.semanticHint);
+
+  // 上限は「シェイプ」に掛ける。容れ物のグループはその上に残る（数だけ見て
+  // 中身の入っていない枠が残る、の逆を避ける）
+  const capped = parseVectorScene(DASHBOARD_SVG, { maxElements: 3 });
+  check("maxElements でシェイプを面積順に切る",
+    capped.elements.filter((e) => e.fill || e.shapes).length === 3 && capped.dropped === 5,
+    `${capped.elements.filter((e) => e.fill || e.shapes).length} kept / ${capped.dropped} dropped`);
+  check("切り落としも決定的",
+    JSON.stringify(parseVectorScene(DASHBOARD_SVG, { maxElements: 3 })) === JSON.stringify(capped));
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

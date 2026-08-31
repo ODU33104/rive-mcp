@@ -1,5 +1,6 @@
 // スクリーンショット検出結果の型と、bbox の包含関係から親子ツリーを組む純関数。
 // ピクセル処理は pageScript.ts 側（canvas が要るため）。ここは Node 単体でテストできる。
+import type { ShapeSpec } from "./rivWriter.js";
 
 // 「どう描くか」(renderMode)と「意味的に何か」(semanticHint)は独立した問いなので分けて持つ。
 // 誤ってvector化すると見た目そのものが壊れる(非矩形の絵やグラデーションを直線パスに潰す)一方、
@@ -7,7 +8,12 @@
 // renderModeの判定は将来「迷ったらraster」に寄せる余地を残す必要がある。semanticHintと1本の
 // kindに統合すると、その判定基準の変更がロール付け(panel/text/image/lineの意味)まで
 // 巻き込んでしまい、両者を同時に動かさざるを得なくなる。
-export type RenderMode = "vector-panel" | "raster";
+//
+// "vector-shape" はベクター入力(SVG)専用。任意のベジェ形状を **元の頂点のまま** 持つので、
+// 矩形に丸め込めない図形（アイコン・イラスト・グラデーション付きの図形）でも
+// 見た目を落とさずに編集可能なまま .riv に入れられる。スクリーンショット経路は
+// 画素から頂点を復元できないので、この値を出さない。
+export type RenderMode = "vector-panel" | "raster" | "vector-shape";
 export type SemanticHint = "panel" | "text" | "image" | "line";
 
 export interface RawRegion {
@@ -44,6 +50,18 @@ export interface RawRegion {
   matteInkThick?: number;
   /** eligible のときだけ入る。sliceImage がこの2色で alpha を作る。 */
   matte?: { fg: string; bg: string; space: "srgb" | "linear" };
+  /** renderMode "vector-shape" のときだけ。importSvg が作ったベジェ断片をそのまま持つ。
+   *  **riv_ui_detect の出力には載せない**（1 要素で数百頂点になり、ツールの応答が
+   *  頂点座標で埋まる）。頂点数だけを要約して返すこと。 */
+  shapes?: ShapeSpec[];
+  /** 描画順。小さいほど背面。SVG のように文書順で描画順が決まる入力で使う。
+   *  未指定なら従来どおり y→x 順（スクリーンショット経路は面積順に id を振るのでこれで足りる）。 */
+  zIndex?: number;
+  /** レイヤー名（Figma の id / data-name / aria-label）。名前が無ければ undefined */
+  layerName?: string;
+  /** レイヤー名から読めたロールの候補。**推定ではなく人が付けた名前の引き写し**。
+   *  自分に名前が無ければ、名前を持つ最も近い祖先のものを引き継ぐ。 */
+  roleHint?: string;
 }
 
 export interface UiElement extends RawRegion {

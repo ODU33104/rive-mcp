@@ -6,10 +6,36 @@
 //       linearGradient/radialGradient(userSpaceOnUse/objectBoundingBox)
 import type { ShapeSpec, GroupSpec, GradientSpec } from "./rivWriter.js";
 
+/** <g> ひとつぶんの素性。Figma のフレーム/レイヤーがそのままここに落ちてくる */
+export interface SvgLayerMeta {
+  /** 文書順に振る安定キー。同じ SVG なら常に同じ値になる（下流の id の決定性はこれに依る） */
+  key: number;
+  tag: string;
+  /** レイヤー名の候補。Figma は id / data-name / aria-label のどれかにレイヤー名を残す */
+  names: string[];
+}
+
+/** shapes[] と同じ添字で並ぶ、そのシェイプが SVG のどこから来たかの記録。
+ *  形状そのもの（塗り・不透明度・ストローク）は ShapeSpec 側にあるので二重に持たない。 */
+export interface SvgNodeMeta extends SvgLayerMeta {
+  /** 祖先 <g>（外側→内側）。<svg> 直下なら空 */
+  ancestors: SvgLayerMeta[];
+  /** 変換適用後（ルート座標）のアンカー bbox [x, y, w, h]。
+   *  制御点とストロークの太さは含まないので、曲線は実際の描画より数 px 小さく出る */
+  bbox: [number, number, number, number];
+  /** 軸平行の矩形として厳密に表せるときだけ入る。**属性値に変換行列を掛けただけで推定はしていない**
+   *  ので、変換が恒等なら SVG の属性値そのもの（浮動小数の演算誤差も入らない）。 */
+  rect?: { x: number; y: number; width: number; height: number; cornerRadius: number };
+}
+
 export interface SvgImportResult {
   width: number;
   height: number;
   shapes: ShapeSpec[];
+  /** shapes[] と同じ長さ・同じ順序 */
+  nodes: SvgNodeMeta[];
+  /** 取り込めずに捨てた要素の数。warnings の文面を数えるより確実に拾えるようにしてある */
+  skipped: { text: number; image: number };
   warnings: string[];
 }
 
@@ -316,10 +342,28 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
   };
 
   const shapes: ShapeSpec[] = [];
+  const nodes: SvgNodeMeta[] = [];
+  const skipped = { text: 0, image: 0 };
   let autoId = 0;
   const prefix = opts?.idPrefix ?? "";
 
-  const walk = (n: XmlNode, ctx: Ctx): void => {
+  // キーは「visit した順」に振る。walk は文書順の DFS なので、同じ SVG からは必ず同じ
+  // キーが出る（vectorScene.ts の要素 id の決定性はこれだけに依っている）。
+  let keyCounter = 0;
+  const keyOf = new Map<XmlNode, number>();
+  const layerMeta = (n: XmlNode): SvgLayerMeta => {
+    let k = keyOf.get(n);
+    if (k === undefined) { k = keyCounter++; keyOf.set(n, k); }
+    return {
+      key: k,
+      tag: n.tag,
+      names: ["id", "data-name", "aria-label"]
+        .map((a) => n.attrs[a])
+        .filter((v): v is string => !!v),
+    };
+  };
+
+  const walk = (n: XmlNode, ctx: Ctx, stack: SvgLayerMeta[]): void => {
     const style = parseStyle(n.attrs.style);
     const get = (k: string) => n.attrs[k] ?? style[k];
     const next: Ctx = {
@@ -335,12 +379,16 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
     if (n.tag === "defs" || n.tag === "clipPath" || n.tag === "mask" || n.tag === "symbol") return;
 
     let subpaths: Subpath[] | null = null;
+    // <rect> の属性値そのもの（変換前）。emitShape で変換を掛けて SvgNodeMeta.rect にする。
+    // ベジェに落としてから矩形を復元すると角丸が円弧からの逆算になるので、ここで持ち回す。
+    let rectAttrs: { x: number; y: number; width: number; height: number; cornerRadius: number } | null = null;
     switch (n.tag) {
       case "path": subpaths = parsePathData(n.attrs.d ?? "", warnings); break;
       case "rect": {
         const x = pf(n.attrs.x), y = pf(n.attrs.y), w = pf(n.attrs.width), h = pf(n.attrs.height);
         let rx = n.attrs.rx !== undefined ? pf(n.attrs.rx) : (n.attrs.ry !== undefined ? pf(n.attrs.ry) : 0);
         rx = Math.min(rx, w / 2, h / 2);
+        rectAttrs = { x, y, width: w, height: h, cornerRadius: rx };
         subpaths = parsePathData(
           rx > 0
             ? `M${x + rx},${y} h${w - 2 * rx} a${rx},${rx} 0 0 1 ${rx},${rx} v${h - 2 * rx} a${rx},${rx} 0 0 1 ${-rx},${rx} h${-(w - 2 * rx)} a${rx},${rx} 0 0 1 ${-rx},${-rx} v${-(h - 2 * rx)} a${rx},${rx} 0 0 1 ${rx},${-rx} Z`
@@ -374,21 +422,30 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
         subpaths = parsePathData(`M${pf(n.attrs.x1)},${pf(n.attrs.y1)} L${pf(n.attrs.x2)},${pf(n.attrs.y2)}`, warnings);
         break;
       case "text":
+        skipped.text++;
         warnings.push("<text> is not imported (use rive-mcp texts[] with a font instead)");
         return;
       case "image":
+        skipped.image++;
         warnings.push("<image> is not imported (embed via riv_create images[])");
         return;
     }
 
     if (subpaths) {
-      if (subpaths.length) emitShape(n, subpaths, next);
+      if (subpaths.length) emitShape(n, subpaths, next, stack, rectAttrs);
       return;
     }
-    n.children.forEach((c) => walk(c, next));
+    // <svg> 自身は「レイヤー」ではないので祖先に積まない（積むと全要素を包む
+    // 中身の無いコンテナが 1 つ増えるだけになる）
+    const childStack = n.tag === "svg" ? stack : [...stack, layerMeta(n)];
+    n.children.forEach((c) => walk(c, next, childStack));
   };
 
-  const emitShape = (n: XmlNode, subpaths: Subpath[], ctx: Ctx): void => {
+  const emitShape = (
+    n: XmlNode, subpaths: Subpath[], ctx: Ctx,
+    stack: SvgLayerMeta[],
+    rectAttrs: { x: number; y: number; width: number; height: number; cornerRadius: number } | null
+  ): void => {
     // 変換をベイク
     const M = mul(originM, ctx.m);
     for (const sp of subpaths) {
@@ -459,6 +516,34 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
     }
     if (!spec.fill && !spec.stroke) return; // 完全不可視は捨てる
     shapes.push(spec);
+
+    const x0 = Math.min(...xs), y0 = Math.min(...ys);
+    const meta: SvgNodeMeta = {
+      ...layerMeta(n),
+      ancestors: stack,
+      bbox: [x0, y0, Math.max(...xs) - x0, Math.max(...ys) - y0],
+    };
+    const rect = rectAttrs ? transformedRect(rectAttrs, M) : rectFromSubpaths(subpaths);
+    if (rect) meta.rect = rect;
+    nodes.push(meta);
+  };
+
+  /** <rect> の属性値に変換を掛ける。回転・スキューが入っている、または角丸が
+   *  非等方スケールで楕円になる場合は「矩形として表せない」ので null（呼び出し側はベジェのまま扱う） */
+  const transformedRect = (
+    r: { x: number; y: number; width: number; height: number; cornerRadius: number },
+    M: M6
+  ): SvgNodeMeta["rect"] | null => {
+    if (Math.abs(M[1]) > 1e-9 || Math.abs(M[2]) > 1e-9) return null;
+    const [ax, ay] = apply(M, r.x, r.y);
+    const [bx, by] = apply(M, r.x + r.width, r.y + r.height);
+    const sx = Math.abs(M[0]), sy = Math.abs(M[3]);
+    if (r.cornerRadius > 0 && Math.abs(sx - sy) > 1e-9) return null; // 角丸が楕円になる
+    return {
+      x: Math.min(ax, bx), y: Math.min(ay, by),
+      width: Math.abs(bx - ax), height: Math.abs(by - ay),
+      cornerRadius: r.cornerRadius * sx,
+    };
   };
 
   const gradientSpec = (
@@ -488,10 +573,39 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
     return { type: "linear", stops, start: s, end: e };
   };
 
-  walk(svg, { m: I, strokeWidth: 1, opacity: 1, fillOpacity: 1 });
+  walk(svg, { m: I, strokeWidth: 1, opacity: 1, fillOpacity: 1 }, []);
   const totalVerts = shapes.reduce((n, s) => n + (s.subpaths?.reduce((m, sp) => m + sp.points.length, 0) ?? 0), 0);
   if (totalVerts > 3000) warnings.push(`${totalVerts} vertices — consider simplifying the SVG (performance)`);
-  return { width, height, shapes, warnings };
+  return { width, height, shapes, nodes, skipped, warnings };
+}
+
+/** 直線だけでできた軸平行の四角形なら、その矩形を返す（Figma は矩形をパスで書き出すことがある）。
+ *  cubic の制御点が線分上に乗っていることまで確かめるので、曲線を矩形と誤認しない。 */
+function rectFromSubpaths(subpaths: Subpath[]): SvgNodeMeta["rect"] | null {
+  if (subpaths.length !== 1) return null;
+  const sp = subpaths[0];
+  if (!sp.closed || sp.anchors.length !== 4) return null;
+  const onSegment = (px: number, py: number, ax: number, ay: number, bx: number, by: number): boolean => {
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) return Math.hypot(px - ax, py - ay) < 1e-6;
+    return Math.abs((px - ax) * dy - (py - ay) * dx) / len < 1e-6;
+  };
+  for (let i = 0; i < 4; i++) {
+    const a = sp.anchors[i], b = sp.anchors[(i + 1) % 4];
+    if (!onSegment(a.outX, a.outY, a.x, a.y, b.x, b.y)) return null;
+    if (!onSegment(b.inX, b.inY, a.x, a.y, b.x, b.y)) return null;
+  }
+  const eq = (u: number, v: number) => Math.abs(u - v) < 1e-6;
+  const p = sp.anchors;
+  const horizontalFirst = eq(p[0].y, p[1].y) && eq(p[1].x, p[2].x) && eq(p[2].y, p[3].y) && eq(p[3].x, p[0].x);
+  const verticalFirst = eq(p[0].x, p[1].x) && eq(p[1].y, p[2].y) && eq(p[2].x, p[3].x) && eq(p[3].y, p[0].y);
+  if (!horizontalFirst && !verticalFirst) return null;
+  const xs = p.map((a) => a.x), ys = p.map((a) => a.y);
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const width = Math.max(...xs) - x, height = Math.max(...ys) - y;
+  if (width <= 0 || height <= 0) return null;
+  return { x, y, width, height, cornerRadius: 0 };
 }
 
 function findTag(n: XmlNode, tag: string): XmlNode | null {

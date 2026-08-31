@@ -17,6 +17,10 @@ do not.
 Each element becomes either a vector rectangle or a slice of the original image.
 Roles pick the entrance, and cards and buttons get hover and press states.
 
+**A screenshot is the entrance for when the source is gone.** If you have the
+design as an SVG, pass `svgPath` instead and skip every estimate on this page —
+see [If you still have the vector source](#if-you-still-have-the-vector-source).
+
 ## What each field means
 
 `renderMode` is how an element will be rebuilt — `vector-panel` for a flat
@@ -228,6 +232,85 @@ single raster. What stops this from swallowing a row of cards is the colour in t
 gaps: a gradient's gap holds the shade that was dropped, a card's margin holds the
 page behind it.
 
+## If you still have the vector source, use it
+
+Everything above is the price of working from pixels. When the design exists as
+an SVG — Figma's right-click → Copy as SVG, or any Illustrator export — pass
+`svgPath` instead of `imagePath` to the same two tools and none of that price is
+paid: the rectangles, fills, corner radii and the parent/child tree are read out
+of the file, not recovered from it.
+
+```
+riv_ui_detect     svgPath, overlayPath   → element tree + numbered overlay
+riv_ui_prototype  svgPath, outPath, roles → .riv
+```
+
+The overlay is drawn on a rasterisation of the SVG, so it looks like the
+screenshot version. What differs in the element tree:
+
+- The tree is the SVG's own `<g>` nesting. Nothing is inferred from bounding
+  boxes, so a group that wraps a single rectangle stays in the tree as a group.
+- `renderMode` gains **`vector-shape`**: artwork that is not an axis-aligned
+  rectangle keeps its real bezier vertices, gradients and strokes. It animates
+  as a whole through a wrapper group, the same way `riv_import_svg` fragments
+  do. `vector-panel` is used only where the shape really is a rectangle — a
+  `<rect>`, or a closed path whose four straight edges are axis-aligned — and
+  its numbers are the attribute values with the group transform applied, not an
+  estimate. `raster` never appears.
+- A rectangle whose fill is a gradient, or which carries its own `opacity`,
+  comes through as `vector-shape` rather than `vector-panel`: an element's
+  `fill` can only hold one colour, and a bezier copy keeps the gradient exact.
+- A rotated rectangle is not reported as a rectangle. Corner radii under a
+  non-uniform scale would be elliptical, so those stay beziers too.
+- Figma layer names (`id`, `data-name`, `aria-label`) arrive as `roleHint` —
+  "Primary Button" becomes `button`. A shape with no name of its own inherits
+  the nearest named ancestor's hint, because Figma names the frame, not the
+  rectangle inside it. Auto-generated names ("Frame 427320", "Vector") produce
+  no hint. `riv_ui_prototype` uses the hint for any id you do not give a role.
+- `renderRisk`, `demoted` and `patched` do not appear. They are the output of
+  guessing, and there is nothing to guess.
+- **No screenshot is embedded.** The screenshot path keeps the original image as
+  the bottom layer so undetected pixels are not lost; here there are none, and
+  keeping it would mean every element left a copy of itself behind when it moved.
+
+`<text>` and `<image>` are not imported yet. They are counted and reported in
+`warnings` rather than dropped silently — outline the text in the design tool if
+you need it now. `maxElements` caps the number of shapes (default 300); the
+groups that contain them are kept on top of that count.
+
+### Measured
+
+Three SVGs written for this repository (`test/fixtures/vectorSvg.mjs`) cover
+rounded rectangles, a linear and a radial gradient, an icon path, a
+stroke-only open path, a rotated rounded rectangle, a translucent ellipse,
+nested `translate`/`scale` transforms, a rectangle written as a path, and one
+`<text>`. `node test/vectorScene.mjs` renders the generated `.riv` and compares
+it, pixel by pixel, with the browser's rasterisation of the same SVG.
+
+| | MAE | worst pixel |
+|---|---|---|
+| dashboard 640×420 | 0.000022 | 38 |
+| hero 400×300 (contains `<text>`) | 0.00052 | 195 |
+| icons 240×120 | 0.00053 | 60 |
+| mean | **0.00036** | |
+| mean, excluding the one with `<text>` | 0.00027 | |
+
+The screenshot path's own reconstruction error over sixteen real pages averages
+0.0004, so the vector path is under it — but the two numbers are not measuring
+the same thing. The screenshot figure comes from a simulation that starts from
+the original image, so anything undetected is exact by construction; this one is
+an actual `.riv` rendered by Rive and compared against an independent
+rasteriser. Inside a rectangle, away from its edges, the worst channel
+difference is **0**: fills and corner radii are not merely close, they are the
+attribute values. What remains is antialiasing along curves and diagonals, where
+two rasterisers simply disagree, and the hole where the `<text>` should be —
+which is why the fixture that has one is the worst of the three despite being
+the simplest.
+
+Every element in all three files is editable (`vector-panel` or `vector-shape`);
+the screenshot path manages 15 of 20 known panels on its tuning set and 2.5% on
+a dark-mode page.
+
 ## What the numbers are measured against
 
 Nine screenshots tune the thresholds; seven more are held back and opened only at
@@ -261,10 +344,11 @@ rather than moving, which the tool reports.
 ## Checking it yourself
 
 ```
-node test/uiDetect.mjs        # detection, the boundary gate, stripe merging, mattes
-node test/uiPrototype.mjs     # roles, motion restrictions
+node test/uiDetect.mjs        # detection, the boundary gate, stripe merging, mattes, SVG parsing
+node test/uiPrototype.mjs     # roles, motion restrictions, vector-shape assembly
 node test/detectorMetrics.mjs # the measurement harness itself
 node test/releaseGate.mjs     # real pages + transformation stability
+node test/vectorScene.mjs     # the vector path, rendered and compared with the SVG
 ```
 
 `test/fixtures/gateSweep.mjs` and `test/fixtures/stripeSweep.mjs` re-derive the
