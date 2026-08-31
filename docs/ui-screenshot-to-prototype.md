@@ -379,6 +379,40 @@ bitmap, and the Japanese heading that no bundled font can spell. The screenshot
 path manages 15 of 20 known panels on its tuning set and 2.5% on a dark-mode
 page.
 
+### Straight from Figma, if you opt in
+
+Everything above works on a file you already have. `figmaUrl` skips the export
+step by asking Figma's REST API for the frame as SVG — and it is **off unless
+`FIGMA_TOKEN` is set** in the environment that runs the server. Without the
+variable the argument errors and no request is made; with it, this is the only
+place in the whole server that touches the network.
+
+```
+FIGMA_TOKEN=figd_…   riv_ui_detect     figmaUrl, overlayPath   → element tree + overlay
+                     riv_ui_prototype  figmaUrl, outPath, roles → .riv
+```
+
+Pass a link to **one frame** — in Figma, select it and use *Copy link to
+selection*, which puts the `node-id` in the URL. Both the old `/file/<key>/` and
+the current `/design/<key>/` forms are understood. The token needs no more than
+read access to the file; it is sent as the `X-Figma-Token` header and never
+appears in a URL, a log line, or an error message.
+
+Two hosts are contacted, in this order: `api.figma.com`, which is the only URL
+this server composes, and then the one Figma's own response names as the place it
+rendered the SVG (an S3 bucket). Nothing else. The export asks for
+`svg_outline_text=false` so text arrives as `<text>` rather than as paths —
+otherwise the editable-text path above would have nothing to work with — and
+`svg_include_id=true` so layer names survive as role hints.
+
+The frame is fetched again for the second call, which is the one way this differs
+from `svgPath`: a design edited between the two calls can shift the element ids,
+and the prototype's warnings say so. If that matters, export once to a file and
+use `svgPath`.
+
+The offline default is unchanged. There is no fallback that quietly turns the
+network on, and no other tool in this server reads `FIGMA_TOKEN`.
+
 ### Rive already opens SVGs — what this adds
 
 Pasting Figma's "Copy as SVG" into the Rive editor has worked since 2023, and

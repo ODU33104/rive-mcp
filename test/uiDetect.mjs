@@ -968,5 +968,97 @@ try {
     rotated.warnings.join(" / "));
 }
 
+// --- M5: Figma REST（既定オフ）------------------------------------------------
+// 実トークンでの疎通はここでは確かめない（CI に鍵を置かない）。確かめるのは
+// 「鍵が無ければ何も起きないこと」「どこへ出て行くか」「取れた SVG が svgPath と
+// 同じ結果になること」の 3 つ。fetch を差し替えて全部オフラインで見る。
+{
+  const { parseFigmaUrl, fetchFigmaSvg } = await import("../dist/figmaImport.js");
+  const { parseVectorScene } = await import("../dist/vectorScene.js");
+  const { DASHBOARD_SVG } = await import("./fixtures/vectorSvg.mjs");
+  const throws = (fn, re) => {
+    try {
+      fn();
+      return false;
+    } catch (e) {
+      return re.test(e.message);
+    }
+  };
+
+  // URL 解析: 旧 /file/ と現行 /design/ の両方、node-id は "1-2" でも "%3A" でも
+  check("design 形式の URL から key と node を取る",
+    JSON.stringify(parseFigmaUrl("https://www.figma.com/design/abc123XYZ/My-Kit?node-id=12-345&t=x")) ===
+      JSON.stringify({ key: "abc123XYZ", nodeId: "12:345" }));
+  check("file 形式（旧）も同じように読む",
+    parseFigmaUrl("https://figma.com/file/KEY0/Name?node-id=1%3A2").nodeId === "1:2");
+  check("node-id が無ければどのフレームか決められないと言う",
+    throws(() => parseFigmaUrl("https://www.figma.com/design/KEY0/Name"), /node-id/));
+  check("figma.com 以外の URL は断る",
+    throws(() => parseFigmaUrl("https://evil.example/design/KEY0/N?node-id=1-2"), /figma\.com/));
+  check("キーの位置が違う URL も断る",
+    throws(() => parseFigmaUrl("https://www.figma.com/community?node-id=1-2"), /file key/));
+
+  // トークンが無ければ **1 回も** ネットワークに出ない
+  let calls = [];
+  const spyFetch = (url, init) => {
+    calls.push({ url: String(url), init });
+    return Promise.reject(new Error("should not be called"));
+  };
+  const noToken = await fetchFigmaSvg("https://www.figma.com/design/KEY0/N?node-id=1-2", { fetchImpl: spyFetch })
+    .then(() => null, (e) => e);
+  check("トークンが無ければ FIGMA_TOKEN を設定せよと言う",
+    noToken && /FIGMA_TOKEN/.test(noToken.message), noToken?.message?.slice(0, 60));
+  check("トークンが無いときは 1 回も取りに行かない", calls.length === 0, String(calls.length));
+
+  // 取得経路。1 つ目は api.figma.com（こちらが組み立てる唯一の URL）、
+  // 2 つ目は Figma 自身が名指しした書き出し先
+  calls = [];
+  const RENDER = "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/deadbeef";
+  const mock = (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).startsWith("https://api.figma.com/")) {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ err: null, images: { "1:2": RENDER } }) });
+    }
+    return Promise.resolve({ ok: true, status: 200, text: async () => DASHBOARD_SVG });
+  };
+  const got = await fetchFigmaSvg("https://www.figma.com/design/KEY0/N?node-id=1-2",
+    { token: "figd_SECRET", fetchImpl: mock });
+  check("api.figma.com にしか自分からは出て行かない",
+    calls.length === 2 && new URL(calls[0].url).host === "api.figma.com" && calls[1].url === RENDER,
+    calls.map((c) => new URL(c.url).host).join(" -> "));
+  check("テキストをパスに潰させない（svg_outline_text=false）",
+    calls[0].url.includes("svg_outline_text=false") && calls[0].url.includes("format=svg"),
+    calls[0].url);
+  check("レイヤー名を残させる（svg_include_id=true）", calls[0].url.includes("svg_include_id=true"));
+  check("トークンはヘッダにだけ載せる",
+    calls[0].init.headers["X-Figma-Token"] === "figd_SECRET" && !calls[0].url.includes("figd_"),
+    calls[0].url);
+  check("node-id は API の形（1:2）で問い合わせる", calls[0].url.includes(encodeURIComponent("1:2")));
+
+  // 取れた SVG は svgPath とまったく同じ経路に流れる = 同じ要素ツリーになる
+  check("取得した SVG が svgPath と同じ結果になる",
+    JSON.stringify(parseVectorScene(got.svg).elements) ===
+      JSON.stringify(parseVectorScene(DASHBOARD_SVG).elements));
+
+  // 失敗の文面にトークンを混ぜない（応答をそのまま貼る運用で漏れるのが一番ありがち）
+  const failing = async (status, body) => {
+    const f = (url) =>
+      Promise.resolve(String(url).startsWith("https://api.figma.com/")
+        ? { ok: status === 200, status, statusText: "", json: async () => body }
+        : { ok: true, status: 200, text: async () => DASHBOARD_SVG });
+    return fetchFigmaSvg("https://www.figma.com/design/KEY0/N?node-id=1-2", { token: "figd_SECRET", fetchImpl: f })
+      .then(() => null, (e) => e);
+  };
+  const forbidden = await failing(403, {});
+  check("403 は「無効か権限が無いか」を断定せずに伝える",
+    /403/.test(forbidden.message) && /invalid or expired/.test(forbidden.message), forbidden.message);
+  check("エラー文にトークンが出ない", !forbidden.message.includes("figd_"), forbidden.message);
+  const noNode = await failing(200, { err: null, images: { "9:9": RENDER } });
+  check("求めたノードが返ってこなければそう言う",
+    /rendered no image/.test(noNode.message), noNode.message);
+  const apiErr = await failing(200, { err: "Invalid parameter", images: {} });
+  check("API の err をそのまま伝える", /Invalid parameter/.test(apiErr.message), apiErr.message);
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

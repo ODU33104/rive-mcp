@@ -11,8 +11,13 @@ function fsMod2Sig(path) {
   return readFileSync(path).subarray(0, 4).toString("hex");
 }
 
+// FIGMA_TOKEN は**必ず外して**起動する。開発機に鍵が置いてあるかどうかで e2e の
+// 結果が変わってはいけないし、テストが本物の Figma を叩いてしまうのも避ける
+const childEnv = { ...process.env };
+delete childEnv.FIGMA_TOKEN;
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
   stdio: ["pipe", "pipe", "inherit"],
+  env: childEnv,
 });
 
 let buffer = "";
@@ -1175,7 +1180,19 @@ try {
       check("SVG から作った .riv を描画できる", !vframe.isError, textOf(vframe).slice(0, 160));
       const both = await callTool("riv_ui_detect", { svgPath: svgFile, imagePath: shotPath });
       check("imagePath と svgPath の同時指定は断る",
-        both.isError && textOf(both).includes("not both"), textOf(both).slice(0, 120));
+        both.isError && textOf(both).includes("not several"), textOf(both).slice(0, 120));
+
+      // Figma REST は既定オフ。**このテストはトークンを持たないので何も取りに行かない**
+      // （実トークンでの疎通は未検証。ここで見るのは「鍵が無ければ動かない」ことだけ）
+      {
+        const noToken = await callTool("riv_ui_detect", {
+          figmaUrl: "https://www.figma.com/design/KEY0/Name?node-id=1-2",
+        });
+        check("FIGMA_TOKEN が無ければ figmaUrl は断られる",
+          noToken.isError && textOf(noToken).includes("FIGMA_TOKEN"), textOf(noToken).slice(0, 140));
+        check("断り文はローカル経路を案内する",
+          textOf(noToken).includes("svgPath"), textOf(noToken).slice(0, 200));
+      }
 
       // --- <text> と <image>。フォントに無い文字は豆腐にせず絵にする（必ず警告つき） ---
       {

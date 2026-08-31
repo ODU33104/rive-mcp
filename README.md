@@ -82,7 +82,10 @@ parent/child tree are read out of the file, artwork keeps its real bezier
 vertices, `<text>` becomes editable Rive text (pass `fonts` for the design's own
 faces; a run whose glyphs are missing is baked as a picture rather than as tofu,
 always with a warning), embedded `<image>` data becomes an image asset, and Figma
-layer names arrive as role hints. Nothing is fetched over the network. Rive's
+layer names arrive as role hints. Nothing is fetched over the network — unless
+you opt in by setting `FIGMA_TOKEN`, which enables a `figmaUrl` argument that
+pulls one frame straight from Figma's REST API; without the variable that
+argument errors and no request is made, and no other tool reads it. Rive's
 editor has accepted pasted SVGs since 2023; what these two calls add is that no
 editor and no person are in the loop, and that the roles bring the motion —
 entrances, ambient loops and hover/press states — with them.

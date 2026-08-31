@@ -24,6 +24,7 @@ import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, paletteFromColors, type Mood } from "./designTokens.js";
 import { detectUiElements, type UiElement } from "./uiDetect.js";
 import { parseVectorScene, editableRatio, attachTextRasters, type VectorFont } from "./vectorScene.js";
+import { fetchFigmaSvg } from "./figmaImport.js";
 import { buildPrototypeScene, attachRasterAssets, ROLE_MOTION, type Role } from "./uiPrototype.js";
 import { overlayLabels } from "./uiOverlay.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
@@ -1670,14 +1671,14 @@ server.registerTool(
 /** 同梱 Inter (OFL)。riv_create の fonts[] 既定と同じファイルを使う */
 const BUNDLED_FONT = join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "inter.ttf");
 
-function vectorSceneFrom(
-  svgPath: string,
+/** SVG 文字列 → シーン。baseDir は `<image href="logo.png">` を探す場所（無ければ探さない）。 */
+function vectorSceneOf(
+  svgText: string,
+  baseDir: string | null,
+  origin: string,
   maxElements?: number,
   fonts?: Array<{ family?: string; path: string }>
 ) {
-  const src = resolve(svgPath);
-  if (!existsSync(src)) throw new Error(`SVG not found: ${src}`);
-  const svgText = readFileSync(src, "utf8");
   const userFonts: VectorFont[] = (fonts ?? []).map((f) => {
     const p = resolve(f.path);
     if (!existsSync(p)) throw new Error(`Font file not found: ${p}`);
@@ -1692,14 +1693,37 @@ function vectorSceneFrom(
     // <image href="logo.png"> は SVG の隣を見る。**ネットワークには一切出ない**
     // （http(s) は svgImport が警告して捨てる）
     resolveHref: (href) => {
-      const p = resolve(dirname(src), decodeURIComponent(href.split("#")[0]));
+      if (!baseDir) return null;
+      const p = resolve(baseDir, decodeURIComponent(href.split("#")[0]));
       return existsSync(p) ? new Uint8Array(readFileSync(p)) : null;
     },
   });
-  if (!scene.elements.length) {
-    throw new Error(`No drawable elements found in ${src}.`);
-  }
+  if (!scene.elements.length) throw new Error(`No drawable elements found in ${origin}.`);
   return { svgText, scene };
+}
+
+function vectorSceneFrom(
+  svgPath: string,
+  maxElements?: number,
+  fonts?: Array<{ family?: string; path: string }>
+) {
+  const src = resolve(svgPath);
+  if (!existsSync(src)) throw new Error(`SVG not found: ${src}`);
+  return vectorSceneOf(readFileSync(src, "utf8"), dirname(src), src, maxElements, fonts);
+}
+
+/** Figma REST 経路（M5）。**FIGMA_TOKEN が無ければ何も起きない** — このサーバーが
+ *  ネットワークに出るのはここだけで、既定はローカル完結のまま。取ってきた SVG は
+ *  svgPath とまったく同じ経路を通る（下流に「どこから来たか」は伝わらない）。 */
+async function vectorSceneFromFigma(
+  figmaUrl: string,
+  maxElements?: number,
+  fonts?: Array<{ family?: string; path: string }>
+) {
+  const { svg, ref } = await fetchFigmaSvg(figmaUrl, { token: process.env.FIGMA_TOKEN });
+  // baseDir は無い。Figma の書き出しはビットマップを data URI で埋めてくるので、
+  // 相対パスの <image> はそもそも出てこない
+  return { ...vectorSceneOf(svg, null, `Figma node ${ref.nodeId}`, maxElements, fonts), ref };
 }
 
 /** 頂点座標・画像バイト列・SVG 断片をそのまま返すとツールの応答がそれで埋まる。要約だけ載せる。 */
@@ -1720,13 +1744,15 @@ function withoutVertices(elements: UiElement[]) {
 /** riv_ui_prototype の SVG 経路。スクリーンショット経路との違いは
  *  **元画像を一切埋め込まないこと**（切り出しも base も無い）だけ。 */
 async function svgPrototype(a: {
-  svgPath: string; outPath: string;
+  svgPath?: string; figmaUrl?: string; outPath: string;
   roles: Array<{ id: number; role: string; name?: string }>;
   maxElements?: number; interactions?: boolean;
   entranceMs?: number; stagger?: number; ambient?: boolean;
   fonts?: Array<{ family?: string; path: string }>;
 }): Promise<ToolResult> {
-  const { scene } = vectorSceneFrom(a.svgPath, a.maxElements, a.fonts);
+  const { scene } = a.svgPath
+    ? vectorSceneFrom(a.svgPath, a.maxElements, a.fonts)
+    : await vectorSceneFromFigma(a.figmaUrl!, a.maxElements, a.fonts);
   // ラスタへ降格したテキストだけはブラウザが要る（その 1 行を透明背景で焼く）。
   // シーンを組み立てる前に済ませて、下流には bytes だけを渡す
   await attachTextRasters(scene.elements, host);
@@ -1758,7 +1784,14 @@ async function svgPrototype(a: {
   if (unknownIds.length) {
     warnings.push(
       `These ids are not in the element list and were ignored: ${unknownIds.join(", ")}. ` +
-        `Check that svgPath and maxElements match the riv_ui_detect call.`
+        `Check that ${a.svgPath ? "svgPath" : "figmaUrl"} and maxElements match the riv_ui_detect call.`
+    );
+  }
+  if (a.figmaUrl) {
+    // ファイルと違い、2 回の呼び出しの間にデザインが変わりうる。id が動く唯一の理由なので明示する
+    warnings.push(
+      `The frame was fetched from Figma again for this call. If it changed since riv_ui_detect, ` +
+        `the element ids in roles may no longer line up.`
     );
   }
   const editable = editableRatio(scene.elements);
@@ -1770,7 +1803,7 @@ async function svgPrototype(a: {
       text: JSON.stringify({
         outPath: out,
         bytes: bytes.length,
-        source: { width: scene.width, height: scene.height, kind: "svg" },
+        source: { width: scene.width, height: scene.height, kind: a.figmaUrl ? "figma" : "svg" },
         elements: withRoles.length,
         editable: `${editable.editable}/${editable.total}`,
         text: scene.textStats,
@@ -1798,6 +1831,7 @@ server.registerTool(
     inputSchema: {
       imagePath: z.string().optional().describe("Screenshot or design comp (PNG/JPEG)"),
       svgPath: z.string().optional().describe("Vector source instead of a screenshot (Figma/Illustrator SVG export). Nothing is estimated: rects, fills, corner radii and nesting come straight from the file"),
+      figmaUrl: z.string().optional().describe("A Figma link to one frame (Copy link to selection), fetched as SVG through the Figma REST API. Off unless FIGMA_TOKEN is set in the server's environment; without it this errors and nothing is requested. Everything else works offline"),
       overlayPath: z.string().optional().describe("Where to write the numbered overlay PNG"),
       minArea: z.number().optional().describe("Ignore regions smaller than this many pixels (default 576). imagePath only"),
       maxElements: z.number().optional().describe("Keep at most this many elements, largest first (default 120, or 300 for svgPath)"),
@@ -1810,10 +1844,14 @@ server.registerTool(
         .describe("Fonts for the SVG's <text>. svgPath only — pass the same list to riv_ui_prototype"),
     },
   },
-  wrap(async (a: { imagePath?: string; svgPath?: string; overlayPath?: string; minArea?: number; maxElements?: number; fonts?: Array<{ family?: string; path: string }> }) => {
-    if (a.imagePath && a.svgPath) return err("Pass imagePath or svgPath, not both");
-    if (a.svgPath) {
-      const { svgText, scene } = vectorSceneFrom(a.svgPath, a.maxElements, a.fonts);
+  wrap(async (a: { imagePath?: string; svgPath?: string; figmaUrl?: string; overlayPath?: string; minArea?: number; maxElements?: number; fonts?: Array<{ family?: string; path: string }> }) => {
+    if ([a.imagePath, a.svgPath, a.figmaUrl].filter(Boolean).length > 1) {
+      return err("Pass one of imagePath, svgPath or figmaUrl, not several");
+    }
+    if (a.svgPath || a.figmaUrl) {
+      const { svgText, scene } = a.svgPath
+        ? vectorSceneFrom(a.svgPath, a.maxElements, a.fonts)
+        : await vectorSceneFromFigma(a.figmaUrl!, a.maxElements, a.fonts);
       let overlayPath: string | undefined;
       if (a.overlayPath) {
         // オーバーレイは SVG をラスタライズした絵の上に描く（番号を見て役割を決めるのは
@@ -1826,7 +1864,7 @@ server.registerTool(
         content: [{
           type: "text",
           text: JSON.stringify({
-            source: { width: scene.width, height: scene.height, kind: "svg" },
+            source: { width: scene.width, height: scene.height, kind: a.figmaUrl ? "figma" : "svg" },
             elements: withoutVertices(scene.elements),
             palette: paletteFromColors(
               scene.elements.filter((e) => e.fill).map((e) => ({ hex: e.fill!, weight: e.rect[2] * e.rect[3] }))
@@ -1836,12 +1874,12 @@ server.registerTool(
             editable: `${editable.editable}/${editable.total}`,
             text: scene.textStats,
             warnings: scene.warnings,
-            next: "Assign a role to each element, then call riv_ui_prototype with the same svgPath.",
+            next: `Assign a role to each element, then call riv_ui_prototype with the same ${a.figmaUrl ? "figmaUrl" : "svgPath"}.`,
           }, null, 1),
         }],
       };
     }
-    if (!a.imagePath) return err("Provide imagePath (screenshot) or svgPath (vector source)");
+    if (!a.imagePath) return err("Provide imagePath (screenshot), svgPath (vector source) or figmaUrl");
     const src = resolve(a.imagePath);
     if (!existsSync(src)) return err(`Image not found: ${src}`);
     const png = readFileSync(src);
@@ -1891,10 +1929,11 @@ server.registerTool(
     description:
       "Take the elements from riv_ui_detect, assign each one a role, and get back a working .riv: every element becomes a shape or an image asset, each gets an entrance appropriate to its role, and buttons and cards get hover and press states. Roles: " +
       (Object.keys(ROLE_MOTION) as Role[]).join(", ") +
-      ". Elements you leave unassigned animate as a generic panel. Pass the same imagePath (or svgPath), minArea and maxElements you gave riv_ui_detect, or the ids will not line up. With svgPath no screenshot is embedded, every element stays editable, and the file reproduces the SVG; its <text> becomes real Rive text you can re-type at runtime, and its embedded <image> data becomes an image asset.",
+      ". Elements you leave unassigned animate as a generic panel. Pass the same imagePath (or svgPath), minArea and maxElements you gave riv_ui_detect, or the ids will not line up. With svgPath no screenshot is embedded, every element stays editable, and the file reproduces the SVG; its <text> becomes real Rive text you can re-type at runtime, and its embedded <image> data becomes an image asset. figmaUrl fetches the same thing straight from Figma, and needs FIGMA_TOKEN.",
     inputSchema: {
       imagePath: z.string().optional().describe("The same screenshot you passed to riv_ui_detect"),
       svgPath: z.string().optional().describe("The same SVG you passed to riv_ui_detect (instead of imagePath)"),
+      figmaUrl: z.string().optional().describe("The same Figma link you passed to riv_ui_detect. Off unless FIGMA_TOKEN is set in the server's environment. The frame is fetched again, so a design that changed in between can move the ids"),
       outPath: z.string().describe("Where to write the .riv"),
       roles: z
         .array(
@@ -1921,15 +1960,17 @@ server.registerTool(
     },
   },
   wrap(async (a: {
-    imagePath?: string; svgPath?: string; outPath: string;
+    imagePath?: string; svgPath?: string; figmaUrl?: string; outPath: string;
     roles: Array<{ id: number; role: string; name?: string }>;
     minArea?: number; maxElements?: number; interactions?: boolean;
     entranceMs?: number; stagger?: number; ambient?: boolean;
     fonts?: Array<{ family?: string; path: string }>;
   }) => {
-    if (a.imagePath && a.svgPath) return err("Pass imagePath or svgPath, not both");
-    if (a.svgPath) return svgPrototype(a as typeof a & { svgPath: string });
-    if (!a.imagePath) return err("Provide imagePath (screenshot) or svgPath (vector source)");
+    if ([a.imagePath, a.svgPath, a.figmaUrl].filter(Boolean).length > 1) {
+      return err("Pass one of imagePath, svgPath or figmaUrl, not several");
+    }
+    if (a.svgPath || a.figmaUrl) return svgPrototype(a);
+    if (!a.imagePath) return err("Provide imagePath (screenshot), svgPath (vector source) or figmaUrl");
     const src = resolve(a.imagePath);
     if (!existsSync(src)) return err(`Image not found: ${src}`);
     const png = readFileSync(src);
