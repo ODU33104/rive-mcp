@@ -244,7 +244,7 @@ npm run test:e2e   # spawns the real server, exercises all 32 tools over JSON-RP
 - The Canvas2D preview renderer can show mesh seams that don't exist in the file (WebGL/Skia render clean)
 - `fill.feather`/`stroke.feather` (vector blur) writes correctly to the `.riv` but isn't rendered by this server's Canvas2D preview pipeline — only a GPU Rive Renderer supports it
 - Luau scripting and the Layout engine are not generated (runtime spec still moving)
-- Screenshot detection (`riv_ui_detect`) is sensitive to small pixel changes: a lossless PNG re-encode is identical, but ±2 RGB noise reclassifies most vector panels and can nearly triple the element count. A panel with a label in it is often returned as a picture rather than an editable rectangle — it is found, but not made editable. See [docs/ui-screenshot-to-prototype.md](docs/ui-screenshot-to-prototype.md) for the measured numbers and the rest of the limits
+- Screenshot detection (`riv_ui_detect`) is sensitive to small pixel changes: a lossless PNG re-encode is identical, but ±2 RGB noise reclassifies most vector panels and can nearly triple the element count. Every flat fill is test-rendered against the screenshot before it ships, so what survives is measured to match — the cost is that fidelity wins over editability on photo-heavy pages, where most elements come back as slices that only fade. See [docs/ui-screenshot-to-prototype.md](docs/ui-screenshot-to-prototype.md) for the measured numbers and the rest of the limits
 
 ## License
 
