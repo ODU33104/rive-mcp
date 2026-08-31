@@ -1,0 +1,137 @@
+{
+  "recordedAt": "2026-08-31T04:19:04.003Z",
+  "note": "SVG 入力の実測。テキスト入りは字形が違い(フォントは SVG に入っていない)、objectBoundingBox の斜め/放射 gradient は Rive では原理的に一致しないので、その 2 種は MAE を退行検知にだけ使う。文字の置き場所はインクの被覆と bbox の IoU で見る。",
+  "fixtures": 6,
+  "reconstructionMaeMean": 0.006808821435145561,
+  "reconstructionMaeMeanExact": 0.0002746386749144102,
+  "editableRatioMin": 0.6666666666666666,
+  "textRatioMin": 0.5,
+  "rows": [
+    {
+      "name": "dashboard",
+      "hasText": false,
+      "pixelExact": true,
+      "size": "640x420",
+      "elements": 12,
+      "editable": "8/8",
+      "ratio": 1,
+      "text": {
+        "total": 0,
+        "asText": 0,
+        "rasterized": 0
+      },
+      "textRatio": 1,
+      "mae": 0.000022452731092436974,
+      "worst": 38,
+      "rectInteriorWorst": 0,
+      "inkIouMin": null,
+      "inkCoverageMin": null,
+      "bytes": 2704
+    },
+    {
+      "name": "hero",
+      "hasText": true,
+      "pixelExact": false,
+      "size": "400x300",
+      "elements": 9,
+      "editable": "6/6",
+      "ratio": 1,
+      "text": {
+        "total": 1,
+        "asText": 1,
+        "rasterized": 0
+      },
+      "textRatio": 1,
+      "mae": 0.0003578104575163399,
+      "worst": 195,
+      "rectInteriorWorst": 0,
+      "inkIouMin": 0.9459459459459459,
+      "inkCoverageMin": 0.1308641975308642,
+      "bytes": 31701
+    },
+    {
+      "name": "icons",
+      "hasText": false,
+      "pixelExact": true,
+      "size": "240x120",
+      "elements": 5,
+      "editable": "4/4",
+      "ratio": 1,
+      "text": {
+        "total": 0,
+        "asText": 0,
+        "rasterized": 0
+      },
+      "textRatio": 1,
+      "mae": 0.0005268246187363834,
+      "worst": 60,
+      "rectInteriorWorst": 0,
+      "inkIouMin": null,
+      "inkCoverageMin": null,
+      "bytes": 2186
+    },
+    {
+      "name": "text-card",
+      "hasText": true,
+      "pixelExact": false,
+      "size": "360x240",
+      "elements": 10,
+      "editable": "7/8",
+      "ratio": 0.875,
+      "text": {
+        "total": 5,
+        "asText": 5,
+        "rasterized": 0
+      },
+      "textRatio": 1,
+      "mae": 0.021554072863713386,
+      "worst": 224,
+      "rectInteriorWorst": 224,
+      "inkIouMin": 0.875,
+      "inkCoverageMin": 0.1323529411764706,
+      "bytes": 33680
+    },
+    {
+      "name": "cjk",
+      "hasText": true,
+      "pixelExact": false,
+      "size": "300x120",
+      "elements": 3,
+      "editable": "2/3",
+      "ratio": 0.6666666666666666,
+      "text": {
+        "total": 2,
+        "asText": 1,
+        "rasterized": 1
+      },
+      "textRatio": 0.5,
+      "mae": 0.0061716775599128535,
+      "worst": 142,
+      "rectInteriorWorst": 0,
+      "inkIouMin": 0.9770992366412213,
+      "inkCoverageMin": 0.1187704248366013,
+      "bytes": 33632
+    },
+    {
+      "name": "nested",
+      "hasText": false,
+      "pixelExact": false,
+      "size": "320x320",
+      "elements": 11,
+      "editable": "6/6",
+      "ratio": 1,
+      "text": {
+        "total": 0,
+        "asText": 0,
+        "rasterized": 0
+      },
+      "textRatio": 1,
+      "mae": 0.01222009037990196,
+      "worst": 188,
+      "rectInteriorWorst": 0,
+      "inkIouMin": null,
+      "inkCoverageMin": null,
+      "bytes": 2482
+    }
+  ]
+}

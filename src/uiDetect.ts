@@ -13,7 +13,11 @@ import type { ShapeSpec } from "./rivWriter.js";
 // 矩形に丸め込めない図形（アイコン・イラスト・グラデーション付きの図形）でも
 // 見た目を落とさずに編集可能なまま .riv に入れられる。スクリーンショット経路は
 // 画素から頂点を復元できないので、この値を出さない。
-export type RenderMode = "vector-panel" | "raster" | "vector-shape";
+//
+// "vector-text" も同じくベクター入力専用。SVG の <text> がフォントごと .riv の Text 要素に
+// なったもので、ランタイムから文字列を差し替えられる。フォントに無い文字があるときは
+// この値にならず raster へ降格する（vectorScene.ts のフォント 3 段はしご）。
+export type RenderMode = "vector-panel" | "raster" | "vector-shape" | "vector-text";
 export type SemanticHint = "panel" | "text" | "image" | "line";
 
 export interface RawRegion {
@@ -62,6 +66,30 @@ export interface RawRegion {
   /** レイヤー名から読めたロールの候補。**推定ではなく人が付けた名前の引き写し**。
    *  自分に名前が無ければ、名前を持つ最も近い祖先のものを引き継ぐ。 */
   roleHint?: string;
+  /** renderMode "vector-text" のときだけ。x/y は**テキストボックスの左上**（SVG の
+   *  ベースライン y から ascent を引いた値）で、Rive の Text 原点と同じ規約。 */
+  textRun?: {
+    content: string;
+    x: number;
+    y: number;
+    fontSize: number;
+    color: string;
+    /** SceneSpec.fonts[].id */
+    font: string;
+    /** cmap+hmtx から出した合計 advance（px）。text-anchor の補正はこの値で済ませてある */
+    advanceWidth: number;
+  };
+  /** raster のうち「自前の画素を持っている」もの — SVG の <image> の中身か、
+   *  ラスタ降格したテキストを透明背景で焼いた切り抜き。**riv_ui_detect の出力には載せない**。 */
+  imageBytes?: Uint8Array;
+  /** imageBytes を rect の大きさに合わせる倍率。Rive の画像は自然サイズ×scale で描かれるので、
+   *  SVG の width/height と元ビットマップの画素数が違うときはここで合わせる（1 なら等倍）。 */
+  imageScale?: number;
+  /** ラスタ降格したテキストを単独で描くための自己完結 SVG。attachTextRasters が bytes に変える */
+  svgFragment?: string;
+  /** 背景が焼き付いていない raster であることの印。スクリーンショットの矩形切り出しと違い、
+   *  透明の周りを持っているので動かしても元の位置に同じ絵が残らない（motionCapabilityOf を参照）。 */
+  ownPixels?: boolean;
 }
 
 export interface UiElement extends RawRegion {

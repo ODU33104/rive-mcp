@@ -59,7 +59,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_diff` | Structural diff between two `.riv` files |
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, **bezier curve editor** (drag control points, hold/linear/cubic, 10 easing presets), **state machine graph view** (node graph, transition details, lint-highlighted states, live playback highlighting), **onion skin** overlay, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
 | `riv_studio_notes` | Read the Studio's Agent chat (with auto-attached context: selection, artboard, animation, playback time) and post replies back into it |
-| `riv_ui_detect` | **Read a UI screenshot**: finds panels, text runs and pictures, returns a nested element tree with rects, corner radii and fill colours plus a numbered overlay PNG. Each element says how it would be rebuilt (`vector-panel` / `raster`) and what it looks like (`panel` / `text` / `image` / `line`) as separate fields. Geometry only — it does not know a button from a card |
+| `riv_ui_detect` | **Read a UI screenshot** — or, with `svgPath`, a Figma/Illustrator SVG: finds panels, text runs and pictures, returns a nested element tree with rects, corner radii and fill colours plus a numbered overlay PNG. Each element says how it would be rebuilt (`vector-panel` / `vector-shape` / `vector-text` / `raster`) and what it looks like (`panel` / `text` / `image` / `line`) as separate fields. Geometry only — it does not know a button from a card |
 | `riv_ui_prototype` | **Screenshot → animated `.riv` in one more call**: assign a role to each detected element and get a working prototype — vector rectangles where they can be rebuilt, image slices where they cannot, an entrance per role, hover and press on cards and buttons. Text is cut out with a real alpha matte where the colour model holds; where it does not, the element fades in place instead of moving, and the warnings say so |
 | `riv_setup` | **One-call environment setup**: installs the bundled `rive-design-guidelines` skill into `.claude/skills/` (project) or `~/.claude/skills/` (user) so the pro workflow auto-triggers — confirmation happens via the normal tool-permission prompt |
 
@@ -74,6 +74,18 @@ and text is cut out with a real alpha matte where the colour model holds — whe
 it does not, the element fades in place instead of moving, and says so. The
 detector's limits are measured rather than asserted: see
 [docs/ui-screenshot-to-prototype.md](docs/ui-screenshot-to-prototype.md).
+
+**If you still have the vector source, pass `svgPath` instead of `imagePath`** to
+the same two tools — Figma's right-click → Copy as SVG, or any Illustrator
+export. Nothing is estimated then: rectangles, fills, corner radii and the
+parent/child tree are read out of the file, artwork keeps its real bezier
+vertices, `<text>` becomes editable Rive text (pass `fonts` for the design's own
+faces; a run whose glyphs are missing is baked as a picture rather than as tofu,
+always with a warning), embedded `<image>` data becomes an image asset, and Figma
+layer names arrive as role hints. Nothing is fetched over the network. Rive's
+editor has accepted pasted SVGs since 2023; what these two calls add is that no
+editor and no person are in the loop, and that the roles bring the motion —
+entrances, ambient loops and hover/press states — with them.
 
 ### Showcases: professional assets in, professional motion out
 

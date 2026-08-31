@@ -23,7 +23,7 @@ import { startStudio, stopStudio, takeStudioNotes, postStudioReply } from "./stu
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, paletteFromColors, type Mood } from "./designTokens.js";
 import { detectUiElements, type UiElement } from "./uiDetect.js";
-import { parseVectorScene, editableRatio } from "./vectorScene.js";
+import { parseVectorScene, editableRatio, attachTextRasters, type VectorFont } from "./vectorScene.js";
 import { buildPrototypeScene, attachRasterAssets, ROLE_MOTION, type Role } from "./uiPrototype.js";
 import { overlayLabels } from "./uiOverlay.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
@@ -1667,25 +1667,53 @@ server.registerTool(
 // 検出器ではなく vectorScene.ts を通る。renderRisk / demoted / patched のような
 // **推定の副産物は SVG 経路には存在しない**ので、無理に 0 を返さず出さない。
 // 失敗は投げる（呼び出しは両方とも wrap の中なので、そのまま Error: 応答になる）
-function vectorSceneFrom(svgPath: string, maxElements?: number) {
+/** 同梱 Inter (OFL)。riv_create の fonts[] 既定と同じファイルを使う */
+const BUNDLED_FONT = join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "inter.ttf");
+
+function vectorSceneFrom(
+  svgPath: string,
+  maxElements?: number,
+  fonts?: Array<{ family?: string; path: string }>
+) {
   const src = resolve(svgPath);
   if (!existsSync(src)) throw new Error(`SVG not found: ${src}`);
   const svgText = readFileSync(src, "utf8");
-  const scene = parseVectorScene(svgText, { maxElements });
+  const userFonts: VectorFont[] = (fonts ?? []).map((f) => {
+    const p = resolve(f.path);
+    if (!existsSync(p)) throw new Error(`Font file not found: ${p}`);
+    return { label: basename(p), bytes: new Uint8Array(readFileSync(p)), family: f.family };
+  });
+  const scene = parseVectorScene(svgText, {
+    maxElements,
+    fonts: userFonts,
+    ...(existsSync(BUNDLED_FONT)
+      ? { fallbackFont: { label: "the bundled Inter", family: "Inter", bytes: new Uint8Array(readFileSync(BUNDLED_FONT)) } }
+      : {}),
+    // <image href="logo.png"> は SVG の隣を見る。**ネットワークには一切出ない**
+    // （http(s) は svgImport が警告して捨てる）
+    resolveHref: (href) => {
+      const p = resolve(dirname(src), decodeURIComponent(href.split("#")[0]));
+      return existsSync(p) ? new Uint8Array(readFileSync(p)) : null;
+    },
+  });
   if (!scene.elements.length) {
-    throw new Error(`No shapes found in ${src}. <text> and <image> are not imported yet.`);
+    throw new Error(`No drawable elements found in ${src}.`);
   }
   return { svgText, scene };
 }
 
-/** 頂点の座標そのものを返すとツールの応答が数千行になる。要約だけ載せる。 */
+/** 頂点座標・画像バイト列・SVG 断片をそのまま返すとツールの応答がそれで埋まる。要約だけ載せる。 */
 function withoutVertices(elements: UiElement[]) {
   return elements.map((e) => {
-    if (!e.shapes) return e;
-    const { shapes, ...rest } = e;
-    const vertices = shapes.reduce(
-      (n, s) => n + (s.subpaths?.reduce((m, sp) => m + sp.points.length, 0) ?? s.points?.length ?? 0), 0);
-    return { ...rest, vertices };
+    const { shapes, imageBytes, svgFragment, ...rest } = e;
+    const out: Record<string, unknown> = { ...rest };
+    if (shapes) {
+      out.vertices = shapes.reduce(
+        (n, s) => n + (s.subpaths?.reduce((m, sp) => m + sp.points.length, 0) ?? s.points?.length ?? 0), 0);
+    }
+    if (imageBytes) out.imageBytes = imageBytes.length;
+    if (svgFragment) out.rasterizedText = true;
+    return out;
   });
 }
 
@@ -1696,8 +1724,12 @@ async function svgPrototype(a: {
   roles: Array<{ id: number; role: string; name?: string }>;
   maxElements?: number; interactions?: boolean;
   entranceMs?: number; stagger?: number; ambient?: boolean;
+  fonts?: Array<{ family?: string; path: string }>;
 }): Promise<ToolResult> {
-  const { scene } = vectorSceneFrom(a.svgPath, a.maxElements);
+  const { scene } = vectorSceneFrom(a.svgPath, a.maxElements, a.fonts);
+  // ラスタへ降格したテキストだけはブラウザが要る（その 1 行を透明背景で焼く）。
+  // シーンを組み立てる前に済ませて、下流には bytes だけを渡す
+  await attachTextRasters(scene.elements, host);
   const roleById = new Map(a.roles.map((r) => [r.id, r]));
   const unknownIds = a.roles.filter((r) => !scene.elements.some((e) => e.id === r.id)).map((r) => r.id);
   const withRoles = scene.elements.map((e) => {
@@ -1712,6 +1744,7 @@ async function svgPrototype(a: {
     source: { width: scene.width, height: scene.height },
     interactions: a.interactions ?? true,
     motion: { entranceMs: a.entranceMs, stagger: a.stagger, ambient: a.ambient ?? true },
+    fonts: scene.fonts,
   });
   // **base 画像を貼らない。** スクリーンショット経路が最背面に元画像を置くのは
   // 「検出できなかった画素を失わないため」で、ベクター入力にはそれが無い。貼ると
@@ -1740,7 +1773,10 @@ async function svgPrototype(a: {
         source: { width: scene.width, height: scene.height, kind: "svg" },
         elements: withRoles.length,
         editable: `${editable.editable}/${editable.total}`,
-        rasterAssets: 0,
+        text: scene.textStats,
+        // ベクター経路で画像アセットになるのは、SVG に埋め込まれていたビットマップと
+        // ラスタへ降格したテキストだけ。元画像の切り出しは 1 枚も無い
+        rasterAssets: built.spec.images?.length ?? 0,
         animations: built.spec.animations?.map((an) => an.name) ?? [],
         stateMachines: (Array.isArray(built.spec.stateMachine)
           ? built.spec.stateMachine
@@ -1758,19 +1794,26 @@ server.registerTool(
   {
     title: "Detect UI elements in a screenshot",
     description:
-      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii within about a pixel. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card. If you have the vector source, pass svgPath instead of imagePath: nothing is estimated, the element tree is the SVG's own group nesting, non-rectangular artwork comes through as \"vector-shape\" with its real bezier vertices, and Figma layer names arrive as roleHint. <text> and <image> are not imported yet and are reported in warnings.",
+      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii within about a pixel. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card. If you have the vector source, pass svgPath instead of imagePath: nothing is estimated, the element tree is the SVG's own group nesting, non-rectangular artwork comes through as \"vector-shape\" with its real bezier vertices, <text> becomes \"vector-text\" (editable Rive text — the bundled Inter is substituted unless you pass fonts, and a run whose glyphs are missing is baked as a picture instead, always with a warning), embedded <image> data comes through as its own pixels, and Figma layer names arrive as roleHint.",
     inputSchema: {
       imagePath: z.string().optional().describe("Screenshot or design comp (PNG/JPEG)"),
       svgPath: z.string().optional().describe("Vector source instead of a screenshot (Figma/Illustrator SVG export). Nothing is estimated: rects, fills, corner radii and nesting come straight from the file"),
       overlayPath: z.string().optional().describe("Where to write the numbered overlay PNG"),
       minArea: z.number().optional().describe("Ignore regions smaller than this many pixels (default 576). imagePath only"),
       maxElements: z.number().optional().describe("Keep at most this many elements, largest first (default 120, or 300 for svgPath)"),
+      fonts: z
+        .array(z.object({
+          family: z.string().optional().describe("The SVG font-family this file is for. Omit to use it for every run"),
+          path: z.string().describe("Path to a .ttf/.otf file"),
+        }))
+        .optional()
+        .describe("Fonts for the SVG's <text>. svgPath only — pass the same list to riv_ui_prototype"),
     },
   },
-  wrap(async (a: { imagePath?: string; svgPath?: string; overlayPath?: string; minArea?: number; maxElements?: number }) => {
+  wrap(async (a: { imagePath?: string; svgPath?: string; overlayPath?: string; minArea?: number; maxElements?: number; fonts?: Array<{ family?: string; path: string }> }) => {
     if (a.imagePath && a.svgPath) return err("Pass imagePath or svgPath, not both");
     if (a.svgPath) {
-      const { svgText, scene } = vectorSceneFrom(a.svgPath, a.maxElements);
+      const { svgText, scene } = vectorSceneFrom(a.svgPath, a.maxElements, a.fonts);
       let overlayPath: string | undefined;
       if (a.overlayPath) {
         // オーバーレイは SVG をラスタライズした絵の上に描く（番号を見て役割を決めるのは
@@ -1791,6 +1834,7 @@ server.registerTool(
             overlayPath,
             dropped: scene.dropped,
             editable: `${editable.editable}/${editable.total}`,
+            text: scene.textStats,
             warnings: scene.warnings,
             next: "Assign a role to each element, then call riv_ui_prototype with the same svgPath.",
           }, null, 1),
@@ -1847,7 +1891,7 @@ server.registerTool(
     description:
       "Take the elements from riv_ui_detect, assign each one a role, and get back a working .riv: every element becomes a shape or an image asset, each gets an entrance appropriate to its role, and buttons and cards get hover and press states. Roles: " +
       (Object.keys(ROLE_MOTION) as Role[]).join(", ") +
-      ". Elements you leave unassigned animate as a generic panel. Pass the same imagePath (or svgPath), minArea and maxElements you gave riv_ui_detect, or the ids will not line up. With svgPath the .riv is pure vector — no screenshot is embedded, every element stays editable, and the file reproduces the SVG.",
+      ". Elements you leave unassigned animate as a generic panel. Pass the same imagePath (or svgPath), minArea and maxElements you gave riv_ui_detect, or the ids will not line up. With svgPath no screenshot is embedded, every element stays editable, and the file reproduces the SVG; its <text> becomes real Rive text you can re-type at runtime, and its embedded <image> data becomes an image asset.",
     inputSchema: {
       imagePath: z.string().optional().describe("The same screenshot you passed to riv_ui_detect"),
       svgPath: z.string().optional().describe("The same SVG you passed to riv_ui_detect (instead of imagePath)"),
@@ -1867,6 +1911,13 @@ server.registerTool(
       entranceMs: z.number().optional().describe("How long the whole entrance takes, in milliseconds"),
       stagger: z.number().optional().describe("Delay between elements entering, in milliseconds"),
       ambient: z.boolean().optional().describe("Give roles with an idle motion a looping ambient animation (default true)"),
+      fonts: z
+        .array(z.object({
+          family: z.string().optional().describe("The SVG font-family this file is for. Omit to use it for every run"),
+          path: z.string().describe("Path to a .ttf/.otf file"),
+        }))
+        .optional()
+        .describe("Fonts for the SVG's <text>. svgPath only. Without a match the bundled Inter is used and a warning says so; a run whose glyphs the font lacks (CJK, say) is baked as a picture rather than embedded as tofu"),
     },
   },
   wrap(async (a: {
@@ -1874,6 +1925,7 @@ server.registerTool(
     roles: Array<{ id: number; role: string; name?: string }>;
     minArea?: number; maxElements?: number; interactions?: boolean;
     entranceMs?: number; stagger?: number; ambient?: boolean;
+    fonts?: Array<{ family?: string; path: string }>;
   }) => {
     if (a.imagePath && a.svgPath) return err("Pass imagePath or svgPath, not both");
     if (a.svgPath) return svgPrototype(a as typeof a & { svgPath: string });

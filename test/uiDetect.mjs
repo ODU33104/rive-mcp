@@ -808,8 +808,10 @@ try {
   check("入れ子の transform（translate + scale）も畳む",
     byName(hero, "Icon Group")?.rect.join() === [40, 54, 48, 48].join(),
     byName(hero, "Icon Group")?.rect.join());
-  check("<text> は黙って落とさず警告に出す",
-    hero.warnings.some((w) => w.includes("<text>")), hero.warnings.join(" / "));
+  check("フォントを渡さなければ <text> はラスタへ降格する（豆腐を焼き込まない）",
+    hero.elements.some((e) => e.semanticHint === "text" && e.renderMode === "raster") &&
+      hero.warnings.some((w) => w.includes("no usable font")),
+    hero.warnings.join(" / "));
 
   // 「矩形に見えるが矩形として扱ってはいけないもの」
   const icons = parseVectorScene(ICONS_SVG);
@@ -833,6 +835,137 @@ try {
     `${capped.elements.filter((e) => e.fill || e.shapes).length} kept / ${capped.dropped} dropped`);
   check("切り落としも決定的",
     JSON.stringify(parseVectorScene(DASHBOARD_SVG, { maxElements: 3 })) === JSON.stringify(capped));
+}
+
+// --- M3: <text> → Rive Text / <image> → 画像アセット ---------------------------
+// 置き場所は **フォントの hhea/hmtx から決める**（canvas 計測を使わない）。同じ SVG から
+// 同じ .riv が出ることを実行環境に依存させないため。ここではその計算そのものを検算する。
+{
+  const { parseVectorScene, editableRatio } = await import("../dist/vectorScene.js");
+  const { readFontMetrics, glyphCoverage } = await import("../dist/fontSubset.js");
+  const { TEXT_CARD_SVG, CJK_SVG, TINY_PNG_DATA_URI } = await import("./fixtures/vectorSvg.mjs");
+  const { readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const INTER = new Uint8Array(readFileSync(join(HERE, "..", "assets", "inter.ttf")));
+  const inter = { label: "inter.ttf", family: "Inter", bytes: INTER };
+  const m = readFontMetrics(INTER);
+  const card = parseVectorScene(TEXT_CARD_SVG, { fallbackFont: inter });
+  const byName = (s, name) => s.elements.find((e) => e.layerName === name);
+
+  // 1) text-anchor 3 種。x の補正は hmtx の advance 合計そのもので決まる
+  const advanceOf = (text, size) => {
+    let a = 0;
+    for (const ch of text) a += m.advanceOf(ch.codePointAt(0));
+    return (a * size) / m.unitsPerEm;
+  };
+  const title = byName(card, "Title");
+  check("text-anchor=start は x をそのまま使う",
+    title?.textRun?.x === 40, String(title?.textRun?.x));
+  check("advance 幅は hmtx から出す",
+    title && Math.abs(title.textRun.advanceWidth - advanceOf("Monthly report", 24)) < 1e-9,
+    title && `${title.textRun.advanceWidth} vs ${advanceOf("Monthly report", 24)}`);
+  const centered = byName(card, "Centered");
+  check("text-anchor=middle は advance の半分だけ左へ寄せる",
+    centered && Math.abs(centered.textRun.x - (180 - advanceOf("centered", 14) / 2)) < 1e-9,
+    centered && String(centered.textRun.x));
+  const trailing = byName(card, "Trailing");
+  check("text-anchor=end は advance ぶん左へ寄せる",
+    trailing && Math.abs(trailing.textRun.x - (320 - advanceOf("right", 14))) < 1e-9,
+    trailing && String(trailing.textRun.x));
+
+  // 2) ベースライン変換。SVG の y はベースライン、Rive の Text は上端原点
+  const expectedTop = 60 - (m.ascent * 24) / m.unitsPerEm;
+  check("y はベースラインから ascent を引いた値（±1px）",
+    title && Math.abs(title.textRun.y - expectedTop) <= 1,
+    title && `${title.textRun.y} vs ${expectedTop}`);
+  check("ascent は hhea から読めている（0 でも 1em でもない）",
+    m.ascent > 0 && m.ascent < m.unitsPerEm * 1.2, `${m.ascent}/${m.unitsPerEm}`);
+
+  // <tspan> は 1 行 = 1 要素。Rive の折り返しに任せない（フォント差で行が変わる）
+  const bodyLines = card.elements.filter((e) => e.textRun && e.layerName === "Body");
+  check("<tspan> の改行は 1 行 = 1 要素にほどく", bodyLines.length === 2, String(bodyLines.length));
+  check("行ごとに y が違う",
+    bodyLines.length === 2 && bodyLines[0].textRun.y < bodyLines[1].textRun.y);
+
+  // 3) CJK は同梱 Inter に無い → ラスタ降格 + 何が無いかを言う警告
+  const cjk = parseVectorScene(CJK_SVG, { fallbackFont: inter });
+  const heading = byName(cjk, "Heading");
+  check("グリフの無い行はテキスト化せずラスタへ降格する",
+    heading?.renderMode === "raster" && heading.semanticHint === "text" && !!heading.svgFragment,
+    heading?.renderMode);
+  check("降格した行は自分だけを描く SVG を持つ（背景を焼き付けない）",
+    heading?.svgFragment?.includes("売上") && !heading.svgFragment.includes("<rect"),
+    heading?.svgFragment?.slice(0, 60));
+  check("降格の警告に足りない文字が入る",
+    cjk.warnings.some((w) => w.includes("no glyph for") && w.includes("'売'")),
+    cjk.warnings.join(" / "));
+  check("同じ SVG の中でも、描ける行はテキストのまま残る",
+    byName(cjk, "Sub")?.renderMode === "vector-text", byName(cjk, "Sub")?.renderMode);
+  check("テキストの内訳を数で返す",
+    cjk.textStats.total === 2 && cjk.textStats.asText === 1 && cjk.textStats.rasterized === 1,
+    JSON.stringify(cjk.textStats));
+  check("被覆チェックはサブセッタと同じ cmap を通る",
+    glyphCoverage(INTER, "売上レポート").missing.length === 6 &&
+      glyphCoverage(INTER, "Latin").missing.length === 0);
+  check("ラスタ降格した行は編集可能に数えない",
+    editableRatio(cjk.elements).editable === 2 && editableRatio(cjk.elements).total === 3,
+    JSON.stringify(editableRatio(cjk.elements)));
+
+  // 4) fonts[] のユーザーフォントが実際に使われる（代替の警告が出ない）
+  const userBytes = new Uint8Array(INTER); // 同じ中身でも別オブジェクト = 由来を見分けられる
+  const withUser = parseVectorScene(TEXT_CARD_SVG, {
+    fonts: [{ family: "Inter", label: "my-inter.ttf", bytes: userBytes }],
+    fallbackFont: inter,
+  });
+  check("font-family が一致するユーザーフォントを使う",
+    withUser.fonts.length === 1 && withUser.fonts[0].bytes === userBytes,
+    String(withUser.fonts.length));
+  check("ユーザーフォントで足りているときは代替の警告を出さない",
+    !withUser.warnings.some((w) => w.includes("is not in fonts[]")), withUser.warnings.join(" / "));
+  check("テキストは fonts[] の id を指す",
+    withUser.elements.filter((e) => e.textRun).every((e) => e.textRun.font === withUser.fonts[0].id));
+  const other = parseVectorScene(CJK_SVG, {
+    fonts: [{ family: "Inter", label: "my-inter.ttf", bytes: userBytes }],
+    fallbackFont: inter,
+  });
+  check("一致しない font-family は同梱フォントへ代替し、必ず警告する",
+    other.warnings.some((w) => w.includes("'noto sans jp'") && w.includes("inter.ttf")),
+    other.warnings.join(" / "));
+
+  // 5) 落とした属性は黙って落とさない
+  check("letter-spacing は捨てるが警告する",
+    card.warnings.some((w) => w.includes("letter-spacing")), card.warnings.join(" / "));
+  check("font-weight は合成しないと言う",
+    card.warnings.some((w) => w.includes("font-weight")), card.warnings.join(" / "));
+
+  // <image>: data URI は中身を持つ。http(s) は取りに行かない
+  const thumb = card.elements.find((e) => e.semanticHint === "image" && e.imageBytes);
+  check("<image> の data URI をデコードして持つ",
+    thumb && thumb.imageBytes.length === 87 && thumb.rect.join() === [20, 180, 48, 48].join(),
+    thumb && `${thumb.imageBytes?.length} ${thumb.rect.join()}`);
+  check("ビットマップの画素数から拡大率を出す（16px 幅 → 48px 配置 = 3 倍）",
+    thumb && Math.abs(thumb.imageScale - 3) < 1e-9, thumb && String(thumb.imageScale));
+  check("<image> は焼き付きが無いので自由に動かせる印が付く", thumb?.ownPixels === true);
+  check("http(s) の <image> は取りに行かず警告する",
+    card.warnings.some((w) => w.includes("example.invalid") && w.includes("network")) &&
+      !card.elements.some((e) => e.layerName === "Remote"),
+    card.warnings.join(" / "));
+  check("data URI の中身がそのまま入る（PNG シグネチャ）",
+    thumb && [...thumb.imageBytes.slice(0, 4)].join() === [137, 80, 78, 71].join() &&
+      TINY_PNG_DATA_URI.startsWith("data:image/png;base64,"));
+
+  // 回転したテキストは「回さずに置く」のではなくラスタへ。見た目を黙って変えない
+  const rotated = parseVectorScene(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+      <text x="10" y="50" font-size="12" fill="#000000" transform="rotate(30 50 50)">Tilted</text></svg>`,
+    { fallbackFont: inter }
+  );
+  check("回転したテキストはラスタへ降格する",
+    rotated.elements[0].renderMode === "raster" &&
+      rotated.warnings.some((w) => w.includes("rotated or skewed")),
+    rotated.warnings.join(" / "));
 }
 
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---

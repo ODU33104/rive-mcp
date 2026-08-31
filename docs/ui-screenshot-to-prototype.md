@@ -256,7 +256,10 @@ screenshot version. What differs in the element tree:
   do. `vector-panel` is used only where the shape really is a rectangle — a
   `<rect>`, or a closed path whose four straight edges are axis-aligned — and
   its numbers are the attribute values with the group transform applied, not an
-  estimate. `raster` never appears.
+  estimate.
+- `renderMode` also gains **`vector-text`**: a `<text>` line that became a real
+  Rive text object, re-typable at runtime. `raster` appears only for an embedded
+  bitmap or for a line of text the font could not spell — see below.
 - A rectangle whose fill is a gradient, or which carries its own `opacity`,
   comes through as `vector-shape` rather than `vector-panel`: an element's
   `fill` can only hold one colour, and a bezier copy keeps the gradient exact.
@@ -273,27 +276,93 @@ screenshot version. What differs in the element tree:
   the bottom layer so undetected pixels are not lost; here there are none, and
   keeping it would mean every element left a copy of itself behind when it moved.
 
-`<text>` and `<image>` are not imported yet. They are counted and reported in
-`warnings` rather than dropped silently — outline the text in the design tool if
-you need it now. `maxElements` caps the number of shapes (default 300); the
-groups that contain them are kept on top of that count.
+- `<image>` whose data is embedded (`href="data:image/png;base64,…"`) becomes an
+  image asset with those exact bytes; a relative `href` is read from next to the
+  SVG. An `http(s)` one is **not fetched** — the URL goes into `warnings` and the
+  element is left out. Nothing here reaches the network.
+
+`maxElements` caps the number of drawables (default 300); the groups that
+contain them are kept on top of that count.
+
+### Text, and why it cannot be exact
+
+The design's font file is not in the SVG. Something has to give, and what gives
+is stated rather than hidden — every substitution and every demotion produces a
+warning.
+
+`riv_ui_prototype` and `riv_ui_detect` take `fonts: [{ family?, path }]`. A run's
+`font-family` is matched against `family` (an entry without one is used for
+every run); pass the same list to both tools so the element ids line up. Then,
+in order:
+
+1. **A font you passed** is used as-is.
+2. **Otherwise the bundled Inter** (OFL) is substituted, and a warning names the
+   family that was asked for. Letterforms and widths will not match the design.
+3. **If the chosen font has no glyph for some character** — Japanese text against
+   Inter, say — that run is *not* embedded. It is rendered on its own,
+   transparent background and behind, and goes in as a picture. A warning lists
+   the characters that were missing. Tofu is never baked into a `.riv`: the run
+   looks right and only loses the ability to be re-typed at runtime.
+
+The same demotion catches rotated and skewed runs, for the same reason — placing
+them unrotated would quietly change the picture.
+
+Placement is computed from the font's own tables, never by measuring on a
+canvas, so the same SVG always produces the same `.riv`:
+
+- `y` in SVG is the **baseline**; a Rive text box is positioned by its top. The
+  top is `y − ascent × fontSize / unitsPerEm`, with `ascent` read from `hhea`.
+- `text-anchor` is applied by shifting `x` by the sum of the `hmtx` advances,
+  rather than by giving the box a width and letting Rive align inside it.
+- Every `<tspan>` on its own line becomes its **own** text object. Rive's own
+  wrapping is not used: with a substituted font the line breaks would land
+  somewhere other than where the designer put them.
+- `letter-spacing` has no equivalent in a Rive text run and is dropped, with a
+  warning. `font-weight` is not synthesised — pass that weight's file in `fonts`.
+
+Each run carries the layer's name, so the text can be swapped at runtime from
+any Rive runtime.
+
+### What is still approximate
+
+`objectBoundingBox` gradients — the kind Figma writes — are defined on a unit
+square and stretched onto the shape. A Rive gradient's bands are always
+perpendicular to its direction, so on a shape that is not square, a **diagonal**
+linear gradient or **any** radial one cannot be matched exactly; the importer
+says so in `warnings`. Measured on a 240×160 rectangle: diagonal MAE 0.023,
+radial 0.037, and axis-aligned **0.000000**. `gradientUnits="userSpaceOnUse"` is
+exact in every direction.
 
 ### Measured
 
-Three SVGs written for this repository (`test/fixtures/vectorSvg.mjs`) cover
-rounded rectangles, a linear and a radial gradient, an icon path, a
-stroke-only open path, a rotated rounded rectangle, a translucent ellipse,
-nested `translate`/`scale` transforms, a rectangle written as a path, and one
-`<text>`. `node test/vectorScene.mjs` renders the generated `.riv` and compares
-it, pixel by pixel, with the browser's rasterisation of the same SVG.
+Six SVGs written for this repository (`test/fixtures/vectorSvg.mjs`) cover
+rounded rectangles, linear and radial gradients, an icon path, a stroke-only
+open path, a rotated rounded rectangle, a translucent ellipse, nested
+`translate`/`scale` transforms, a rectangle written as a path, four levels of
+grouping, `<text>` with all three `text-anchor` values and multi-line `<tspan>`,
+Japanese text against a Latin font, and an embedded PNG.
+`node test/vectorScene.mjs` builds the `.riv`, renders it, and compares it with
+the browser's rasterisation of the same SVG; it writes
+`test/fixtures/vector-baseline.json`, which `test/releaseGate.mjs` then checks
+for regressions.
 
-| | MAE | worst pixel |
-|---|---|---|
-| dashboard 640×420 | 0.000022 | 38 |
-| hero 400×300 (contains `<text>`) | 0.00052 | 195 |
-| icons 240×120 | 0.00053 | 60 |
-| mean | **0.00036** | |
-| mean, excluding the one with `<text>` | 0.00027 | |
+| | MAE | editable | text kept as text | ink IoU |
+|---|---|---|---|---|
+| dashboard 640×420 | 0.000022 | 8/8 | — | — |
+| icons 240×120 | 0.00053 | 4/4 | — | — |
+| hero 400×300 | 0.00036 | 6/6 | 1/1 | 0.95 |
+| text-card 360×240 | 0.022 | 7/8 | 5/5 | 0.88 |
+| cjk 300×120 | 0.0062 | 2/3 | 1/2 | 0.98 |
+| nested 320×320 | 0.012 | 6/6 | — | — |
+| mean, pixel-exact fixtures only | **0.00027** | | | |
+
+Only the first two are expected to match pixel for pixel; the others carry a
+substituted font or an `objectBoundingBox` gradient, and their MAE is a
+regression tripwire rather than a score. For the ones with text, what is checked
+instead is where the ink lands: the bounding box of the rendered glyphs against
+the bounding box of the browser's, which agrees to an IoU of 0.88–1.00. The
+baseline conversion is what that number is really testing, and it holds to
+within a pixel.
 
 The screenshot path's own reconstruction error over sixteen real pages averages
 0.0004, so the vector path is under it — but the two numbers are not measuring
@@ -303,13 +372,26 @@ an actual `.riv` rendered by Rive and compared against an independent
 rasteriser. Inside a rectangle, away from its edges, the worst channel
 difference is **0**: fills and corner radii are not merely close, they are the
 attribute values. What remains is antialiasing along curves and diagonals, where
-two rasterisers simply disagree, and the hole where the `<text>` should be —
-which is why the fixture that has one is the worst of the three despite being
-the simplest.
+two rasterisers simply disagree.
 
-Every element in all three files is editable (`vector-panel` or `vector-shape`);
-the screenshot path manages 15 of 20 known panels on its tuning set and 2.5% on
-a dark-mode page.
+Everything is editable except the two things that cannot be: the embedded
+bitmap, and the Japanese heading that no bundled font can spell. The screenshot
+path manages 15 of 20 known panels on its tuning set and 2.5% on a dark-mode
+page.
+
+### Rive already opens SVGs — what this adds
+
+Pasting Figma's "Copy as SVG" into the Rive editor has worked since 2023, and
+for a designer sitting in the editor that is the better route. Two things are
+different here:
+
+1. **No editor, and no person.** `riv_ui_detect` → `riv_ui_prototype` is two
+   tool calls with no GUI anywhere in the loop, so a build step or an agent can
+   regenerate the `.riv` from the current design on every commit.
+2. **Motion arrives with the roles.** The paste gives you static artwork. Here
+   each element's role — read from the Figma layer name where there is one —
+   selects an entrance, an ambient loop, and hover/press states, and the state
+   machine comes out wired. Nothing is keyframed by hand.
 
 ## What the numbers are measured against
 
@@ -350,6 +432,9 @@ node test/detectorMetrics.mjs # the measurement harness itself
 node test/releaseGate.mjs     # real pages + transformation stability
 node test/vectorScene.mjs     # the vector path, rendered and compared with the SVG
 ```
+
+`test/vectorScene.mjs` writes `test/fixtures/vector-baseline.json` (or wherever
+`--out` points); the release gate reads it back and fails on a regression.
 
 `test/fixtures/gateSweep.mjs` and `test/fixtures/stripeSweep.mjs` re-derive the
 thresholds. Every number in this file came out of one of these.

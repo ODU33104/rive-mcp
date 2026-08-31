@@ -2,6 +2,7 @@
 import type { UiElement } from "./uiDetect.js";
 import type {
   SceneSpec, ShapeSpec, ImageSpec, GroupSpec, AnimationSpec, TrackSpec, StateMachineSpec,
+  TextSpec, FontSpec,
 } from "./rivWriter.js";
 import type { PresetSpec, PresetName } from "./motionPresets.js";
 
@@ -75,10 +76,14 @@ export function motionCapabilityOf(el: {
   renderMode: string;
   matteEligible?: boolean;
   matteConfidence?: number;
+  ownPixels?: boolean;
   rect: [number, number, number, number];
 }): MotionCapability {
   // ベクター図形は塗りで再構成されるので焼き付きが無い。制限しない。
   if (el.renderMode !== "raster") return "free";
+  // ベクター入力の raster（<image> の中身・ラスタ降格したテキスト）は自分の画素だけを
+  // 持っていて、周りは透明。スクリーンショットの矩形切り出しとは別物なので制限しない。
+  if (el.ownPixels) return "free";
   if (el.matteEligible) return "free";
   const area = el.rect[2] * el.rect[3];
   if ((el.matteConfidence ?? 0) < MERGE_CONFIDENCE_MAX && area <= MERGE_AREA_MAX_PX) return "merge";
@@ -97,6 +102,8 @@ export interface PrototypeInput {
   source: { width: number; height: number };
   interactions: boolean;
   motion: { entranceMs?: number; stagger?: number; ambient?: boolean };
+  /** vector-text 要素が参照するフォント。参照されているのに渡さないと createRiv が落ちる */
+  fonts?: FontSpec[];
 }
 
 type AnimWithPresets = AnimationSpec & { presets?: PresetSpec[] };
@@ -188,6 +195,7 @@ export function buildPrototypeScene(input: PrototypeInput): {
   const shapes: ShapeSpec[] = [];
   const images: ImageSpec[] = [];
   const groups: GroupSpec[] = [];
+  const texts: TextSpec[] = [];
   const rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }> = [];
   const targetIdOf = new Map<number, string>(); // 要素id -> shape/image id（アニメの対象）
   const capabilityOf = new Map<number, MotionCapability>();
@@ -237,6 +245,29 @@ export function buildPrototypeScene(input: PrototypeInput): {
         });
       });
       targetIdOf.set(el.id, gid);
+    } else if (el.renderMode === "vector-text" && el.textRun) {
+      // Text の原点は左上なので、そのまま拡大すると左上を軸に伸びる。vector-shape と同じく
+      // 要素の中心に置いたラッパーグループを動かして、中心を軸にする
+      const gid = `el${el.id}`;
+      groups.push({ id: gid, x: cx, y: cy });
+      const run = el.textRun;
+      texts.push({
+        id: `${gid}_text`,
+        parent: gid,
+        x: run.x - cx,
+        y: run.y - cy,
+        z,
+        // name を付けると .riv のランタイムから文字列を差し替えられる。
+        // 元データのレイヤー名（Figma で人が付けた名前）をそのまま使う
+        runs: [{
+          text: run.content,
+          name: el.name ?? el.layerName ?? `el${el.id}`,
+          fontSize: run.fontSize,
+          color: run.color,
+          font: run.font,
+        }],
+      });
+      targetIdOf.set(el.id, gid);
     } else if (el.renderMode === "raster") {
       // capability が merge の要素は**そもそも切り出さない**。切り出さなければ
       // 背景画像の中に残り、周囲と一緒に動く。信頼度が極端に低い小片を
@@ -254,6 +285,13 @@ export function buildPrototypeScene(input: PrototypeInput): {
         continue;
       }
       const name = `el${el.id}_${el.role}`; // id を含むので role が衝突しても一意
+      if (el.imageBytes) {
+        // ベクター入力の画素は既に手元にある（<image> の中身、または降格したテキストの
+        // 切り抜き）。元画像から切り出す必要が無いので rasterRegions には積まない
+        images.push({ id: name, x: cx, y: cy, scale: el.imageScale ?? 1, z, bytes: el.imageBytes });
+        targetIdOf.set(el.id, name);
+        continue;
+      }
       // matte を持つテキストは、矩形の切り出しではなく前景色+alpha として切り出す。
       // 判定は検出側で済んでおり、ここは「持っていれば渡す」だけ。
       rasterRegions.push({ name, polygon: polygonOf(rect), matte: el.matte });
@@ -397,7 +435,7 @@ export function buildPrototypeScene(input: PrototypeInput): {
     );
   }
 
-  if (shapes.length === 0 && rasterRegions.length === 0) {
+  if (shapes.length === 0 && rasterRegions.length === 0 && images.length === 0 && texts.length === 0) {
     warnings.push(
       `no visual elements produced from ${input.elements.length} input element(s) ` +
         `(all were fully out of image bounds, or panel/line without fill)`
@@ -408,6 +446,9 @@ export function buildPrototypeScene(input: PrototypeInput): {
     artboard: { width: srcW, height: srcH },
     shapes,
     images,
+    ...(texts.length ? { texts } : {}),
+    // 参照されていないフォントを持ち込まない（1 つで数百 KB になる。サブセット後でも無駄）
+    ...(texts.length && input.fonts?.length ? { fonts: input.fonts } : {}),
     ...(groups.length ? { groups } : {}),
     ...(animations.length ? { animations: animations as AnimationSpec[] } : {}),
     ...(stateMachine ? { stateMachine } : {}),

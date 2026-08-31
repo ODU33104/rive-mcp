@@ -328,5 +328,60 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
     JSON.stringify(grown.spec.animations).includes('"target":"el1_grow"'));
 }
 
+// --- M3: vector-text と、自前の画素を持つ raster の組み立て ---------------------
+{
+  const fontBytes = new Uint8Array([0, 1, 0, 0]); // 中身は使わない（createRiv は通さない）
+  const built = buildPrototypeScene({
+    source: { width: 400, height: 300 },
+    elements: [
+      { id: 1, parent: null, children: [2, 3], renderMode: "vector-panel", semanticHint: "panel",
+        rect: [0, 0, 400, 300], fill: "#FFFFFF", zIndex: 0, role: "background" },
+      { id: 2, parent: 1, children: [], renderMode: "vector-text", semanticHint: "text",
+        rect: [40, 44, 120, 20], zIndex: 1, role: "text", layerName: "Title",
+        textRun: { content: "Hello", x: 40, y: 44, fontSize: 16, color: "#101010", font: "font1", advanceWidth: 120 } },
+      { id: 3, parent: 1, children: [], renderMode: "raster", semanticHint: "image",
+        rect: [40, 200, 48, 48], zIndex: 2, role: "image", ownPixels: true, imageScale: 3,
+        imageBytes: new Uint8Array([1, 2, 3]) },
+    ],
+    interactions: true,
+    motion: { entranceMs: 1000, ambient: true },
+    fonts: [{ id: "font1", bytes: fontBytes }],
+  });
+  const t = built.spec.texts?.[0];
+  check("vector-text は TextSpec になる", !!t, JSON.stringify(built.spec.texts));
+  check("Text はラッパーグループの子（原点が左上なので中心を軸に動かすため）",
+    t?.parent === "el2" && !!built.spec.groups?.find((g) => g.id === "el2" && g.x === 100 && g.y === 54),
+    `${t?.parent} ${JSON.stringify(built.spec.groups)}`);
+  check("Text の座標はラッパーからの相対",
+    t && t.x === 40 - 100 && t.y === 44 - 54, t && `${t.x},${t.y}`);
+  check("ラン名にレイヤー名が付く（ランタイムから差し替えられる）",
+    t?.runs[0].name === "Title" && t.runs[0].text === "Hello", JSON.stringify(t?.runs));
+  check("フォントはシーンに 1 度だけ載る",
+    built.spec.fonts?.length === 1 && built.spec.fonts[0].bytes === fontBytes);
+  check("アニメの対象はラッパーグループ",
+    JSON.stringify(built.spec.animations).includes('"target":"el2"'));
+
+  check("自前の画素を持つ raster は元画像から切り出さない", built.rasterRegions.length === 0);
+  const img = built.spec.images.find((i) => i.id === "el3_image");
+  check("bytes はそのまま画像アセットになる",
+    img && img.bytes?.length === 3 && img.scale === 3, img && `${img.bytes?.length} scale=${img.scale}`);
+  check("自前の画素なら焼き付きが無いので自由に動かせる",
+    motionCapabilityOf({ renderMode: "raster", ownPixels: true, rect: [0, 0, 200, 200] }) === "free");
+  check("スクリーンショットの切り出しは今までどおり制限される",
+    motionCapabilityOf({ renderMode: "raster", rect: [0, 0, 200, 200] }) === "fade-only");
+  check("ベクター入力だけのシーンでは fade 制限の警告が出ない",
+    !built.warnings.some((w) => w.includes("fade in place")), built.warnings.join(" / "));
+
+  // フォントを参照するテキストが 1 つも無ければフォントは持ち込まない（数百 KB の無駄）
+  const noText = buildPrototypeScene({
+    source: { width: 100, height: 100 },
+    elements: [{ id: 1, parent: null, children: [], renderMode: "vector-panel", semanticHint: "panel",
+      rect: [0, 0, 100, 100], fill: "#000000", role: "panel" }],
+    interactions: false, motion: { ambient: false },
+    fonts: [{ id: "font1", bytes: fontBytes }],
+  });
+  check("テキストが無ければフォントを埋め込まない", noText.spec.fonts === undefined);
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);

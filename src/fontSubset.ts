@@ -22,11 +22,7 @@ class W {
   bytes() { return new Uint8Array(this.a); }
 }
 
-export function subsetTtf(font: Uint8Array, text: string): Uint8Array {
-  const sfnt = u32(font, 0);
-  if (sfnt !== 0x00010000 && sfnt !== 0x74727565) {
-    throw new Error("not a TrueType(glyf) font (CFF/.otf is not supported)");
-  }
+function readTables(font: Uint8Array): Map<string, Table> {
   const numTables = u16(font, 4);
   const tables = new Map<string, Table>();
   for (let i = 0; i < numTables; i++) {
@@ -34,6 +30,69 @@ export function subsetTtf(font: Uint8Array, text: string): Uint8Array {
     const tag = String.fromCharCode(font[o], font[o + 1], font[o + 2], font[o + 3]);
     tables.set(tag, { tag, offset: u32(font, o + 8), length: u32(font, o + 12) });
   }
+  return tables;
+}
+
+/** テキストの置き場所を canvas 計測なしで決めるための最小メトリクス。
+ *  glyf を読まないので CFF(.otf) でも取れる（サブセットはできないが座標は出せる）。 */
+export interface FontMetrics {
+  unitsPerEm: number;
+  /** hhea の ascender / descender。descender は負。フォント単位 */
+  ascent: number;
+  descent: number;
+  /** cmap に無い文字は undefined（0 ではない — 「幅 0」と「無い」を混ぜると豆腐に気づけない） */
+  advanceOf(codePoint: number): number | undefined;
+}
+
+export function readFontMetrics(font: Uint8Array): FontMetrics {
+  const tables = readTables(font);
+  const need = (tag: string): Table => {
+    const x = tables.get(tag);
+    if (!x) throw new Error(`missing table ${tag}`);
+    return x;
+  };
+  const head = need("head"), hhea = need("hhea"), hmtx = need("hmtx"), cmap = need("cmap");
+  const unitsPerEm = u16(font, head.offset + 18) || 1000;
+  const numHMetrics = u16(font, hhea.offset + 34);
+  const map = readCmap(font, cmap.offset);
+  return {
+    unitsPerEm,
+    ascent: i16(font, hhea.offset + 4),
+    descent: i16(font, hhea.offset + 6),
+    advanceOf(cp: number): number | undefined {
+      const gid = map.get(cp);
+      if (gid === undefined) return undefined;
+      // hmtx の末尾は「同じ advance が続く」圧縮。numHMetrics 以降は最後の値を使う
+      return u16(font, hmtx.offset + Math.min(gid, numHMetrics - 1) * 4);
+    },
+  };
+}
+
+/**
+ * 埋め込む前に「この文字列をこのフォントで描けるか」を確かめる。
+ * **subsetTtf と同じ readCmap を通す**のが要点で、別実装で数えると
+ * 「被覆チェックは通ったのに埋め込んだら豆腐」というズレが起きる。
+ * BMP 外(cp > 0xFFFF)は cmap に在っても missing に入れる — subsetTtf の
+ * cmap format4 再構築がそれを落とすので、埋め込んでも結局描けない。
+ */
+export function glyphCoverage(font: Uint8Array, text: string): { missing: string[] } {
+  const cmapT = readTables(font).get("cmap");
+  const missing: string[] = [];
+  const map = cmapT ? readCmap(font, cmapT.offset) : new Map<number, number>();
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!;
+    if (cp === 0x20 || cp === 0x09) continue; // 空白は advance だけで表現され、グリフが無くても描ける
+    if ((cp > 0xffff || !map.has(cp)) && !missing.includes(ch)) missing.push(ch);
+  }
+  return { missing };
+}
+
+export function subsetTtf(font: Uint8Array, text: string): Uint8Array {
+  const sfnt = u32(font, 0);
+  if (sfnt !== 0x00010000 && sfnt !== 0x74727565) {
+    throw new Error("not a TrueType(glyf) font (CFF/.otf is not supported)");
+  }
+  const tables = readTables(font);
   const need = (t: string): Table => {
     const x = tables.get(t);
     if (!x) throw new Error(`missing table ${t}`);

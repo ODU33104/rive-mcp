@@ -1176,6 +1176,50 @@ try {
       const both = await callTool("riv_ui_detect", { svgPath: svgFile, imagePath: shotPath });
       check("imagePath と svgPath の同時指定は断る",
         both.isError && textOf(both).includes("not both"), textOf(both).slice(0, 120));
+
+      // --- <text> と <image>。フォントに無い文字は豆腐にせず絵にする（必ず警告つき） ---
+      {
+        const { TEXT_CARD_SVG, CJK_SVG } = await import(
+          pathToFileURL(join(root, "test", "fixtures", "vectorSvg.mjs")).href);
+        const textSvg = join(root, "test", "tmp", "ui-text.svg");
+        writeFileSync(textSvg, TEXT_CARD_SVG);
+        const td = JSON.parse(textOf(await callTool("riv_ui_detect", { svgPath: textSvg })));
+        check("<text> は編集可能な vector-text になる",
+          td.text.total === 5 && td.text.asText === 5 &&
+            td.elements.filter((e) => e.renderMode === "vector-text").length === 5,
+          JSON.stringify(td.text));
+        check("巨大なバイト列は返さない（長さだけ）",
+          td.elements.every((e) => e.imageBytes === undefined || typeof e.imageBytes === "number"));
+
+        const textRiv = join(root, "test", "tmp", "ui-text.riv");
+        const tp = JSON.parse(textOf(await callTool("riv_ui_prototype", {
+          svgPath: textSvg, outPath: textRiv,
+          roles: td.elements.map((e) => ({ id: e.id, role: e.roleHint ?? "panel" })),
+        })));
+        check("テキスト入り SVG から .riv が書ける", !!tp.outPath && tp.bytes > 0, JSON.stringify(tp.bytes));
+        check("埋め込み <image> だけが画像アセットになる", tp.rasterAssets === 1, String(tp.rasterAssets));
+        const tinfo = JSON.parse(textOf(await callTool("riv_inspect", { path: textRiv })));
+        check("生成した .riv を公式ランタイムが読める",
+          tinfo.artboards?.[0]?.width === 360, JSON.stringify(tinfo.artboards?.[0]?.width));
+
+        const cjkSvg = join(root, "test", "tmp", "ui-cjk.svg");
+        writeFileSync(cjkSvg, CJK_SVG);
+        const cd = JSON.parse(textOf(await callTool("riv_ui_detect", { svgPath: cjkSvg })));
+        check("同梱フォントに無い文字の行はラスタへ降格する",
+          cd.text.rasterized === 1 && cd.text.asText === 1, JSON.stringify(cd.text));
+        check("降格は黙ってやらない（警告に文字が出る）",
+          cd.warnings.some((w) => w.includes("no glyph for")), JSON.stringify(cd.warnings));
+        const cjkRiv = join(root, "test", "tmp", "ui-cjk.riv");
+        const cp = JSON.parse(textOf(await callTool("riv_ui_prototype", {
+          svgPath: cjkSvg, outPath: cjkRiv,
+          roles: cd.elements.map((e) => ({ id: e.id, role: e.roleHint ?? "panel" })),
+        })));
+        check("降格した行は切り抜き 1 枚として .riv に入る", cp.rasterAssets === 1, String(cp.rasterAssets));
+        const cframe = await callTool("riv_render_frame", {
+          path: cjkRiv, outPath: join(root, "test", "tmp", "ui-cjk.png"), time: 2,
+        });
+        check("降格した行を含む .riv を描画できる", !cframe.isError, textOf(cframe).slice(0, 160));
+      }
     }
   }
 

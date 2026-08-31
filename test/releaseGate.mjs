@@ -250,6 +250,38 @@ try {
       maxCount <= b.maxCountRatio * 1.2 + 0.05, `${maxCount.toFixed(2)} (記録 ${b.maxCountRatio.toFixed(2)})`);
   }
 
+  // --- 3. ベクター入力（SVG）の退行検知 ---
+  // 実画像と違い**正解が入力そのもの**なので、記録するのは「今の実測」ではなく
+  // 「元データを使っている限り達成できているはずの水準」。落ちたら実装のバグ。
+  // 数値は node test/vectorScene.mjs が書く（そちらが往復を全部通して測る）。
+  {
+    const path = join(HERE, "fixtures", "vector-baseline.json");
+    let rec = null;
+    try {
+      rec = JSON.parse(readFileSync(path, "utf8"));
+    } catch {
+      console.log("note SVG: vector-baseline.json が無い（node test/vectorScene.mjs で作る）");
+    }
+    if (rec) {
+      console.log(`\n--- SVG 入力 (${rec.fixtures}枚 / 記録 ${rec.recordedAt}) ---`);
+      for (const r of rec.rows) {
+        console.log(`  ${r.name.padEnd(10)} MAE ${r.mae.toFixed(6)}  editable ${r.editable}  ` +
+          `text ${r.text.asText}/${r.text.total}` +
+          (r.inkIouMin === null ? "" : `  inkIoU最小 ${r.inkIouMin.toFixed(2)}`));
+      }
+      // スクリーンショット経路の再構成誤差（0.0004）を上回ったら、ベクターを読む意味が消える
+      gate("SVG: 画素一致するはずのフィクスチャの MAE がスクショ経路を下回る",
+        rec.reconstructionMaeMeanExact <= 0.0004,
+        rec.reconstructionMaeMeanExact.toFixed(6));
+      gate("SVG: 編集可能比率が全フィクスチャで 0.66 以上",
+        rec.editableRatioMin >= 0.66, rec.editableRatioMin.toFixed(3));
+      // 文字の置き場所。字形は違ってよいが、置き場所がずれたら別物になる
+      const worstInk = Math.min(...rec.rows.map((r) => (r.inkIouMin === null ? 1 : r.inkIouMin)));
+      gate("SVG: 文字のインクが SVG と同じ場所にある（bbox IoU >= 0.5）",
+        worstInk >= 0.5, worstInk.toFixed(2));
+    }
+  }
+
   if (process.env.RECORD_METAMORPHIC === "1") {
     const out = { recordedAt: new Date().toISOString(), perTransform: {} };
     for (const kind of KINDS) {

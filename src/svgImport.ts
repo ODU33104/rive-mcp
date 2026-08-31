@@ -28,12 +28,47 @@ export interface SvgNodeMeta extends SvgLayerMeta {
   rect?: { x: number; y: number; width: number; height: number; cornerRadius: number };
 }
 
+/** `<text>` / `<tspan>` の 1 行。**折り返しは再現しない** — SVG に書いてある改行位置が正で、
+ *  Rive 側の折り返しに任せるとフォント差で行が変わる（.claude/PLAN-vector-prototype.md M3 §1）。 */
+export interface SvgTextMeta extends SvgLayerMeta {
+  ancestors: SvgLayerMeta[];
+  /** ルート座標。**y はベースライン**（Rive のテキストボックスは上端原点なので変換が要る） */
+  x: number;
+  y: number;
+  content: string;
+  /** 変換後の px */
+  fontSize: number;
+  color: string;
+  anchor: "start" | "middle" | "end";
+  /** font-family の先頭（クォート除去・小文字化）。指定が無ければ undefined */
+  family?: string;
+  /** 指定されていた font-weight。合成太字はしないので**選定にしか使わない** */
+  weight?: string;
+  /** 指定されていた letter-spacing（px）。Rive の TextSpec に対応物が無いので捨てる */
+  letterSpacing?: number;
+  /** 変換に回転/スキューが入っている。Rive の Text は回転して置けるが、
+   *  ここでは行ごとの回転を再現しないのでラスタへ降格する印として持つ */
+  rotated: boolean;
+  /** この 1 行だけを元と同じ見た目で描く自己完結 SVG。ラスタ降格時にこれをラスタライズする */
+  fragment: string;
+}
+
+export interface SvgImageMeta extends SvgLayerMeta {
+  ancestors: SvgLayerMeta[];
+  /** ルート座標の配置矩形 */
+  rect: { x: number; y: number; width: number; height: number };
+  /** data URI か、resolveHref で読めた相対パスの中身 */
+  bytes: Uint8Array;
+}
+
 export interface SvgImportResult {
   width: number;
   height: number;
   shapes: ShapeSpec[];
   /** shapes[] と同じ長さ・同じ順序 */
   nodes: SvgNodeMeta[];
+  texts: SvgTextMeta[];
+  images: SvgImageMeta[];
   /** 取り込めずに捨てた要素の数。warnings の文面を数えるより確実に拾えるようにしてある */
   skipped: { text: number; image: number };
   warnings: string[];
@@ -44,6 +79,19 @@ interface XmlNode {
   tag: string;
   attrs: Record<string, string>;
   children: XmlNode[];
+  /** 直下の文字データ（子要素の中身は含まない）。<text>/<tspan> のためだけに拾う */
+  text?: string;
+}
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (whole, body: string) => {
+    if (body[0] === "#") {
+      const cp = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      return Number.isFinite(cp) ? String.fromCodePoint(cp) : whole;
+    }
+    return ENTITIES[body] ?? whole;
+  });
 }
 
 function parseXml(src: string): XmlNode {
@@ -57,8 +105,16 @@ function parseXml(src: string): XmlNode {
   const stack: XmlNode[] = [root];
   const tagRe = /<\/?([a-zA-Z_][\w:-]*)((?:\s+[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/g;
   let m: RegExpExecArray | null;
+  let cursor = 0;
   while ((m = tagRe.exec(src))) {
     const [full, tag, attrStr, selfClose] = m;
+    // タグとタグの間の文字データを、いま開いている要素に積む
+    const chunk = src.slice(cursor, m.index);
+    cursor = tagRe.lastIndex;
+    if (chunk) {
+      const owner = stack[stack.length - 1];
+      owner.text = (owner.text ?? "") + decodeEntities(chunk);
+    }
     if (full.startsWith("</")) {
       if (stack.length > 1) stack.pop();
       continue;
@@ -299,9 +355,24 @@ interface Ctx {
   fillOpacity: number;
   cap?: "butt" | "round" | "square";
   join?: "miter" | "round" | "bevel";
+  // テキスト系のプロパティは SVG では継承する。Figma は <text> に全部書くが、
+  // Illustrator は <g> にまとめて書くことがあるので継承を通す
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: string;
+  textAnchor?: string;
+  letterSpacing?: number;
 }
 
-export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImportResult {
+export function importSvg(
+  svgText: string,
+  opts?: {
+    idPrefix?: string;
+    /** `<image href>` が相対パスのときに中身を返す。返さなければ警告してスキップする。
+     *  fs をここに持ち込まないための注入点（呼び出し側が svgPath 相対で解決する） */
+    resolveHref?: (href: string) => Uint8Array | null;
+  }
+): SvgImportResult {
   const warnings: string[] = [];
   const root = parseXml(svgText);
   const svg = findTag(root, "svg");
@@ -343,6 +414,8 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
 
   const shapes: ShapeSpec[] = [];
   const nodes: SvgNodeMeta[] = [];
+  const texts: SvgTextMeta[] = [];
+  const images: SvgImageMeta[] = [];
   const skipped = { text: 0, image: 0 };
   let autoId = 0;
   const prefix = opts?.idPrefix ?? "";
@@ -363,6 +436,19 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
     };
   };
 
+  const attrOf = (node: XmlNode, key: string): string | undefined =>
+    node.attrs[key] ?? parseStyle(node.attrs.style)[key];
+  /** px（と単位なし）だけ読む。em/%/rem は親の font-size に依存していて SVG 単体では確定しない */
+  const lengthOf = (v: string | undefined, what: string): number | undefined => {
+    if (v === undefined) return undefined;
+    const t = v.trim();
+    if (/^-?(?:\d+\.?\d*|\.\d+)(?:px)?$/.test(t)) return parseFloat(t);
+    warnings.push(`${what} '${t}' is not a px length and was ignored`);
+    return undefined;
+  };
+  const xmlEscape = (s: string): string =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
   const walk = (n: XmlNode, ctx: Ctx, stack: SvgLayerMeta[]): void => {
     const style = parseStyle(n.attrs.style);
     const get = (k: string) => n.attrs[k] ?? style[k];
@@ -375,6 +461,11 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
       fillOpacity: ctx.fillOpacity * (get("fill-opacity") !== undefined ? parseFloat(get("fill-opacity")!) : 1),
       cap: (get("stroke-linecap") as Ctx["cap"]) ?? ctx.cap,
       join: (get("stroke-linejoin") as Ctx["join"]) ?? ctx.join,
+      fontSize: lengthOf(get("font-size"), "font-size") ?? ctx.fontSize,
+      fontFamily: get("font-family") ?? ctx.fontFamily,
+      fontWeight: get("font-weight") ?? ctx.fontWeight,
+      textAnchor: get("text-anchor") ?? ctx.textAnchor,
+      letterSpacing: lengthOf(get("letter-spacing"), "letter-spacing") ?? ctx.letterSpacing,
     };
     if (n.tag === "defs" || n.tag === "clipPath" || n.tag === "mask" || n.tag === "symbol") return;
 
@@ -422,12 +513,10 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
         subpaths = parsePathData(`M${pf(n.attrs.x1)},${pf(n.attrs.y1)} L${pf(n.attrs.x2)},${pf(n.attrs.y2)}`, warnings);
         break;
       case "text":
-        skipped.text++;
-        warnings.push("<text> is not imported (use rive-mcp texts[] with a font instead)");
+        emitText(n, next, stack);
         return;
       case "image":
-        skipped.image++;
-        warnings.push("<image> is not imported (embed via riv_create images[])");
+        emitImage(n, next, stack);
         return;
     }
 
@@ -546,6 +635,145 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
     };
   };
 
+  /** `<text>` を 1 行 = 1 SvgTextMeta にほどく。折り返しはしない（M3 §1）。 */
+  const emitText = (n: XmlNode, ctx: Ctx, stack: SvgLayerMeta[]): void => {
+    const M = mul(originM, ctx.m);
+    const rotated = Math.abs(M[1]) > 1e-9 || Math.abs(M[2]) > 1e-9;
+    const scale = Math.sqrt(Math.abs(M[0] * M[3] - M[1] * M[2])) || 1;
+    interface Line {
+      x: number; y: number; content: string; fontSize: number;
+      fill?: string; anchor: string; family?: string; weight?: string; spacing?: number;
+      names: string[];
+    }
+    const flat = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+    const namesOf = (node: XmlNode) =>
+      ["id", "data-name", "aria-label"].map((a) => node.attrs[a]).filter((v): v is string => !!v);
+    const base: Line = {
+      x: pf(n.attrs.x), y: pf(n.attrs.y),
+      content: flat(n.text),
+      fontSize: ctx.fontSize ?? 16,
+      fill: ctx.fill, anchor: ctx.textAnchor ?? "start",
+      family: ctx.fontFamily, weight: ctx.fontWeight, spacing: ctx.letterSpacing,
+      names: namesOf(n),
+    };
+    if (ctx.fontSize === undefined) {
+      warnings.push(`<text> "${base.content.slice(0, 20)}" has no font-size — 16px assumed`);
+    }
+    const lines: Line[] = [];
+    if (base.content) lines.push(base);
+    let cursorY = base.y;
+    for (const sp of n.children.filter((c) => c.tag === "tspan")) {
+      const content = flat(sp.text);
+      if (!content) continue;
+      const sy = sp.attrs.y !== undefined ? pf(sp.attrs.y) : cursorY + pf(sp.attrs.dy);
+      cursorY = sy;
+      lines.push({
+        x: (sp.attrs.x !== undefined ? pf(sp.attrs.x) : base.x) + pf(sp.attrs.dx),
+        y: sy,
+        content,
+        fontSize: lengthOf(attrOf(sp, "font-size"), "font-size") ?? base.fontSize,
+        fill: attrOf(sp, "fill") ?? base.fill,
+        anchor: attrOf(sp, "text-anchor") ?? base.anchor,
+        family: attrOf(sp, "font-family") ?? base.family,
+        weight: attrOf(sp, "font-weight") ?? base.weight,
+        spacing: lengthOf(attrOf(sp, "letter-spacing"), "letter-spacing") ?? base.spacing,
+        names: namesOf(sp).length ? namesOf(sp) : base.names,
+      });
+    }
+    if (!lines.length) {
+      skipped.text++;
+      warnings.push("<text> has no character data and was skipped");
+      return;
+    }
+    // 行はそれぞれ独立した要素になるので、キーも 1 行ずつ要る（同じキーを配ると
+    // 下流の Map で行が潰れ、最後の 1 行だけが残る）
+    const firstMeta = layerMeta(n);
+    lines.forEach((ln, i) => {
+      const color = parseSvgColor(ln.fill ?? "#000000", warnings);
+      if (!color) {
+        skipped.text++;
+        warnings.push(`<text> "${ln.content.slice(0, 20)}" has fill:none and would not be visible — skipped`);
+        return;
+      }
+      const anchor: SvgTextMeta["anchor"] =
+        ln.anchor === "middle" ? "middle" : ln.anchor === "end" ? "end" : "start";
+      const [wx, wy] = apply(M, ln.x, ln.y);
+      const fragment =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+        `<g transform="matrix(${M.join(" ")})">` +
+        `<text x="${ln.x}" y="${ln.y}" font-size="${ln.fontSize}" fill="${color}"` +
+        (anchor !== "start" ? ` text-anchor="${anchor}"` : "") +
+        (ln.family ? ` font-family="${xmlEscape(ln.family)}"` : "") +
+        (ln.weight ? ` font-weight="${xmlEscape(ln.weight)}"` : "") +
+        (ln.spacing !== undefined ? ` letter-spacing="${ln.spacing}"` : "") +
+        `>${xmlEscape(ln.content)}</text></g></svg>`;
+      texts.push({
+        key: i === 0 ? firstMeta.key : keyCounter++,
+        tag: "text",
+        names: ln.names,
+        ancestors: stack,
+        x: wx, y: wy,
+        content: ln.content,
+        fontSize: ln.fontSize * scale,
+        color,
+        anchor,
+        ...(ln.family ? { family: ln.family.split(",")[0].replace(/["']/g, "").trim().toLowerCase() } : {}),
+        ...(ln.weight ? { weight: ln.weight } : {}),
+        ...(ln.spacing !== undefined ? { letterSpacing: ln.spacing } : {}),
+        rotated,
+        fragment,
+      });
+    });
+  };
+
+  const emitImage = (n: XmlNode, ctx: Ctx, stack: SvgLayerMeta[]): void => {
+    const href = (n.attrs.href ?? n.attrs["xlink:href"] ?? "").trim();
+    if (!href) {
+      skipped.image++;
+      warnings.push("<image> has no href and was skipped");
+      return;
+    }
+    if (/^https?:/i.test(href)) {
+      // ローカル完結の原則。黙って空けるのではなく、何を取りに行かなかったかを出す
+      skipped.image++;
+      warnings.push(`<image> points at ${href} — nothing is fetched over the network, so it was skipped`);
+      return;
+    }
+    let bytes: Uint8Array | null = null;
+    if (href.startsWith("data:")) {
+      const m = href.match(/^data:[^,]*;base64,([\s\S]*)$/);
+      if (!m) {
+        skipped.image++;
+        warnings.push("<image> data URI is not base64 and was skipped");
+        return;
+      }
+      bytes = new Uint8Array(Buffer.from(m[1].replace(/\s+/g, ""), "base64"));
+    } else {
+      bytes = opts?.resolveHref?.(href) ?? null;
+      if (!bytes) {
+        skipped.image++;
+        warnings.push(`<image href="${href}"> could not be read next to the SVG and was skipped`);
+        return;
+      }
+    }
+    const M = mul(originM, ctx.m);
+    const rect = transformedRect(
+      { x: pf(n.attrs.x), y: pf(n.attrs.y), width: pf(n.attrs.width), height: pf(n.attrs.height), cornerRadius: 0 },
+      M
+    );
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
+      skipped.image++;
+      warnings.push("<image> is rotated or has no width/height — only axis-aligned placements are imported");
+      return;
+    }
+    images.push({
+      ...layerMeta(n),
+      ancestors: stack,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      bytes,
+    });
+  };
+
   const gradientSpec = (
     g: XmlNode, stops: Array<{ color: string; position: number }>,
     M: M6, cx: number, cy: number, bw: number, bh: number
@@ -562,21 +790,39 @@ export function importSvg(svgText: string, opts?: { idPrefix?: string }): SvgImp
       // objectBoundingBox: 0-1 → bbox ローカル
       return { x: (px - 0.5) * bw, y: (py - 0.5) * bh };
     };
+    // objectBoundingBox の gradient は「単位正方形で定義してから bbox へ非等方に伸ばす」ので、
+    // 正方形でない図形では等高線が gradient ベクトルに直交しなくなる。Rive の gradient は
+    // 常に直交するため、**斜め方向と radial は原理的に一致しない**（軸平行の linear は一致する）。
+    // 実測 2026-08-31（240x160 の矩形）: 斜め MAE 0.023 / radial 0.037、軸平行は 0.000000。
+    const skewedBox = !user && Math.abs(bw - bh) > 1e-6;
     if (g.tag === "radialGradient") {
       const c = pt(g.attrs.cx, g.attrs.cy, user ? 0 : 0.5, user ? 0 : 0.5);
       const rAttr = g.attrs.r !== undefined ? pfp(g.attrs.r, 1) : 0.5;
       const r = user ? rAttr * Math.hypot(gm[0], gm[1]) : rAttr * Math.max(bw, bh);
+      if (skewedBox) {
+        warnings.push(
+          `radialGradient #${g.attrs.id} is defined in objectBoundingBox units on a non-square shape — ` +
+            `it becomes a circle instead of an ellipse (Rive gradients are not stretched with the shape)`
+        );
+      }
       return { type: "radial", stops, start: c, end: { x: c.x + r, y: c.y } };
     }
     const s = pt(g.attrs.x1, g.attrs.y1, user ? 0 : 0, user ? 0 : 0);
     const e = pt(g.attrs.x2, g.attrs.y2, user ? 0 : 1, user ? 0 : 0);
+    if (skewedBox && Math.abs(e.x - s.x) > 1e-6 && Math.abs(e.y - s.y) > 1e-6) {
+      warnings.push(
+        `linearGradient #${g.attrs.id} runs diagonally in objectBoundingBox units on a non-square shape — ` +
+          `its bands stay perpendicular to the gradient instead of shearing with the shape ` +
+          `(use gradientUnits="userSpaceOnUse", or an axis-aligned gradient, for an exact match)`
+      );
+    }
     return { type: "linear", stops, start: s, end: e };
   };
 
   walk(svg, { m: I, strokeWidth: 1, opacity: 1, fillOpacity: 1 }, []);
   const totalVerts = shapes.reduce((n, s) => n + (s.subpaths?.reduce((m, sp) => m + sp.points.length, 0) ?? 0), 0);
   if (totalVerts > 3000) warnings.push(`${totalVerts} vertices — consider simplifying the SVG (performance)`);
-  return { width, height, shapes, nodes, skipped, warnings };
+  return { width, height, shapes, nodes, texts, images, skipped, warnings };
 }
 
 /** 直線だけでできた軸平行の四角形なら、その矩形を返す（Figma は矩形をパスで書き出すことがある）。
