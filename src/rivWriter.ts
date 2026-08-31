@@ -1354,9 +1354,16 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
               if (inputType === "trigger") {
                 push({ type: "TransitionTriggerCondition", props: { inputId } });
               } else if (inputType === "bool") {
+                // TransitionBoolCondition に比較値は無い: op が ==(0) なら「入力が true で発火」、
+                // !=(1) なら「false で発火」(rive-runtime transition_bool_condition.cpp)。
+                // 呼び出し側が condition.value: false と書いた場合は op を反転して意図を保つ
+                // （2026-08-31 まで value は黙って無視され、「false になったら」の遷移が
+                //  true で発火していた。uiPrototype の hover 解除がこれで壊れていた実績）。
+                let op = tr.condition.op ?? "==";
+                if (tr.condition.value === false) op = op === "==" ? "!=" : "==";
                 push({
                   type: "TransitionBoolCondition",
-                  props: { inputId, opValue: CONDITION_OPS[tr.condition.op ?? "=="] },
+                  props: { inputId, opValue: CONDITION_OPS[op as "==" | "!="] },
                 });
               } else {
                 push({

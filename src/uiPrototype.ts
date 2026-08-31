@@ -3,6 +3,8 @@ import type { UiElement } from "./uiDetect.js";
 import type {
   SceneSpec, ShapeSpec, ImageSpec, GroupSpec, AnimationSpec, TrackSpec, StateMachineSpec,
   TextSpec, FontSpec,
+  SMStateSpec,
+  SMTransitionSpec,
 } from "./rivWriter.js";
 import type { PresetSpec, PresetName } from "./motionPresets.js";
 
@@ -405,18 +407,109 @@ export function buildPrototypeScene(input: PrototypeInput): {
   }
 
   // 7) interactions ステートマシン（hover=Boolean入力 / press=Trigger入力）
+  //
+  // 入力の宣言だけでなく、**状態・アニメ・ポインタリスナーまで**ここで組む。
+  // 2026-08-31 まで入力しか作っておらず、hover を true にしても画素が 1px も
+  // 動かなかった（デモ GIF を作ろうとして発覚。テストも入力の存在しか見ていなかった）。
+  //
+  // 仕組み: 要素ごとに専用の SM レイヤーを 1 枚持たせる。
+  //   Idle ⇄ Hover は hover_<id>(bool) で行き来し、Pressed へは press_<id>(trigger) で入る。
+  //   アニメは対象そのものの相対的なプロパティ（scale/rotation/opacity。lift だけ絶対 y）を
+  //   動かす短い oneShot で、ブレンドは遷移の durationMs に任せる。
+  //   リスナー（enter/exit/down）も張るので、SM を再生できるランタイムなら
+  //   入力を手で叩かなくてもポインタに反応する。
   let stateMachine: StateMachineSpec | undefined;
   if (input.interactions) {
     const smInputs: NonNullable<StateMachineSpec["inputs"]> = [];
+    const layers: NonNullable<StateMachineSpec["layers"]> = [];
+    const listeners: NonNullable<StateMachineSpec["listeners"]> = [];
+    // 待機状態のアニメは「空」ではだめで、hover/press が触るプロパティの**基準値を
+    // 書き続ける**必要がある。Rive はアニメが書かなくなった値を元に戻してくれないので、
+    // 空アニメの idle に戻ると hover の姿勢のまま固まる（実測: hover 解除後も scale 1.05）。
     for (const el of animatable) {
       // hover(lift/grow/spin) と press はいずれも位置か大きさを変える。
       // 焼き付いた切り出しに付けると、触るたびに元の位置の絵と二重になる。
       if ((capabilityOf.get(el.id) ?? "free") !== "free") continue;
       const m = motionFor(el.role);
-      if (m.hover) smInputs.push({ name: `hover_${el.id}`, type: "bool", initial: false });
-      if (m.press) smInputs.push({ name: `press_${el.id}`, type: "trigger" });
+      if (!m.hover && !m.press) continue;
+      const targetId = targetIdOf.get(el.id)!;
+      const rect = clamped.get(el.id)!;
+      const cy = rect[1] + rect[3] / 2;
+
+      // hover の見た目。値は「気づくが叫ばない」程度（Studio の実物で確認した感覚値）
+      const hoverTracks: TrackSpec[] = [];
+      const hoverKf = (property: TrackSpec["property"], from: number, to: number): void => {
+        hoverTracks.push({ target: targetId, property, keyframes: [
+          { frame: 0, value: from, easing: "ease-out" },
+          { frame: 5, value: to, easing: "emphasized-decel" },
+        ]});
+      };
+      switch (m.hover) {
+        case "lift": hoverKf("y", cy, cy - Math.max(4, rect[3] * 0.03)); break;
+        case "grow": hoverKf("scaleX", 1, 1.05); hoverKf("scaleY", 1, 1.05); break;
+        case "spin": hoverKf("rotation", 0, 12); break;
+        case "tint": hoverKf("opacity", 1, 0.8); break;
+      }
+
+      const restTracks: TrackSpec[] = [];
+      const restKf = (property: TrackSpec["property"], base: number): void => {
+        restTracks.push({ target: targetId, property, keyframes: [{ frame: 0, value: base, easing: "hold" }] });
+      };
+      switch (m.hover) {
+        case "lift": restKf("y", cy); break;
+        case "grow": restKf("scaleX", 1); restKf("scaleY", 1); break;
+        case "spin": restKf("rotation", 0); break;
+        case "tint": restKf("opacity", 1); break;
+      }
+      if (m.press) { if (m.hover !== "grow") { restKf("scaleX", 1); restKf("scaleY", 1); } }
+      animations.push({ name: `restfx_${el.id}`, fps: FPS, duration: 2, loop: "loop", tracks: restTracks });
+      const states: SMStateSpec[] = [{ name: `idle_${el.id}`, animation: `restfx_${el.id}` }];
+      const transitions: SMTransitionSpec[] = [{ from: "entry", to: `idle_${el.id}` }];
+      if (m.hover) {
+        smInputs.push({ name: `hover_${el.id}`, type: "bool", initial: false });
+        states.push({ name: `hover_${el.id}`, animation: `hoverfx_${el.id}` });
+        transitions.push(
+          { from: `idle_${el.id}`, to: `hover_${el.id}`, durationMs: 120,
+            condition: { input: `hover_${el.id}`, value: true } },
+          // bool 条件は op で真偽を見る（value:false は writer が op 反転で解釈するが、
+          // ここは意図を明示して op で書く）
+          { from: `hover_${el.id}`, to: `idle_${el.id}`, durationMs: 160,
+            condition: { input: `hover_${el.id}`, op: "!=" } },
+        );
+        animations.push({
+          name: `hoverfx_${el.id}`, fps: FPS, duration: 6, loop: "oneShot", tracks: hoverTracks,
+        });
+        listeners.push(
+          { target: targetId, type: "enter", actions: [{ input: `hover_${el.id}`, value: true }] },
+          { target: targetId, type: "exit", actions: [{ input: `hover_${el.id}`, value: false }] },
+        );
+      }
+      if (m.press) {
+        smInputs.push({ name: `press_${el.id}`, type: "trigger" });
+        // 沈んで戻るまでを 1 本の oneShot に。戻りは Pressed からの exitTime 遷移
+        const pressFrames = 10; // 30fps で約 0.33 秒
+        const pressTracks: TrackSpec[] = (["scaleX", "scaleY"] as const).map((property) => ({
+          target: targetId, property, keyframes: [
+            { frame: 0, value: 1, easing: "ease-out" },
+            { frame: 3, value: 0.93, easing: "emphasized-decel" },
+            { frame: pressFrames, value: 1, easing: "ease-out-back" },
+          ]}));
+        states.push({ name: `pressed_${el.id}`, animation: `pressfx_${el.id}` });
+        const pressMs = Math.round((pressFrames / FPS) * 1000);
+        for (const from of m.hover ? [`idle_${el.id}`, `hover_${el.id}`] : [`idle_${el.id}`]) {
+          transitions.push({ from, to: `pressed_${el.id}`, durationMs: 40,
+            condition: { input: `press_${el.id}` } });
+        }
+        transitions.push({ from: `pressed_${el.id}`, to: `idle_${el.id}`, exitTimeMs: pressMs, durationMs: 100 });
+        animations.push({
+          name: `pressfx_${el.id}`, fps: FPS, duration: pressFrames + 1, loop: "oneShot", tracks: pressTracks,
+        });
+        listeners.push({ target: targetId, type: "down", actions: [{ input: `press_${el.id}` }] });
+      }
+      layers.push({ name: `fx_${el.id}`, states, transitions });
     }
-    stateMachine = { name: "Interactions", inputs: smInputs };
+    stateMachine = { name: "Interactions", inputs: smInputs,
+      ...(layers.length ? { layers } : {}), ...(listeners.length ? { listeners } : {}) };
   }
 
   // 何がどう制限されたかを黙って隠さない。プロトタイプが「思ったより動かない」ときの

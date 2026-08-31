@@ -46,6 +46,10 @@ check("panel はラスタにしない", !built.rasterRegions.some((r) => r.name.
 check("entrance タイムラインがある", json.includes("entrance"));
 check("interactions で SM がある", json.includes("Interactions"));
 check("button の press 入力がある", json.includes("press_2"));
+check("hover の状態とアニメがある（入力だけの飾りではない）",
+  json.includes("hoverfx_") && json.includes("restfx_"), "");
+check("press の状態アニメがある", json.includes("pressfx_"));
+check("ポインタリスナーが張られている", JSON.stringify(built.spec.stateMachine?.listeners ?? []).includes("enter"));
 // この固定具のテキスト要素は matte を持たないので、Task 18 の制限が働いて
 // 「fade だけにした」という警告が1件出るのが正しい。ここで見たいのは
 // **矩形のクランプ等の異常が起きていないこと**なので、その種類の警告が無いことを見る。

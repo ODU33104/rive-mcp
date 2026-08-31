@@ -1060,5 +1060,58 @@ try {
   check("API の err をそのまま伝える", /Invalid parameter/.test(apiErr.message), apiErr.message);
 }
 
+// --- interactions が実際に画素を動かすことの検証（2026-08-31） ---
+//
+// 2026-08-31 まで hover/press は SM 入力を宣言するだけで、状態もアニメも無かった
+// （テストが「入力の存在」しか見ていなかったための見逃し）。ここでは実際に SM を
+// 再生して画素が動くこと・離したら戻ることを固定する。
+{
+  const hostIx = new RiveHost(PAGE_SCRIPT);
+  try {
+    const { buildPrototypeScene, attachRasterAssets } = await import("../dist/uiPrototype.js");
+    const { createRiv } = await import("../dist/rivWriter.js");
+    const png = await hostIx.rasterize(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="320" height="120">
+        <rect width="320" height="120" fill="#F5F6F8"/>
+        <rect x="50" y="32" width="220" height="56" rx="14" fill="#2563EB"/>
+        <text x="160" y="67" font-family="Arial, sans-serif" font-size="21" font-weight="bold"
+              fill="#FFFFFF" text-anchor="middle">Create account</text>
+      </svg>`);
+    const det = await detectUiElements(hostIx, png, { minArea: 576, workingMax: 1280, maxElements: 120 });
+    const withRoles = det.elements.map((e) => ({ ...e,
+      role: e.rect[2] >= det.width * 0.9 ? "background" : e.semanticHint === "text" ? "text" : "button" }));
+    const btnId = withRoles.find((e) => e.role === "button").id;
+    const built = buildPrototypeScene({ elements: withRoles, source: { width: det.width, height: det.height },
+      interactions: true, motion: {} });
+    const sliced = await hostIx.sliceImage(png, built.rasterRegions);
+    attachRasterAssets(built.spec, sliced);
+    const { bytes } = createRiv(built.spec);
+    const sm = await hostIx.playStateMachine(Buffer.from(bytes), {
+      stateMachine: "Interactions", width: 320, background: "#FFFFFF", steps: [
+        { advance: 0.05, capture: true },                                    // 0: 基準
+        { input: `hover_${btnId}`, value: true, advance: 0.4, capture: true }, // 1: hover 中
+        { input: `press_${btnId}`, advance: 0.1, capture: true },              // 2: press 中
+        { advance: 0.6, capture: true },                                       // 3: press 戻り(hover 継続)
+        { input: `hover_${btnId}`, value: false, advance: 0.6, capture: true },// 4: 解除後
+      ]});
+    const pageIx = await hostIx.getPage();
+    const diffs = await pageIx.evaluate(async ({ f }) => {
+      const dec = async (b64) => { const bin = atob(b64); const by = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) by[k] = bin.charCodeAt(k);
+        const bmp = await createImageBitmap(new Blob([by], { type: "image/png" }));
+        const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+        const x = c.getContext("2d"); x.drawImage(bmp, 0, 0);
+        return x.getImageData(0, 0, bmp.width, bmp.height).data; };
+      const px = []; for (const s of f) px.push(await dec(s));
+      const diff = (a, b) => { let n = 0; for (let i = 0; i < a.length; i += 4)
+        if (Math.abs(a[i] - b[i]) > 16 || Math.abs(a[i + 1] - b[i + 1]) > 16) n++; return n; };
+      return { hover: diff(px[0], px[1]), press: diff(px[1], px[2]), released: diff(px[0], px[4]) };
+    }, { f: sm.frames });
+    check("hover で画素が動く", diffs.hover > 200, String(diffs.hover));
+    check("press で画素が動く", diffs.press > 200, String(diffs.press));
+    check("hover 解除で元の姿勢に戻る", diffs.released < 50, String(diffs.released));
+  } finally { await hostIx.close(); }
+}
+
 // --- 以降のタスクのテストはこの行の上に追記する（process.exit より下は実行されない） ---
 process.exit(failed ? 1 : 0);
