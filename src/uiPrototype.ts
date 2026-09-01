@@ -101,7 +101,7 @@ export interface PrototypeElement extends UiElement {
 
 export interface PrototypeInput {
   elements: PrototypeElement[];
-  source: { width: number; height: number };
+  source: { width: number; height: number; kind?: "svg" | "figma" };
   interactions: boolean;
   motion: { entranceMs?: number; stagger?: number; ambient?: boolean };
   /** vector-text 要素が参照するフォント。参照されているのに渡さないと createRiv が落ちる */
@@ -133,6 +133,35 @@ function clampRect(
   return [nx, ny, nw, nh];
 }
 
+/** 角丸矩形を 1px 外側に広げたポリゴン。base や祖先ラスタからベクター塗りの元画素を
+ *  消すのに使う。外側に広げるのは、境界のアンチエイリアス画素まで確実に消すため —
+ *  内側に寄せると 1px の輪郭が焼き付いたまま残り、塗りが動く前から額縁のように見える
+ *  （実測 2026-09-01: サインインカードの入場中、ボタンの位置に青い輪郭が浮いていた）。
+ *  代償は静止時の 1px の透明リング（下の artboard 背景が覗く）で、明色地では見えない。
+ *  角は 1/4 円弧を 6 分割で近似 */
+function roundedCutPolygon(
+  rect: [number, number, number, number], radius: number
+): Array<[number, number]> {
+  const inset = -1;
+  const [x, y, w, h] = rect;
+  const x0 = x + inset, y0 = y + inset, x1 = x + w - inset, y1 = y + h - inset;
+  if (x1 - x0 < 2 || y1 - y0 < 2) return polygonOf(rect);
+  const r = Math.max(0, Math.min(radius - inset, (x1 - x0) / 2, (y1 - y0) / 2));
+  if (r < 2) return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const pts: Array<[number, number]> = [];
+  const arc = (cx: number, cy: number, a0: number): void => {
+    for (let i = 0; i <= 6; i++) {
+      const a = a0 + (i / 6) * (Math.PI / 2);
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  };
+  arc(x1 - r, y0 + r, -Math.PI / 2);
+  arc(x1 - r, y1 - r, 0);
+  arc(x0 + r, y1 - r, Math.PI / 2);
+  arc(x0 + r, y0 + r, Math.PI);
+  return pts;
+}
+
 function polygonOf(rect: [number, number, number, number]): Array<[number, number]> {
   const [x, y, w, h] = rect;
   return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
@@ -140,7 +169,7 @@ function polygonOf(rect: [number, number, number, number]): Array<[number, numbe
 
 export function buildPrototypeScene(input: PrototypeInput): {
   spec: SceneSpec;
-  rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }>;
+  rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" }; cut?: boolean; holes?: Array<Array<[number, number]>> }>;
   warnings: string[];
 } {
   const warnings: string[] = [];
@@ -198,7 +227,7 @@ export function buildPrototypeScene(input: PrototypeInput): {
   const images: ImageSpec[] = [];
   const groups: GroupSpec[] = [];
   const texts: TextSpec[] = [];
-  const rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" } }> = [];
+  const rasterRegions: Array<{ name: string; polygon: Array<[number, number]>; matte?: { fg: string; bg: string; space: "srgb" | "linear" }; cut?: boolean; holes?: Array<Array<[number, number]>> }> = [];
   const targetIdOf = new Map<number, string>(); // 要素id -> shape/image id（アニメの対象）
   const capabilityOf = new Map<number, MotionCapability>();
   let mergedIntoBase = 0;
@@ -228,6 +257,18 @@ export function buildPrototypeScene(input: PrototypeInput): {
       if (el.stroke) shape.stroke = { color: el.stroke.color, thickness: el.stroke.width };
       shapes.push(shape);
       targetIdOf.set(el.id, id);
+      // **base に残った元画素を切り抜く。** base があるのはスクリーンショット経路だけ
+      // （SVG/Figma 経路は source.kind が付き、base を貼らないので切るものが無い）。 静止状態では不透明な塗りが覆うので見えないが、
+      // 入場や hover で塗りが動いた瞬間、下から同じ絵（焼き付き）が現れて二重になる
+      // （実測 2026-09-01: swoop-in の入場中、ボタンが 2 枚見えた）。cut: true は
+      // 画像アセットを作らず base から消すだけ
+      if (!input.source.kind) {
+        rasterRegions.push({
+          name: `${id}_basecut`,
+          polygon: roundedCutPolygon(rect, el.cornerRadius ?? 0),
+          cut: true,
+        });
+      }
     } else if (el.renderMode === "vector-shape" && el.shapes?.length) {
       // 任意のベジェ形状。**アニメの対象はシェイプ自身ではなくラッパーグループ**にする
       // （riv_import_svg の imports と同じ方式）。ShapeSpec の座標系は「bbox 中心 = x,y、
@@ -303,6 +344,91 @@ export function buildPrototypeScene(input: PrototypeInput): {
     // fill の無い vector-panel 要素は可視要素を持たない（base 画像側にそのまま残るだけ）
   }
 
+  // 4.4) 祖先のラスタ切り抜きから、動くベクター子孫の領域を抜く。
+  // base からの切り抜き(basecut)と同じ理由の親ラスタ版。カードがラスタで、その上の
+  // ボタンがベクターのとき、カードの切り抜きにはボタンの画素が焼き付いている。
+  // 静止時はベクターがぴったり覆うが、ベクターが動いた瞬間に焼き付きが現れる。
+  const regionByName = new Map(rasterRegions.map((r) => [r.name, r]));
+  for (const el of input.elements) {
+    if (!(el.renderMode === "vector-panel" && el.fill)) continue;
+    const hole = roundedCutPolygon(clamped.get(el.id)!, el.cornerRadius ?? 0);
+    let p = el.parent;
+    while (p !== null) {
+      const anc = byId.get(p);
+      if (!anc) break;
+      if (anc.renderMode === "raster" && targetIdOf.has(anc.id)) {
+        const reg = regionByName.get(`el${anc.id}_${anc.role}`);
+        if (reg) (reg.holes ?? (reg.holes = [])).push(hole);
+      }
+      p = anc.parent;
+    }
+  }
+
+  // 4.5) 動きの単位を「要素 + その子孫」にする
+  //
+  // ボタンの入場・hover・press が動かすべきなのはボタン**と上に乗るラベル**であって、
+  // ボタンの矩形だけではない（実測 2026-09-01: hover でボタンだけ 5% 拡大し、ラベルが
+  // 置き去りになった。入場も同様にラベルが先に定位置で待っていた）。
+  // 動きを持ちうる free の要素ごとにグループ grp_<id> を要素中心に置き、自分の可視
+  // ターゲットと子孫の可視ターゲットをその中へ移す。以降のプリセット（entrance/idle/
+  // hover/press）はすべて grp_<id> を動かす。入れ子（カードの中のボタン）は BFS 順に
+  // 処理するので、ボタンのグループはカードのグループの子になり、カードが動けば
+  // ボタンごと動く。chart-grow は既に専用グループで包んでいるので対象外。
+  const groupOf = new Map<number, string>();   // 要素id -> grp id
+  // rivWriter は「グループは使う前に定義されていること」を要求する。grp は既存グループ
+  // （vector-shape ラッパー等）の親になるので、**groups の先頭**に BFS 順で入れる
+  // （BFS 順なら grp の親 grp も必ず先に来る）
+  const grpDefs: GroupSpec[] = [];
+  const reparent = (childTargetId: string, grpId: string, gx: number, gy: number): void => {
+    const sMatch = shapes.find((o) => o.id === childTargetId);
+    const iMatch = images.find((o) => o.id === childTargetId);
+    const gMatch = groups.find((o) => o.id === childTargetId);
+    const t = sMatch ?? iMatch ?? gMatch;
+    if (!t || t.parent) return; // 既にどこかへ付け替え済みなら触らない
+    t.parent = grpId;
+    t.x = (t.x ?? 0) - gx;
+    t.y = (t.y ?? 0) - gy;
+  };
+  for (const el of bfsOrder) {
+    if (!targetIdOf.has(el.id)) continue;
+    if ((capabilityOf.get(el.id) ?? "free") !== "free") continue;
+    const m = motionFor(el.role);
+    if (m.entrance === "chart-grow") continue; // 専用グループと二重に包まない
+    // 位置も大きさも動かさない要素（fade だけ）はグループ不要。作ると子が全部
+    // 「親に運ばれる」扱いになり、ページ全体の入場がロールに関係なく fade に潰れる
+    // （実測 2026-09-01: 背景に grp を作ったら全要素の入場が fade-in になった）
+    if (!(m.hover || m.press || m.idle || m.entrance !== "fade-in")) continue;
+    const rect = clamped.get(el.id)!;
+    const gx = rect[0] + rect[2] / 2;
+    const gy = rect[1] + rect[3] / 2;
+    const grpId = `grp_${el.id}`;
+    // 親要素が既にグループを持つなら、その子として置く（座標は親グループ相対）
+    const parentGrp = el.parent !== null ? groupOf.get(el.parent) : undefined;
+    let ox = gx, oy = gy;
+    if (parentGrp) {
+      const pr = clamped.get(el.parent!)!;
+      ox = gx - (pr[0] + pr[2] / 2);
+      oy = gy - (pr[1] + pr[3] / 2);
+    }
+    grpDefs.push({ id: grpId, x: ox, y: oy, ...(parentGrp ? { parent: parentGrp } : {}) });
+    groupOf.set(el.id, grpId);
+    reparent(targetIdOf.get(el.id)!, grpId, gx, gy);
+    // 直下の子で「自分のグループを持たない」ものだけをここへ入れる。
+    // 自分のグループを持つ子（カードの中のボタン）は上の parentGrp 経由でぶら下がる
+    for (const cid of el.children) {
+      const child = byId.get(cid);
+      if (!child || !targetIdOf.has(cid)) continue;
+      const cm = motionFor(child.role);
+      const childWillGroup = (capabilityOf.get(cid) ?? "free") === "free" &&
+        (cm.hover || cm.press || cm.idle || cm.entrance !== "chart-grow");
+      if (childWillGroup) continue; // 後で自分のグループとして parentGrp にぶら下がる
+      reparent(targetIdOf.get(cid)!, grpId, gx, gy);
+    }
+  }
+  groups.unshift(...grpDefs);
+  /** アニメの対象: グループがあればグループ、無ければ可視ターゲット */
+  const animTargetOf = (elId: number): string => groupOf.get(elId) ?? targetIdOf.get(elId)!;
+
   // 5) entrance タイムライン
   const entranceMs = input.motion.entranceMs ?? 1200;
   const animatable = bfsOrder.filter((el) => targetIdOf.has(el.id));
@@ -323,12 +449,16 @@ export function buildPrototypeScene(input: PrototypeInput): {
   let maxEndFrame = Math.round((entranceMs / 1000) * FPS);
 
   animatable.forEach((el, i) => {
-    const targetId = targetIdOf.get(el.id)!;
+    const targetId = animTargetOf(el.id);
     const atFrame = Math.round((delayFor(i) / 1000) * FPS);
     // **焼き付いた切り出しを平行移動させない。** capability が fade-only の要素は
     // ロールの入場（rise-in/slide-in など位置を動かすもの）を使わず fade に落とす。
     const cap = capabilityOf.get(el.id) ?? "free";
-    const preset = cap === "fade-only" ? FADE_ONLY_ENTRANCE : motionFor(el.role).entrance;
+    // 親がグループで動くなら、子は親と一緒に運ばれてくる。子自身の入場まで位置を
+    // 動かすと親の動きと合成されて「ちぎれて飛んでくる」ように見える（実測 2026-09-01）。
+    // 子はその場でフェードだけさせる
+    const ridesParent = el.parent !== null && groupOf.has(el.parent);
+    const preset = cap === "fade-only" || ridesParent ? FADE_ONLY_ENTRANCE : motionFor(el.role).entrance;
 
     if (preset === "chart-grow") {
       // chart-grow は既存プリセットに無いので自前でキーフレームを組む。
@@ -402,7 +532,7 @@ export function buildPrototypeScene(input: PrototypeInput): {
       // 焼き付いた切り出し(fade-only)には付けない。常時ループする分、
       // 入場より二重露出が目立つ。
       .filter((el) => motionFor(el.role).idle && (capabilityOf.get(el.id) ?? "free") === "free")
-      .map((el) => ({ preset: motionFor(el.role).idle as PresetName, target: targetIdOf.get(el.id)! }));
+      .map((el) => ({ preset: motionFor(el.role).idle as PresetName, target: animTargetOf(el.id) }));
     animations.push({ name: "idle", fps: FPS, duration: FPS * 4, loop: "loop", tracks: [], presets: idlePresets });
   }
 
@@ -432,9 +562,11 @@ export function buildPrototypeScene(input: PrototypeInput): {
       if ((capabilityOf.get(el.id) ?? "free") !== "free") continue;
       const m = motionFor(el.role);
       if (!m.hover && !m.press) continue;
-      const targetId = targetIdOf.get(el.id)!;
+      const targetId = animTargetOf(el.id);
       const rect = clamped.get(el.id)!;
-      const cy = rect[1] + rect[3] / 2;
+      // グループは要素中心に置いてあるので、lift の基準 y はグループ自身の y（親グループ相対）
+      const grpMatch = groups.find((g) => g.id === targetId);
+      const cy = grpMatch ? (grpMatch.y ?? 0) : rect[1] + rect[3] / 2;
 
       // hover の見た目。値は「気づくが叫ばない」程度（Studio の実物で確認した感覚値）
       const hoverTracks: TrackSpec[] = [];

@@ -238,6 +238,8 @@ window.riveApi = {
     const W = bitmap.width, H = bitmap.height;
     const parts = [];
     for (const region of opts.regions) {
+      // cut: true は「base から消すだけ」の領域。画像アセットは作らない
+      if (region.cut) continue;
       const xs = region.polygon.map((p) => p[0]);
       const ys = region.polygon.map((p) => p[1]);
       const x0 = Math.max(0, Math.floor(Math.min(...xs)));
@@ -255,6 +257,21 @@ window.riveApi = {
       ctx.closePath();
       ctx.clip();
       ctx.drawImage(bitmap, -x0, -y0);
+
+      // holes: この切り抜きの内側で「別の要素として上に描かれ、かつ動きうる」領域。
+      // 抜かないと、カードの切り抜きにボタンが焼き付いたまま残り、上のベクターが
+      // 入場や press で動いた瞬間に下から同じ絵が現れて二重になる
+      // （実測 2026-09-01: サインインカードの入場でボタンが 2 枚見えた）。
+      for (const hole of region.holes ?? []) {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        hole.forEach(([px, py], i) =>
+          i === 0 ? ctx.moveTo(px - x0, py - y0) : ctx.lineTo(px - x0, py - y0)
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalCompositeOperation = "source-over";
+      }
 
       // matte が付いている領域は、切り出した矩形をそのまま貼るのではなく
       // 前景色 + alpha に置き換える。矩形のまま貼ると背景が焼き付き、
@@ -1197,6 +1214,48 @@ window.riveApi = {
         matte: m && m.eligible ? { fg: m.fg, bg: m.bg, space: m.space } : undefined,
         _wr: [gx0, gy0, gx1, gy1],
       });
+    }
+
+    // --- ほぼ同じ場所を指すテキスト行の統合 ---
+    //
+    // 量子化の断片から行を 2 通りに束ねてしまい、ink 伸長後にほぼ同じ矩形へ収束することがある
+    // （実測 2026-09-01: "Password" が 73,229,63x12 と 74,229,62x12 の 2 要素になった。
+    //  静止画では完全に重なって見えないが、入場アニメで 2 枚が別々にフェードして二重に見える）。
+    // 交差面積が小さい方の 85% 以上なら同じ行とみなし、矩形を union して 1 枚に。
+    // matte は面積の大きい方のものを残す（両者はほぼ同じ画素を指しているので差は縁だけ）。
+    {
+      const texts = regions.filter((r) => r.semanticHint === "text");
+      const drop = new Set();
+      for (let i = 0; i < texts.length; i++) {
+        if (drop.has(texts[i])) continue;
+        for (let j = i + 1; j < texts.length; j++) {
+          if (drop.has(texts[j])) continue;
+          const a = texts[i].rect, b = texts[j].rect;
+          const ix = Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]));
+          const iy = Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
+          const inter = ix * iy;
+          // IoU で「ほぼ同一」だけを統合する。片側包含（大きな行の中の短い語）まで統合すると、
+          // 別の行を呑んで文字カバレッジが落ちる（実測 2026-09-01: holdout の
+          // textInkRasterCover 0.9996 → 0.958）。同一矩形の二重検出だけを消す
+          const uni = a[2] * a[3] + b[2] * b[3] - inter;
+          if (uni <= 0 || inter / uni < 0.8) continue;
+          const keep = a[2] * a[3] >= b[2] * b[3] ? texts[i] : texts[j];
+          const gone = keep === texts[i] ? texts[j] : texts[i];
+          const x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]);
+          keep.rect = [x0, y0, Math.max(a[0] + a[2], b[0] + b[2]) - x0, Math.max(a[1] + a[3], b[1] + b[3]) - y0];
+          if (keep._wr && gone._wr) {
+            keep._wr = [Math.min(keep._wr[0], gone._wr[0]), Math.min(keep._wr[1], gone._wr[1]),
+              Math.max(keep._wr[2], gone._wr[2]), Math.max(keep._wr[3], gone._wr[3])];
+          }
+          drop.add(gone);
+          if (keep === texts[j]) break;
+        }
+      }
+      if (drop.size) {
+        const kept = regions.filter((r) => !drop.has(r));
+        regions.length = 0;
+        for (const r of kept) regions.push(r);
+      }
     }
 
     // --- 文字で覆われた穴を充填率に算入して再分類 ---

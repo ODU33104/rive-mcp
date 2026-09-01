@@ -42,7 +42,8 @@ const json = JSON.stringify(built.spec);
 check("panel はベクター化される", json.includes("6C7BFF"));
 check("text はラスタ切り出し対象", built.rasterRegions.some((r) => r.name.includes("3")),
   built.rasterRegions.map((r) => r.name).join(","));
-check("panel はラスタにしない", !built.rasterRegions.some((r) => r.name.includes("el2")));
+check("panel はラスタにしない（basecut は base から消すだけの領域）",
+  !built.rasterRegions.some((r) => r.name.includes("el2") && !r.cut));
 check("entrance タイムラインがある", json.includes("entrance"));
 check("interactions で SM がある", json.includes("Interactions"));
 check("button の press 入力がある", json.includes("press_2"));
@@ -114,7 +115,7 @@ check("制限は黙って行われない",
   const idleAnim = withAmbient.spec.animations.find((a) => a.name === "idle");
   check("idle: ambient trueでタイムラインが存在", !!idleAnim);
   const idleTargets = (idleAnim?.presets ?? []).map((p) => p.target);
-  check("idle: idleを持つcardが対象に含まれる", idleTargets.includes("el1"), idleTargets.join(","));
+  check("idle: idleを持つcardが対象に含まれる（2026-09-01から動きはgrpに付く）", idleTargets.includes("grp_1"), idleTargets.join(","));
   check("idle: idleを持たないtextは対象に含まれない", !idleTargets.includes("el2_text"), idleTargets.join(","));
 
   const withoutAmbient = buildPrototypeScene({
@@ -201,14 +202,16 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
   const idleTargets = (b) =>
     (b.spec.animations.find((a) => a.name === "idle")?.presets ?? []).map((p) => p.target);
   const smNames = (b) => (b.spec.stateMachine?.inputs ?? []).map((i) => i.name);
-  const target = "el2_card";
+  const target = "el2_card";          // ラスタ切り出しの名前
+  const animTargetGood = "grp_2";     // free の要素の動きは grp_<id> に付く
+  const animTargetBad = "el2_card";   // fade-only はグループを持たない
 
-  check("matte 付きはロールどおりの入場", entranceOf(good, target).includes(ROLE_MOTION.card.entrance),
-    entranceOf(good, target).join(","));
-  check("matte 無しは fade-in に落ちる", entranceOf(bad, target).join(",") === "fade-in",
-    entranceOf(bad, target).join(","));
-  check("matte 付きは idle が付く", idleTargets(good).includes(target), idleTargets(good).join(","));
-  check("matte 無しは idle が付かない", !idleTargets(bad).includes(target), idleTargets(bad).join(","));
+  check("matte 付きはロールどおりの入場", entranceOf(good, animTargetGood).includes(ROLE_MOTION.card.entrance),
+    entranceOf(good, animTargetGood).join(","));
+  check("matte 無しは fade-in に落ちる", entranceOf(bad, animTargetBad).join(",") === "fade-in",
+    entranceOf(bad, animTargetBad).join(","));
+  check("matte 付きは idle が付く", idleTargets(good).includes(animTargetGood), idleTargets(good).join(","));
+  check("matte 無しは idle が付かない", !idleTargets(bad).some((t) => t.includes("2")), idleTargets(bad).join(","));
   check("matte 付きは hover 入力がある", smNames(good).includes("hover_2"), smNames(good).join(","));
   check("matte 無しは hover 入力が無い", !smNames(bad).includes("hover_2"), smNames(bad).join(","));
   check("制限したことを黙っていない",
@@ -257,7 +260,7 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
     fill: { color: "#FF0000" },
   };
   const vec = buildPrototypeScene({
-    source: { width: 400, height: 300 },
+    source: { width: 400, height: 300, kind: "svg" },
     elements: [
       { id: 1, parent: null, children: [2], renderMode: "vector-panel", semanticHint: "panel",
         rect: [0, 0, 400, 300], fill: "#101010", zIndex: 0, role: "background" },
@@ -269,8 +272,10 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
   });
   const wrapper = vec.spec.groups?.find((g) => g.id === "el2");
   check("vector-shape はラッパーグループを持つ", !!wrapper);
-  check("ラッパーは要素の中心に置く（拡大の軸が要素の中心になる）",
-    wrapper && wrapper.x === 120 && wrapper.y === 60, wrapper && `${wrapper.x},${wrapper.y}`);
+  const absOfVec = (id) => { let x = 0, y = 0; let g = vec.spec.groups?.find((o) => o.id === id);
+    while (g) { x += g.x ?? 0; y += g.y ?? 0; g = vec.spec.groups?.find((o) => o.id === g.parent); } return [x, y]; };
+  check("ラッパーは要素の中心に置く（拡大の軸が要素の中心になる。grp 連鎖の合成で判定）",
+    wrapper && absOfVec("el2")[0] === 120 && absOfVec("el2")[1] === 60, wrapper && `abs=${absOfVec("el2")}`);
   const child = vec.spec.shapes.find((s) => s.parent === "el2");
   check("シェイプはラッパーのローカル座標に移す",
     child && child.x === 0 && child.y === 0, child && `${child.x},${child.y}`);
@@ -278,7 +283,7 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
   check("頂点は落とさない", child?.subpaths?.[0].points.length === 4);
   check("ベクターなので切り出しは作らない", vec.rasterRegions.length === 0);
   const vecJson = JSON.stringify(vec.spec);
-  check("アニメの対象はラッパーグループ", vecJson.includes('"target":"el2"'), vecJson.slice(0, 0) || "");
+  check("アニメの対象はラッパーグループ（grp_<id> か el<id>）", /"target":"(grp_2|el2)"/.test(vecJson));
   // 焼き付きが無いので制限しない = hover / press が付く
   check("vector-shape は自由に動かせる", motionCapabilityOf({ renderMode: "vector-shape", rect: [0, 0, 10, 10] }) === "free");
   check("vector-shape にも hover が付く", vecJson.includes("hover_2"));
@@ -336,7 +341,7 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
 {
   const fontBytes = new Uint8Array([0, 1, 0, 0]); // 中身は使わない（createRiv は通さない）
   const built = buildPrototypeScene({
-    source: { width: 400, height: 300 },
+    source: { width: 400, height: 300, kind: "svg" },
     elements: [
       { id: 1, parent: null, children: [2, 3], renderMode: "vector-panel", semanticHint: "panel",
         rect: [0, 0, 400, 300], fill: "#FFFFFF", zIndex: 0, role: "background" },
@@ -353,17 +358,21 @@ check("警告に元と後の値が載る", over.warnings[0].includes("380") && o
   });
   const t = built.spec.texts?.[0];
   check("vector-text は TextSpec になる", !!t, JSON.stringify(built.spec.texts));
+  // 2026-09-01 から、動きの単位は grp_<id>（要素+子孫）。el2 ラッパーはその子になり、
+  // 絶対位置はグループ連鎖の合成で決まる
+  const absOf = (id) => { let x = 0, y = 0; let g = built.spec.groups?.find((o) => o.id === id);
+    while (g) { x += g.x ?? 0; y += g.y ?? 0; g = built.spec.groups?.find((o) => o.id === g.parent); } return [x, y]; };
   check("Text はラッパーグループの子（原点が左上なので中心を軸に動かすため）",
-    t?.parent === "el2" && !!built.spec.groups?.find((g) => g.id === "el2" && g.x === 100 && g.y === 54),
-    `${t?.parent} ${JSON.stringify(built.spec.groups)}`);
+    t?.parent === "el2" && absOf("el2")[0] === 100 && absOf("el2")[1] === 54,
+    `${t?.parent} abs=${absOf("el2")}`);
   check("Text の座標はラッパーからの相対",
     t && t.x === 40 - 100 && t.y === 44 - 54, t && `${t.x},${t.y}`);
   check("ラン名にレイヤー名が付く（ランタイムから差し替えられる）",
     t?.runs[0].name === "Title" && t.runs[0].text === "Hello", JSON.stringify(t?.runs));
   check("フォントはシーンに 1 度だけ載る",
     built.spec.fonts?.length === 1 && built.spec.fonts[0].bytes === fontBytes);
-  check("アニメの対象はラッパーグループ",
-    JSON.stringify(built.spec.animations).includes('"target":"el2"'));
+  check("アニメの対象はラッパーグループ（grp_<id> か el<id>）",
+    /"target":"(grp_2|el2)"/.test(JSON.stringify(built.spec.animations)));
 
   check("自前の画素を持つ raster は元画像から切り出さない", built.rasterRegions.length === 0);
   const img = built.spec.images.find((i) => i.id === "el3_image");
