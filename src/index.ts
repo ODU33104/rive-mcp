@@ -99,6 +99,14 @@ function wrap<A extends unknown[]>(fn: (...args: A) => Promise<ToolResult>) {
   };
 }
 
+// z.tuple() emits draft-07 tuple "items" (an array of schemas), which some
+// MCP clients' JSON-schema validators reject. A length-2 number array emits
+// the equivalent single-schema form; the cast keeps the [number, number]
+// inferred type so handlers stay unchanged. Factory form: reusing one zod
+// instance across tools would make the converter emit a $ref, which those
+// validators also reject.
+const point2D = () => z.array(z.number()).length(2) as unknown as z.ZodTuple<[z.ZodNumber, z.ZodNumber]>;
+
 // ---- riv_list ----------------------------------------------------------
 server.registerTool(
   "riv_list",
@@ -1045,7 +1053,7 @@ server.registerTool(
         .array(
           z.object({
             name: z.string(),
-            polygon: z.array(z.tuple([z.number(), z.number()])).min(3)
+            polygon: z.array(point2D()).min(3)
               .describe("Polygon vertices in source image pixel coords"),
             keepInBase: z.boolean().optional().describe("Don't erase this region from base.png"),
           })
@@ -1097,8 +1105,8 @@ server.registerTool(
       outPath: z.string().describe("Output .riv path"),
       parts: z.record(
         z.object({
-          polygon: z.array(z.tuple([z.number(), z.number()])).min(3).describe("Region in image px coords"),
-          pivot: z.tuple([z.number(), z.number()]).optional().describe("Attachment point (default: bottom-center of bbox)"),
+          polygon: z.array(point2D()).min(3).describe("Region in image px coords"),
+          pivot: point2D().optional().describe("Attachment point (default: bottom-center of bbox)"),
           behindBody: z.boolean().optional().describe("Draw behind the body (e.g. tail)"),
         })
       ).optional().describe("Named cutout parts, e.g. {earL, earR, tail}. Names containing 'ear' attach to the head"),
@@ -1374,7 +1382,10 @@ server.registerTool(
 );
 
 // ---- riv_batch_render ------------------------------------------------------
-const batchDefaultsShape = {
+// Factory, not a shared object: spreading the same zod instances into both
+// batchJobSchema and `defaults` would make the JSON-schema converter emit
+// $ref dedup pointers, which some MCP clients' validators reject.
+const batchDefaultsShape = () => ({
   format: z.enum(["png", "gif", "apng", "webm", "sprites"]).optional().describe("Output format for this job"),
   outDir: z.string().optional().describe("Output directory (default: alongside the source .riv)"),
   artboard: z.string().optional(),
@@ -1389,11 +1400,11 @@ const batchDefaultsShape = {
   transparent: z.boolean().optional().describe("format=apng: render on a transparent background (default true)"),
   loops: z.number().int().min(0).optional().describe("format=apng: loop count, 0=infinite (default 0)"),
   count: z.number().int().positive().max(256).optional().describe("format=sprites: frame count (default 16)"),
-};
+});
 const batchJobSchema = z.object({
   rivPath: z.string().optional().describe("Path to a single .riv file (mutually exclusive with glob)"),
   glob: z.string().optional().describe("Glob pattern matching multiple .riv files, e.g. 'samples/**/*.riv' (self-contained matcher: only '*' and '**' are supported, no {a,b} or [abc])"),
-  ...batchDefaultsShape,
+  ...batchDefaultsShape(),
 });
 
 server.registerTool(
@@ -1404,7 +1415,7 @@ server.registerTool(
       "Render a list of jobs — each a single .riv (rivPath) or a glob of .riv files (glob) — to png/gif/apng/webm/sprites, sequentially reusing the same headless Chromium page (no parallel pages). Built for CI/scripts: call this tool repeatedly from your pipeline instead of expecting a live watch mode — none is provided, since MCP's request/response model doesn't fit a background file watcher. 'defaults' holds options shared across every job; each job's own fields override them. One job's failure does not stop the batch — every job (and every file a glob expands to) gets its own success/error/outPath/durationMs entry in the returned report.",
     inputSchema: {
       jobs: z.array(batchJobSchema).min(1).max(200).describe("Jobs to render, in order"),
-      defaults: z.object(batchDefaultsShape).optional().describe("Shared defaults merged under each job (job-level values win)"),
+      defaults: z.object(batchDefaultsShape()).optional().describe("Shared defaults merged under each job (job-level values win)"),
     },
   },
   wrap(async ({ jobs, defaults }: { jobs: BatchJobSpec[]; defaults?: BatchJobSpec }) => {
