@@ -50,3 +50,6 @@ samples/riv.app-marketplace/
 
 # テスト出力（生成物。コミットしない）
 test/tmp/
+
+# ローカルMCPサーバー設定（絶対パス入り・開発者ごとに異なる）
+.mcp.json
