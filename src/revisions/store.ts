@@ -54,6 +54,7 @@ export class FileRevisionStore {
       sourceHash: revision.sourceHash,
       sourceKind: revision.sourceKind,
       operation: revision.operation,
+      provenance: revision.provenance ?? [],
     });
     const expectedAssetRef = "r_" + hashHex(expectedRevisionHash).slice(0, 32);
     if (revision.revisionHash !== expectedRevisionHash || expectedAssetRef !== assetRef) {
@@ -93,12 +94,14 @@ export class FileRevisionStore {
 
     const rivHash = sha256Bytes(input.rivBytes);
     const sourceHash = input.sourceBytes === undefined ? undefined : sha256Bytes(input.sourceBytes);
+    const provenance = input.provenance ?? [];
     const identity = {
       parentRef: input.parentRef,
       rivHash,
       sourceHash,
       sourceKind: input.sourceKind,
       operation: input.operation,
+      provenance,
     };
     const fullRevisionHash = revisionHash(identity);
     const assetRef = "r_" + hashHex(fullRevisionHash).slice(0, 32);
@@ -126,6 +129,7 @@ export class FileRevisionStore {
       rivPath: input.rivPath,
       sourcePath: input.sourcePath,
       operation: input.operation,
+      provenance,
     };
     writeAtomic(existingPath, JSON.stringify(revision, null, 2) + "\n");
     return revision;
@@ -139,5 +143,6 @@ export function revisionSummary(revision: AssetRevision): Record<string, unknown
     rivHash: revision.rivHash,
     sourceHash: revision.sourceHash ?? null,
     sourceKind: revision.sourceKind,
+    provenance: revision.provenance ?? [],
   };
 }
