@@ -21,6 +21,7 @@ jobs:
       - run: npm run test:reviews
       - run: npm run test:tool-registry
       - run: npm run test:tool-surface
+      - run: npm run test:skills
       - run: npm run test:phase1
       - run: npm run test:phase2
       - run: npm run test:e2e-baseline
