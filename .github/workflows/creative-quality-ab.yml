@@ -1,0 +1,160 @@
+name: creative-quality-ab
+
+on:
+  pull_request:
+    paths:
+      - "test/ab/**"
+      - ".github/workflows/creative-quality-ab.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "pilot = 3 briefs x 2 versions; full = 9 briefs x 2 versions"
+        required: true
+        default: "pilot"
+        type: choice
+        options: [pilot, full]
+      repeats:
+        description: "Independent repeats per version/brief"
+        required: true
+        default: "1"
+      model:
+        description: "OpenAI API model"
+        required: true
+        default: "gpt-5.6-luna"
+      reasoning_effort:
+        description: "Reasoning effort"
+        required: true
+        default: "medium"
+        type: choice
+        options: [low, medium, high]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --check test/ab/runAgent.mjs
+      - run: node --check test/ab/aggregate.mjs
+      - run: node -e "const b=require('./test/ab/briefs.json'); if(b.briefs.length!==9) process.exit(1); if(b.briefs.filter(x=>x.pilot).length!==3) process.exit(2); console.log('A/B protocol fixtures valid')"
+
+  pilot-on-pr:
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check API credential availability
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          mkdir -p test/tmp/creative-ab/_summary
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo '{"status":"blocked","reason":"OPENAI_API_KEY GitHub Actions secret is not configured"}' > test/tmp/creative-ab/_summary/blocked.json
+            echo "LIVE_AB=0" >> "$GITHUB_ENV"
+          else
+            echo "LIVE_AB=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Checkout baseline snapshot
+        if: env.LIVE_AB == '1'
+        uses: actions/checkout@v4
+        with:
+          ref: d44adbbe224e38aacf2caad43c32dc482fc23bf8
+          path: compare/baseline
+
+      - name: Checkout current snapshot
+        if: env.LIVE_AB == '1'
+        uses: actions/checkout@v4
+        with:
+          ref: dec889c9df42009930da9c6cadd6bbfe525caea2
+          path: compare/current
+
+      - uses: actions/setup-node@v4
+        if: env.LIVE_AB == '1'
+        with:
+          node-version: 20
+
+      - name: Build both snapshots
+        if: env.LIVE_AB == '1'
+        run: |
+          (cd compare/baseline && npm ci && npm run build)
+          (cd compare/current && npm ci && npm run build)
+
+      - name: Run pilot A/B
+        if: env.LIVE_AB == '1'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AB_MODEL: gpt-5.6-luna
+          AB_REASONING_EFFORT: medium
+        run: |
+          set -euo pipefail
+          for brief in fintech-status-card weather-micro-interaction existing-file-refinement; do
+            node test/ab/runAgent.mjs --version=baseline --repo=compare/baseline --brief="$brief" --run=1 --model="$AB_MODEL"
+            node test/ab/runAgent.mjs --version=current  --repo=compare/current  --brief="$brief" --run=1 --model="$AB_MODEL"
+          done
+          node test/ab/aggregate.mjs test/tmp/creative-ab
+
+      - name: Upload pilot / blocker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creative-quality-ab-pilot
+          path: test/tmp/creative-ab
+          if-no-files-found: error
+
+  dispatch-ab:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: d44adbbe224e38aacf2caad43c32dc482fc23bf8
+          path: compare/baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: dec889c9df42009930da9c6cadd6bbfe525caea2
+          path: compare/current
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Require API key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          test -n "$OPENAI_API_KEY" || (echo "Configure repository Actions secret OPENAI_API_KEY first" && exit 2)
+      - name: Build both snapshots
+        run: |
+          (cd compare/baseline && npm ci && npm run build)
+          (cd compare/current && npm ci && npm run build)
+      - name: Run selected A/B
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AB_MODEL: ${{ inputs.model }}
+          AB_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+          MODE: ${{ inputs.mode }}
+          REPEATS: ${{ inputs.repeats }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = "pilot" ]; then
+            briefs="fintech-status-card weather-micro-interaction existing-file-refinement"
+          else
+            briefs="fintech-status-card weather-micro-interaction music-player-control onboarding-progress game-reward-reveal upload-state-machine data-visualization-tile vector-reaction existing-file-refinement"
+          fi
+          for brief in $briefs; do
+            for run in $(seq 1 "$REPEATS"); do
+              node test/ab/runAgent.mjs --version=baseline --repo=compare/baseline --brief="$brief" --run="$run" --model="$AB_MODEL"
+              node test/ab/runAgent.mjs --version=current  --repo=compare/current  --brief="$brief" --run="$run" --model="$AB_MODEL"
+            done
+          done
+          node test/ab/aggregate.mjs test/tmp/creative-ab
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creative-quality-ab-${{ inputs.mode }}
+          path: test/tmp/creative-ab
+          if-no-files-found: error
