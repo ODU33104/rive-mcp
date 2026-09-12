@@ -33,8 +33,10 @@ import { importLottie } from "./lottieImport.js";
 import { decompileRiv } from "./rivDecompile.js";
 import { runBatchRender, type BatchJobSpec } from "./batchRender.js";
 import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
+import { FileRevisionStore, revisionSummary } from "./revisions/store.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
+const revisionStore = new FileRevisionStore();
 
 const server = new McpServer({
   name: "rive-mcp",
@@ -869,6 +871,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
   },
   wrap(
     async ({ outPath, scene, previewTime }: { outPath: string; scene: Record<string, unknown>; previewTime?: number }) => {
+      const sourceSnapshot = JSON.stringify(scene);
       const spec = scene as unknown as SceneSpec & {
         imports?: Array<{ spec: string; id?: string; parent?: string; x?: number; y?: number; scale?: number; z?: number }>;
       };
@@ -931,6 +934,13 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
         frameCount: 1,
         format: "png",
       });
+      const revision = revisionStore.put({
+        rivBytes: bytes,
+        sourceBytes: sourceSnapshot,
+        sourceKind: "scene-spec",
+        rivPath: out,
+        operation: { tool: "riv_create" },
+      });
       return {
         content: [
           {
@@ -938,6 +948,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
             text:
               `Created ${out} (${bytes.length} bytes) — validated with official Rive runtime.\n` +
               JSON.stringify(info, null, 1) +
+              `\nRevision: ${JSON.stringify(revisionSummary(revision))}` +
               (warnings.length ? `\nWarnings: ${warnings.join("; ")}` : ""),
           },
           { type: "image", data: r.frames[0], mimeType: "image/png" },
@@ -956,8 +967,9 @@ server.registerTool(
       "Modify an existing .riv (lossless roundtrip): set any property, change named text runs, delete objects (with automatic subtree + reference remapping), or edit keyframes on an existing animation (op=setKeyframes). Use riv_dump to find object indices/names. Renders a preview of the result.\n" +
       "setKeyframes: target an animated object via index/name(+type), give 'animation' (LinearAnimation name) and 'property' (x/y/rotation/scaleX/scaleY/opacity/width/height — rotation in degrees), then 'keyframes' (array of {frame,value,easing}). 'mode': replace (default, swaps the whole track) | add (appends keyframes, creating the track if absent) | remove (deletes keyframes matching the given frame numbers; keyframes[].value/easing are ignored).",
     inputSchema: {
-      path: z.string().describe("Source .riv path"),
-      outPath: z.string().optional().describe("Output path (default: overwrite source)"),
+      path: z.string().optional().describe("Source .riv path (use exactly one of path or assetRef)"),
+      assetRef: z.string().optional().describe("Immutable revision reference (use exactly one of path or assetRef)"),
+      outPath: z.string().optional().describe("Output path (path mode default: overwrite source; assetRef mode default: no file write)"),
       edits: z.array(
         z.object({
           op: z.enum(["set", "setText", "delete", "setKeyframes"]),
@@ -981,20 +993,58 @@ server.registerTool(
       ).min(1),
     },
   },
-  wrap(async ({ path, outPath, edits }: { path: string; outPath?: string; edits: EditOp[] }) => {
-    const { bytes, abs } = loadRiv(path);
+  wrap(async ({ path, assetRef, outPath, edits }: { path?: string; assetRef?: string; outPath?: string; edits: EditOp[] }) => {
+    if ((path ? 1 : 0) + (assetRef ? 1 : 0) !== 1) {
+      return err("Provide exactly one of path or assetRef");
+    }
+
+    let bytes: Buffer;
+    let abs: string | undefined;
+    let parentRef: string | undefined;
+    if (assetRef) {
+      const resolvedRevision = revisionStore.get(assetRef);
+      bytes = resolvedRevision.rivBytes;
+      abs = resolvedRevision.revision.rivPath;
+      parentRef = assetRef;
+    } else {
+      const loaded = loadRiv(path!);
+      bytes = loaded.bytes;
+      abs = loaded.abs;
+    }
+
     const result = editRiv(bytes, edits);
-    const out = resolve(outPath ?? abs);
-    writeFileSync(out, result.bytes);
+    let out: string | undefined;
+    if (assetRef) {
+      if (outPath) {
+        out = resolve(outPath);
+        writeFileSync(out, result.bytes);
+      }
+    } else {
+      out = resolve(outPath ?? abs!);
+      writeFileSync(out, result.bytes);
+    }
+
+    const revision = revisionStore.put({
+      rivBytes: result.bytes,
+      parentRef,
+      sourceKind: "binary-edit",
+      rivPath: out,
+      operation: { tool: "riv_edit", details: edits },
+    });
     const r = await host.renderFrames(Buffer.from(result.bytes), { frameCount: 1, format: "png" });
+    const target = out ?? "(revision store only)";
     return {
       content: [
-        { type: "text", text: `Edited -> ${out}\n${result.log.join("\n")}` },
+        {
+          type: "text",
+          text:
+            `Edited -> ${target}\n${result.log.join("\n")}\n` +
+            `Revision: ${JSON.stringify(revisionSummary(revision))}`,
+        },
         { type: "image", data: r.frames[0], mimeType: "image/png" },
       ],
     };
-  })
-);
+  }));
 
 // ---- riv_optimize --------------------------------------------------------
 server.registerTool(
