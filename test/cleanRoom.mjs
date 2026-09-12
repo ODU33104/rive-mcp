@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,8 @@ const refinedPath = join(workspace, "refined.riv");
 const finalAuthoredPath = join(workspace, "authored.final.riv");
 const finalRefinedPath = join(workspace, "refined.final.riv");
 const svgSpecPath = join(workspace, "asset.scene.json");
+const artifactDir = join(repoRoot, "test", "tmp", "clean-room");
+mkdirSync(artifactDir, { recursive: true });
 
 const child = spawn(process.execPath, [join(repoRoot, "dist", "index.js")], {
   cwd: workspace,
@@ -188,8 +190,13 @@ try {
     authoredFinalize: finalizedAuthored,
     refinedFinalize: finalizedRefined,
   };
-  writeFileSync(join(workspace, "clean-room-report.json"), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify(report, null, 2));
+  const reportText = JSON.stringify(report, null, 2);
+  writeFileSync(join(workspace, "clean-room-report.json"), reportText);
+  writeFileSync(join(artifactDir, "report.json"), reportText);
+  copyFileSync(finalAuthoredPath, join(artifactDir, "authored.final.riv"));
+  copyFileSync(finalRefinedPath, join(artifactDir, "refined.final.riv"));
+  copyFileSync(svgSpecPath, join(artifactDir, "asset.scene.json"));
+  console.log(reportText);
 } catch (error) {
   exitCode = 1;
   console.error(error instanceof Error ? error.stack ?? error.message : String(error));
