@@ -12,6 +12,8 @@ mkdirSync(outDir, { recursive: true });
 const rivPath = join(outDir, "generated.riv");
 const pngPath = join(outDir, "generated.png");
 const reportPath = join(outDir, "report.json");
+const editedRivPath = join(outDir, "edited.riv");
+const editedPngPath = join(outDir, "edited.png");
 
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
   stdio: ["pipe", "pipe", "inherit"],
@@ -112,12 +114,36 @@ try {
   const revision = JSON.parse(revisionMatch[1]);
   if (!/^r_[0-9a-f]{20}$/.test(revision.assetRef)) throw new Error("invalid assetRef: " + revision.assetRef);
   const rivBytes = requireFile(rivPath, 256);
-  if (readFileSync(rivPath).subarray(0, 4).toString("latin1") !== "RIVE") throw new Error("generated file has no RIVE fingerprint");
+  const baseBytes = readFileSync(rivPath);
+  if (baseBytes.subarray(0, 4).toString("latin1") !== "RIVE") throw new Error("generated file has no RIVE fingerprint");
 
   const render = await callTool("riv_render_frame", { path: rivPath, animation: "intro", time: 0.7, width: 480, outPath: pngPath });
   const image = imageOf(render);
   if (!image || image.data.length < 1000) throw new Error("render did not return a usable image");
   const pngBytes = requireFile(pngPath, 1000);
+
+  // Revision-aware edit: immutable parent stays byte-identical while a child revision is produced.
+  const edit = await callTool("riv_edit", {
+    assetRef: revision.assetRef,
+    outPath: editedRivPath,
+    edits: [{ op: "set", name: "panel", type: "Rectangle", set: { width: 320 } }],
+  });
+  const editText = textOf(edit);
+  const editRevisionMatch = editText.match(/Revision:\s*(\{[^\n]+\})/);
+  if (!editRevisionMatch) throw new Error("riv_edit did not return revision metadata: " + editText);
+  const editedRevision = JSON.parse(editRevisionMatch[1]);
+  if (editedRevision.parentRef !== revision.assetRef) {
+    throw new Error("edited revision parent mismatch: " + JSON.stringify(editedRevision));
+  }
+  if (editedRevision.assetRef === revision.assetRef) throw new Error("edit reused the parent assetRef");
+  if (!baseBytes.equals(readFileSync(rivPath))) throw new Error("assetRef edit mutated the original .riv path");
+  requireFile(editedRivPath, 256);
+
+  const editedRender = await callTool("riv_render_frame", {
+    path: editedRivPath, animation: "intro", time: 0.7, width: 480, outPath: editedPngPath,
+  });
+  if (!imageOf(editedRender)) throw new Error("edited revision did not render");
+  requireFile(editedPngPath, 1000);
 
   const lint = await callTool("riv_lint", { path: rivPath });
   const lintJson = JSON.parse(textOf(lint));
@@ -134,7 +160,8 @@ try {
   const report = {
     ok: true,
     revision,
-    outputs: { rivPath, rivBytes, pngPath, pngBytes },
+    editedRevision,
+    outputs: { rivPath, rivBytes, pngPath, pngBytes, editedRivPath, editedPngPath },
     create: createText,
     lint: lintJson,
     critique: textOf(critique),
