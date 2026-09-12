@@ -38,6 +38,8 @@ import { stableJson, sha256Bytes } from "./revisions/hash.js";
 import { FileReviewStore, reviewSummary } from "./review/store.js";
 import { FileFinalizeStore } from "./finalize/store.js";
 import { ToolRegistry } from "./tools/registry.js";
+import { fileProvenance, mergeProvenance, provenanceEntry, type ProvenanceFragment } from "./provenance.js";
+import type { ProvenanceEntry } from "./revisions/types.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 const revisionStore = new FileRevisionStore();
@@ -687,10 +689,10 @@ toolRegistry.register(
 
 // ---- riv_import_svg ----------------------------------------------------
 // SVG→シーン断片。プレビュー用の一時rivも組んで画像を返す
-async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string) {
+async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string, provenance?: ProvenanceEntry[]) {
   const res = importSvg(svgText, { idPrefix });
   const specPath = resolve(outSpec);
-  writeFileSync(specPath, JSON.stringify({ sourceWidth: res.width, sourceHeight: res.height, shapes: res.shapes }, null, 0));
+  writeFileSync(specPath, JSON.stringify({ sourceWidth: res.width, sourceHeight: res.height, shapes: res.shapes, __provenance: provenance ?? [] }, null, 0));
   const previewScene: SceneSpec = {
     artboard: { name: "SvgPreview", width: Math.max(64, res.width), height: Math.max(64, res.height) },
     shapes: res.shapes,
