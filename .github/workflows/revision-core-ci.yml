@@ -18,6 +18,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:revisions
+      - run: npm run test:reviews
       - run: npm run test:phase1
       - run: npm run test:phase2
       - run: npm run test:e2e-baseline

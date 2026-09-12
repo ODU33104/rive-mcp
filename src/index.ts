@@ -35,9 +35,13 @@ import { runBatchRender, type BatchJobSpec } from "./batchRender.js";
 import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
 import { FileRevisionStore, revisionSummary } from "./revisions/store.js";
 import { stableJson } from "./revisions/hash.js";
+import { FileReviewStore, reviewSummary } from "./review/store.js";
+import { FileFinalizeStore } from "./finalize/store.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 const revisionStore = new FileRevisionStore();
+const reviewStore = new FileReviewStore(revisionStore);
+const finalizeStore = new FileFinalizeStore(revisionStore, reviewStore);
 
 const server = new McpServer({
   name: "rive-mcp",
@@ -528,20 +532,40 @@ server.registerTool(
   {
     title: "Diagnose a .riv file for structural problems",
     description:
-      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, keyframe easing silently discarded on a track's last keyframe, plus motion-quality rules (all-linear robotic movement, teleporting objects, missing stagger on simultaneous fade-ins, one-sided scale animation). Complements riv_dump (which shows raw structure but doesn't judge it).",
+      "Static diagnostic pass over a .riv file: broken/out-of-range references, oversized embedded assets, state-machine states unreachable by any transition, unconditional self-transitions (infinite-loop risk), unused state-machine inputs, keyframe easing silently discarded on a track's last keyframe, plus motion-quality rules (all-linear robotic movement, teleporting objects, missing stagger on simultaneous fade-ins, one-sided scale animation). Complements riv_dump (which shows raw structure but doesn't judge it). Pass exactly one of path or assetRef; assetRef mode also records an immutable review receipt.",
     inputSchema: {
-      path: z.string().describe("Path to the .riv file"),
+      path: z.string().optional().describe("Path to the .riv file (use exactly one of path or assetRef)"),
+      assetRef: z.string().optional().describe("Immutable revision reference; records a lint review receipt"),
     },
   },
-  wrap(async ({ path }: { path: string }) => {
-    const { bytes } = loadRiv(path);
+  wrap(async ({ path, assetRef }: { path?: string; assetRef?: string }) => {
+    if ((path ? 1 : 0) + (assetRef ? 1 : 0) !== 1) {
+      return err("Provide exactly one of path or assetRef");
+    }
+    let bytes: Buffer;
+    if (assetRef) bytes = revisionStore.get(assetRef).rivBytes;
+    else bytes = loadRiv(path!).bytes;
+
     const findings = lintRiv(bytes);
-    const summary = {
+    const summary: Record<string, unknown> = {
       errorCount: findings.filter((f) => f.severity === "error").length,
       warningCount: findings.filter((f) => f.severity === "warning").length,
       infoCount: findings.filter((f) => f.severity === "info").length,
       findings,
     };
+    if (assetRef) {
+      const receipt = reviewStore.put({
+        assetRef,
+        kind: "lint",
+        payload: {
+          errorCount: summary.errorCount,
+          warningCount: summary.warningCount,
+          infoCount: summary.infoCount,
+          findings,
+        },
+      });
+      summary.review = reviewSummary(receipt);
+    }
     return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
   })
 );
@@ -573,7 +597,8 @@ server.registerTool(
     description:
       "One-call review bundle for the render→critique→revise loop. Returns (1) a FILMSTRIP image — N frames left→right across the duration, so motion is readable as a sequence, (2) an ONION-SKIN image — all frames ghost-overlaid so every mover leaves a visible trail (use it to check trajectories and travel direction vs the artwork's facing), (3) a MOTION REPORT — net displacement/rotation vector per animated object computed from the file data, (4) objective design metrics + lint findings, and (5) a fixed 7-axis scoring checklist (incl. spatial/directional coherence). LOOK at the images, score each axis 1-5, fix anything below 4 (riv_edit / regenerate), then re-run. Iterate at least twice before delivering any non-trivial scene.",
     inputSchema: {
-      path: z.string().describe("Path to the .riv file"),
+      path: z.string().optional().describe("Path to the .riv file (use exactly one of path or assetRef)"),
+      assetRef: z.string().optional().describe("Immutable revision reference; records a critique review receipt"),
       artboard: z.string().optional(),
       animation: z.string().optional().describe("Animation to sample (default: first)"),
       stateMachine: z.string().optional(),
@@ -583,8 +608,11 @@ server.registerTool(
     },
   },
   wrap(
-    async (a: { path: string; artboard?: string; animation?: string; stateMachine?: string; frames?: number; width?: number; individualFrames?: boolean }) => {
-      const { bytes } = loadRiv(a.path);
+    async (a: { path?: string; assetRef?: string; artboard?: string; animation?: string; stateMachine?: string; frames?: number; width?: number; individualFrames?: boolean }) => {
+      if ((a.path ? 1 : 0) + (a.assetRef ? 1 : 0) !== 1) {
+        return err("Provide exactly one of path or assetRef");
+      }
+      const bytes = a.assetRef ? revisionStore.get(a.assetRef).rivBytes : loadRiv(a.path!).bytes;
       const buf = Buffer.from(bytes);
       const metrics = computeMetrics(bytes);
       const info = await host.inspect(buf);
@@ -609,6 +637,25 @@ server.registerTool(
       const stripPng = Buffer.from(encodePng(strip.rgba, strip.width, strip.height)).toString("base64");
       const onionPng = Buffer.from(encodePng(onion.rgba, onion.width, onion.height)).toString("base64");
       const times = Array.from({ length: n }, (_, i) => Math.round((i / fps) * 100) / 100);
+      const receipt = a.assetRef
+        ? reviewStore.put({
+            assetRef: a.assetRef,
+            kind: "critique",
+            payload: {
+              runtimeValidation: { ok: true },
+              target: {
+                artboard: ab?.name ?? a.artboard ?? null,
+                animation: anim?.name ?? null,
+                stateMachine: a.stateMachine ?? null,
+              },
+              sampledFrames: n,
+              width: r.width,
+              height: r.height,
+              times,
+              metrics,
+            },
+          })
+        : null;
       return {
         content: [
           {
@@ -617,7 +664,9 @@ server.registerTool(
               `Sampled "${anim?.name ?? a.stateMachine ?? "?"}" at t=[${times.join(", ")}]s (cells ${r.width}x${r.height}). ` +
               `Image 1 = filmstrip (time flows left→right), image 2 = onion skin (motion trails).\n` +
               `${motionReport(bytes)}\n` +
-              `METRICS ${JSON.stringify(metrics, null, 1)}\n\n${CRITIQUE_CHECKLIST}`,
+              `METRICS ${JSON.stringify(metrics, null, 1)}\n` +
+              (receipt ? `ReviewReceipt: ${JSON.stringify(reviewSummary(receipt))}\n` : "") +
+              `\n${CRITIQUE_CHECKLIST}`,
           },
           { type: "image" as const, data: stripPng, mimeType: "image/png" },
           { type: "image" as const, data: onionPng, mimeType: "image/png" },
@@ -1046,6 +1095,62 @@ server.registerTool(
       ],
     };
   }));
+
+// ---- riv_finalize ------------------------------------------------------
+server.registerTool(
+  "riv_finalize",
+  {
+    title: "Finalize a reviewed immutable revision",
+    description:
+      "Export an immutable assetRef only after the exact same revision has a zero-error lint review receipt and a critique review receipt. Re-validates the .riv with the official Rive runtime before writing. Reviews from a parent or sibling revision never count.",
+    inputSchema: {
+      assetRef: z.string().describe("Immutable revision to finalize"),
+      outPath: z.string().describe("Destination .riv path"),
+    },
+  },
+  wrap(async ({ assetRef, outPath }: { assetRef: string; outPath: string }) => {
+    const resolvedRevision = revisionStore.get(assetRef);
+    const reviews = reviewStore.listForAsset(assetRef);
+    const lint = reviews.find((receipt) => {
+      if (receipt.kind !== "lint") return false;
+      const payload = receipt.payload as { errorCount?: unknown };
+      return payload && payload.errorCount === 0;
+    });
+    const critique = reviews.find((receipt) => receipt.kind === "critique");
+
+    if (!lint) return err("Finalize blocked: this exact revision has no zero-error lint review receipt");
+    if (!critique) return err("Finalize blocked: this exact revision has no critique review receipt");
+
+    // Official runtime validation is intentionally repeated at the delivery boundary.
+    await host.inspect(resolvedRevision.rivBytes);
+
+    const out = resolve(outPath);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, resolvedRevision.rivBytes);
+
+    const receipt = finalizeStore.put({
+      assetRef,
+      lintReviewRef: lint.reviewRef,
+      critiqueReviewRef: critique.reviewRef,
+      outPath: out,
+    });
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          finalized: true,
+          assetRef,
+          rivHash: resolvedRevision.revision.rivHash,
+          outPath: out,
+          lintReviewRef: lint.reviewRef,
+          critiqueReviewRef: critique.reviewRef,
+          finalizeRef: receipt.finalizeRef,
+          runtimeValidation: { ok: true },
+        }, null, 2),
+      }],
+    };
+  })
+);
 
 // ---- riv_optimize --------------------------------------------------------
 server.registerTool(
