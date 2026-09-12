@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { revisionHash, sha256Bytes } from "./hash.js";
 import type { AssetRevision, PutRevisionInput, ResolvedRevision } from "./types.js";
@@ -66,6 +66,25 @@ export class FileRevisionStore {
     const actualHash = sha256Bytes(rivBytes);
     if (actualHash !== revision.rivHash) throw new Error("Revision integrity check failed for " + assetRef);
     return { revision, rivBytes };
+  }
+
+
+  latestForPath(rivPath: string): AssetRevision | null {
+    const metadataDir = join(this.root, "metadata");
+    if (!existsSync(metadataDir)) return null;
+    const target = resolve(rivPath);
+    let best: AssetRevision | null = null;
+    for (const name of readdirSync(metadataDir)) {
+      if (!name.endsWith(".json")) continue;
+      try {
+        const revision = this.get(name.slice(0, -5)).revision;
+        if (!revision.rivPath || resolve(revision.rivPath) !== target) continue;
+        if (!best || revision.createdAt > best.createdAt) best = revision;
+      } catch {
+        // Ignore unrelated/corrupt metadata here; direct get() still reports integrity errors.
+      }
+    }
+    return best;
   }
 
   put(input: PutRevisionInput): AssetRevision {
