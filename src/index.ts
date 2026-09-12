@@ -1763,6 +1763,40 @@ toolRegistry.register(
     if (!data.notes.length) {
       return { content: [{ type: "text", text: `${replyNote}No pending instructions from the Studio UI.` }] };
     }
+
+    let handoffRevision: ReturnType<typeof revisionSummary> | null = null;
+    if (!peek) {
+      const watchedPath = getStudioRivPath();
+      if (watchedPath && existsSync(watchedPath)) {
+        const studioBytes = readFileSync(watchedPath);
+        const currentHash = sha256Bytes(studioBytes);
+        const latest = revisionStore.latestForPath(watchedPath);
+        if (latest?.rivHash === currentHash) {
+          handoffRevision = revisionSummary(latest);
+        } else {
+          const context = data.notes[data.notes.length - 1]?.context;
+          const revision = revisionStore.put({
+            rivBytes: studioBytes,
+            parentRef: latest?.assetRef,
+            sourceKind: "studio-edit",
+            rivPath: watchedPath,
+            operation: {
+              tool: "riv_studio_notes",
+              summary: "Studio handoff to AI",
+              details: {
+                noteCount: data.notes.length,
+                selection: context?.selection ?? null,
+                artboard: context?.artboard ?? null,
+                animation: context?.animation ?? null,
+                timeSec: context?.timeSec ?? null,
+              },
+            },
+          });
+          handoffRevision = revisionSummary(revision);
+        }
+      }
+    }
+
     const lines = data.notes.map((n, i) => {
       const c = n.context;
       const ctx = c
