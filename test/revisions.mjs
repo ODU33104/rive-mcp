@@ -16,7 +16,7 @@ const a = store.put({
   operation: { tool: "riv_create" },
 });
 
-assert.match(a.assetRef, /^r_[0-9a-f]{20}$/);
+assert.match(a.assetRef, /^r_[0-9a-f]{32}$/);
 assert.match(a.rivHash, /^sha256:[0-9a-f]{64}$/);
 assert.equal(a.parentRef, undefined);
 assert.deepEqual(store.get(a.assetRef).rivBytes, rivA);
@@ -52,7 +52,16 @@ assert.equal(c.parentRef, a.assetRef);
 assert.notEqual(b.assetRef, c.assetRef);
 assert.deepEqual(reopened.get(a.assetRef).rivBytes, rivA);
 
-assert.throws(() => reopened.get("r_00000000000000000000"), /Unknown assetRef/);
+// Metadata is part of the immutable identity too: changing lineage must invalidate the ref.
+const metaPath = join(root, "metadata", a.assetRef + ".json");
+const originalMeta = readFileSync(metaPath, "utf8");
+const tamperedMeta = JSON.parse(originalMeta);
+tamperedMeta.parentRef = "r_ffffffffffffffffffffffffffffffff";
+writeFileSync(metaPath, JSON.stringify(tamperedMeta));
+assert.throws(() => reopened.get(a.assetRef), /metadata integrity check failed/);
+writeFileSync(metaPath, originalMeta);
+
+assert.throws(() => reopened.get("r_00000000000000000000000000000000"), /Unknown assetRef/);
 assert.throws(() => reopened.put({
   rivBytes: Buffer.from("NOTRIVE"),
   sourceKind: "imported-riv",
