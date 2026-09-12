@@ -49,6 +49,14 @@ try {
   })).sort((a,b)=>b.descriptionChars-a.descriptionChars);
   const totalDescriptionChars = rows.reduce((n,r)=>n+r.descriptionChars,0);
   const totalSchemaChars = rows.reduce((n,r)=>n+r.schemaChars,0);
+  const createRow = rows.find((r) => r.name === "riv_create");
+  if (rows.length !== 33) throw new Error("unexpected tool count: " + rows.length);
+  if (!createRow || createRow.descriptionChars > 900) {
+    throw new Error("riv_create description budget exceeded: " + (createRow?.descriptionChars ?? "missing"));
+  }
+  if (totalDescriptionChars > 16000) {
+    throw new Error("total tool description budget exceeded: " + totalDescriptionChars);
+  }
   console.log(JSON.stringify({ toolCount: rows.length, totalDescriptionChars, totalSchemaChars, rows }, null, 2));
 } finally {
   child.kill();
