@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -16,6 +17,10 @@ const median = (xs) => {
   return a[Math.floor(a.length / 2)];
 };
 const pct = (oldValue, newValue) => oldValue === 0 ? null : ((newValue - oldValue) / oldValue) * 100;
+
+function sha256File(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
 
 function dirSize(root) {
   let total = 0;
@@ -283,7 +288,9 @@ async function runVersion(label, repoDir) {
       artifacts: {
         distBytes: dirSize(join(repoDir, "dist")),
         rivBytes,
+        rivSha256: sha256File(rivPath),
         pngBytes,
+        pngSha256: sha256File(join(workspace, "common-0.png")),
       },
       latencyMsMedian: {
         initialize: initializeMs,
@@ -324,6 +331,8 @@ function markdown(report) {
   md += row("dist bytes", b.artifacts.distBytes, c.artifacts.distBytes, `${pct(b.artifacts.distBytes,c.artifacts.distBytes).toFixed(1)}%`);
   md += row("Generated .riv bytes", b.artifacts.rivBytes, c.artifacts.rivBytes, `${pct(b.artifacts.rivBytes,c.artifacts.rivBytes).toFixed(1)}%`);
   md += row("Rendered PNG bytes", b.artifacts.pngBytes, c.artifacts.pngBytes, `${pct(b.artifacts.pngBytes,c.artifacts.pngBytes).toFixed(1)}%`);
+  md += row("Generated .riv SHA-256 equal", b.artifacts.rivSha256.slice(0,12), c.artifacts.rivSha256.slice(0,12), b.artifacts.rivSha256 === c.artifacts.rivSha256 ? "YES" : "NO");
+  md += row("Rendered PNG SHA-256 equal", b.artifacts.pngSha256.slice(0,12), c.artifacts.pngSha256.slice(0,12), b.artifacts.pngSha256 === c.artifacts.pngSha256 ? "YES" : "NO");
   for (const k of ["create","renderFrame","lint","critique"]) {
     md += row(`${k} median ms`, b.latencyMsMedian[k].toFixed(1), c.latencyMsMedian[k].toFixed(1), `${pct(b.latencyMsMedian[k],c.latencyMsMedian[k]).toFixed(1)}%`);
   }
