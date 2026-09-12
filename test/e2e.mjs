@@ -952,7 +952,9 @@ try {
   // AIへの指示: UI投稿 → riv_studio_notes で消費
   await fetch("http://localhost:8797/notes", { method: "POST", body: JSON.stringify({ text: "テスト指示: 大きくして" }) });
   const notesRes = await callTool("riv_studio_notes", { port: 8797 });
-  check("riv_studio_notes fetches instructions", !notesRes.isError && textOf(notesRes).includes("テスト指示"), textOf(notesRes).slice(0, 150));
+  const notesText = textOf(notesRes);
+  check("riv_studio_notes fetches instructions", !notesRes.isError && notesText.includes("テスト指示"), notesText.slice(0, 180));
+  check("riv_studio_notes returns immutable handoff revision", /Studio handoff revision: \{"assetRef":"r_[0-9a-f]{32}"/.test(notesText), notesText.slice(0, 260));
   const notesEmpty = await callTool("riv_studio_notes", { port: 8797 });
   check("riv_studio_notes consumes queue", !notesEmpty.isError && textOf(notesEmpty).includes("No pending"), textOf(notesEmpty).slice(0, 100));
 
@@ -980,6 +982,19 @@ try {
     body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "cubic", cubic: [0.1, 0.1, 0.9, 0.9] }),
   }).then((r2) => r2.json());
   check("/curve applies a cubic edit", curveRes.ok === true, JSON.stringify(curveRes));
+
+  // A Studio edit is not revisioned on every gesture. The next AI handoff captures it once as a child revision.
+  await fetch("http://localhost:8797/notes", {
+    method: "POST",
+    body: JSON.stringify({ text: "カーブ編集後をAIへ引き渡す", context: { artboard: "Gen", animation: "wobble", timeSec: 0.5 } }),
+  });
+  const editedHandoff = await callTool("riv_studio_notes", { port: 8797 });
+  const editedHandoffText = textOf(editedHandoff);
+  check(
+    "Studio edited file handoff creates a studio-edit child revision",
+    /"parentRef":"r_[0-9a-f]{32}"/.test(editedHandoffText) && editedHandoffText.includes('"sourceKind":"studio-edit"'),
+    editedHandoffText.slice(0, 320)
+  );
 
   const animAfter = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const scaleTrackAfter = animAfter.tracks.find((tr) => tr.propertyName === "scaleX");
