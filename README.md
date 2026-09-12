@@ -18,15 +18,15 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Generate `.riv` from JSON** — shapes, gradients, embedded PNGs, text, bones + skinning, IK, mesh deformation, keyframe animation with easing, multi-layer state machines, listeners, events, physics baking, particles, embedded audio (WAV/MP3/FLAC) fired from the timeline or a state machine
 - **Pro-quality by construction** — 28 semantic motion presets (`pop-in`, staggered `rise-in`, `breathing`, `stagger-in`, `parallax-drift`, `shimmer`, …) with professionally tuned amplitudes/easings, an OKLCH design-token generator (`riv_design_tokens`), motion-quality lint rules (robotic linear movement, teleports, missing stagger), and a one-call critique loop (`riv_critique`: frames + objective metrics + scoring checklist)
 - **Real vector art pipeline** — import SVG (Figma/Illustrator/Iconify, or npm SVG sets like `@twemoji/svg` when offline) as true bezier paths (`riv_import_svg`, `riv_asset_search`), decompile existing `.riv` files into editable specs **including gradients, blend modes and hand-tuned animation tracks** (`riv_decompile`), plus trim paths (draw-on), clipping masks, blend modes (`multiply` shadows, `screen` glows), follow-path motion, solos and detached bezier handles in the scene spec
-- **Losslessly edit existing `.riv`** — change any property, swap text, delete subtrees (references auto-remapped); round-trip verified pixel-perfect
+- **Immutable revision workflow** — `riv_create` returns an `assetRef`; `riv_edit` can branch from that exact revision without overwriting it, review receipts are bound to the exact `assetRef` + `rivHash`, and `riv_finalize` refuses stale parent/sibling reviews
 - **Local web Studio** — Rive-editor-style 3-pane UI (hierarchy / canvas with click-select & drag / inspector / timeline) with hot reload; edits apply live. Also includes a **bezier curve editor** for hand-tuning keyframe easing (drag control points, hold/linear/cubic switching, 10 one-click presets), a **state machine graph view** (node graph of layers/states/transitions with lint findings and live-playback state highlighting), and an **onion skin** overlay (0-5 surrounding frames) for checking motion at a glance
 - **Studio keeps growing** — drag-and-drop image replacement for embedded assets (lossless swap), multi-artboard tabs, named snapshot save/restore/delete, dope-sheet marquee/Shift-click multi-select with grouped drag and Ctrl+C/V copy-paste, and a bone overlay with FK drag-to-pose that bakes straight to a keyframe
 - **Human ⇄ AI loop** — a two-way **Agent chat** in the Studio: you type feedback (with the current selection/artboard/animation/time attached), the AI picks it up via `riv_studio_notes`, fixes the file, and replies into the same thread; your browser updates instantly
 - **Auto-rig characters** — one call turns a character PNG into a rigged `.riv` with cutout parts, bone-skinned head mesh, eye blink, idle/happy animations and a state machine
 - **Data binding & pipeline tooling** — `riv_inspect` decodes ViewModel definitions, instances (with resolved values), enums, converters and bind wiring — data binding inspection that few tools support yet; `riv_batch_render` exports many files × formats in one glob-aware call for CI, and `riv_ab_compare` composites two files side by side into one labeled GIF/APNG for design review
-- **Everything verified** — generated files are loaded, rendered and state-machine-driven by the official runtime in E2E tests
+- **Everything verified** — generated files are loaded/rendered by the official runtime, reviewed through revision-bound lint/critique receipts, and exercised again from an empty clean-room workspace before release
 
-## Tools (32)
+## Tools (33)
 
 | Tool | What it does |
 |---|---|
@@ -41,14 +41,15 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_batch_render` | Render a list of jobs — single files or globs — to png/gif/apng/webm/sprites in one call; per-job error isolation and a timing report, built for CI |
 | `riv_play_state_machine` | Set/fire inputs → advance → state-transition report (+ optional frame captures) |
 | `riv_generate_code` | Integration code with real artboard/SM/input names (React / JS / Vue / Svelte / Flutter) |
-| `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview. Supports bezier-handled vertices, elastic easing, gradients, physics baking, particles, and **semantic motion presets** (`{"preset":"pop-in","target":"card"}` expands server-side into professionally tuned keyframes — entrances/exits/emphasis/ambient loops, with `stagger` for groups). Also embeds audio (WAV/MP3/FLAC) fired from timeline frames or state-machine entry — the AudioAsset/AudioEvent are written correctly but only play back in a GPU-backed Rive runtime, not this server's own preview |
+| `riv_create` | **Build a `.riv` from a JSON scene spec** — validated with the official runtime, returns a preview **and immutable `assetRef`**. Supports vector/rig/audio/state-machine authoring and semantic motion presets. Imported SVG/Iconify/Lottie/.riv sources can carry provenance (`source`, `license`, `attribution`) into the revision; unknown licenses stay `unknown` rather than being guessed |
 | `riv_design_tokens` | **Generate design tokens before designing**: OKLCH-harmonized palette (+WCAG contrast), gradient pairs, Material-Motion durations & easing roles, spacing/radius/type scales — deterministic from seed color + mood |
-| `riv_import_svg` | **SVG → Rive bezier shapes** (Figma/Illustrator exports, icons, illustrations): full cubic vertices, multi-contour paths, gradients, strokes, nested transforms — so the AI composes pro artwork instead of drawing with primitives. Fragments plug into riv_create via `imports` |
+| `riv_import_svg` | **SVG → Rive bezier shapes** (Figma/Illustrator exports, icons, illustrations). Writes a reusable fragment for `riv_create`; optional `license` / `attribution` are stored as provenance |
 | `riv_asset_search` | Search **Iconify's ~200k professionally designed icons** and import one directly as Rive shapes (needs network) |
 | `riv_lottie_import` | **Lottie/bodymovin JSON → Rive scene fragment** — pulls in LottieFiles' huge library of free professionally-animated assets art *and* choreography: keyframed transforms with exact bezier easing curves (not preset-approximated), path morphing (per-vertex keyframes), shape/null/precomp layers, gradients, trim-path draw-on, visibility windows. Unsupported bits (text layers, masks, mattes, …) are counted, not silently dropped |
-| `riv_decompile` | **.riv → editable scene spec**: study or remix professional files (bezier paths, gradients, solos, trim paths, animations with named easings); unsupported types are counted, not silently dropped |
+| `riv_decompile` | **.riv → editable scene spec**: study or remix existing files (bezier paths, gradients, solos, trim paths, animations with named easings); unsupported types are counted. Licensing is source-specific — pass known license/attribution or it remains `unknown` |
 | `riv_critique` | **One-call review bundle that makes motion visible to a VLM**: a filmstrip (frames left→right), an onion-skin overlay (motion trails), a motion report (net displacement vector per animated object), objective metrics (bezier ratio, palette flags, easing distribution) + lint findings + a fixed 7-axis scoring checklist incl. spatial/directional coherence (does each mover travel toward its artwork's front? is the perspective consistent?) |
-| `riv_edit` | Lossless editing of existing `.riv` files: set properties, swap named text, delete subtrees, **add/replace/remove keyframes** |
+| `riv_edit` | Lossless editing by `path` or immutable `assetRef`: set properties, swap named text, delete subtrees, **add/replace/remove keyframes**. `assetRef` edits create a child revision and preserve parent provenance |
+| `riv_finalize` | **Delivery gate for immutable revisions**: exports only when that exact `assetRef` has a zero-error lint receipt and critique receipt; re-validates with the official runtime and returns the finalized revision's provenance |
 | `riv_optimize` | Shrink a `.riv` without changing its visual output: remove unreferenced interpolators/events/empty tracks left over from prior edits, thin redundant keyframes on strictly-linear runs (Douglas-Peucker, easing-safe — cubic/hold segments are never touched), with a `dryRun` report of the plan |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
 | `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |
@@ -58,10 +59,10 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_rig_character` | **Character PNG → fully rigged `.riv` in one call** |
 | `riv_diff` | Structural diff between two `.riv` files |
 | `riv_studio` | **Local web Studio**: Rive-editor-style dark UI — hierarchy tree, canvas select/drag/resize, inspector, keyframe timeline editing, **bezier curve editor** (drag control points, hold/linear/cubic, 10 easing presets), **state machine graph view** (node graph, transition details, lint-highlighted states, live playback highlighting), **onion skin** overlay, undo/redo, playback speed, one-click export (PNG/APNG/GIF/WebM), live preview + hot reload, EN/JA |
-| `riv_studio_notes` | Read the Studio's Agent chat (with auto-attached context: selection, artboard, animation, playback time) and post replies back into it |
+| `riv_studio_notes` | Read/reply to Studio Agent chat. When instructions are consumed, the watched `.riv` is captured as an immutable **Studio handoff revision** (reusing the current revision if bytes are unchanged) so AI edits can continue from a stable `assetRef` |
 | `riv_ui_detect` | **Read a UI screenshot** — or, with `svgPath`, a Figma/Illustrator SVG: finds panels, text runs and pictures, returns a nested element tree with rects, corner radii and fill colours plus a numbered overlay PNG. Each element says how it would be rebuilt (`vector-panel` / `vector-shape` / `vector-text` / `raster`) and what it looks like (`panel` / `text` / `image` / `line`) as separate fields. Geometry only — it does not know a button from a card |
 | `riv_ui_prototype` | **Screenshot → animated `.riv` in one more call**: assign a role to each detected element and get a working prototype — vector rectangles where they can be rebuilt, image slices where they cannot, an entrance per role, hover and press on cards and buttons. Text is cut out with a real alpha matte where the colour model holds; where it does not, the element fades in place instead of moving, and the warnings say so |
-| `riv_setup` | **One-call environment setup**: installs the bundled `rive-design-guidelines` skill into `.claude/skills/` (project) or `~/.claude/skills/` (user) so the pro workflow auto-triggers — confirmation happens via the normal tool-permission prompt |
+| `riv_setup` | **One-call environment setup**: installs the bundled `rive-author`, `rive-refine`, `rive-qa`, `rive-setup`, and `rive-design-guidelines` skills into the client skill directory |
 
 ### Screenshot → animated prototype
 
@@ -108,14 +109,15 @@ Twemoji artwork © Twitter/X and contributors, [CC-BY 4.0](https://creativecommo
 `riv_create` output can look like flat "AI placeholder" shapes if a client just wings the scene spec. The server bakes quality in structurally — the recommended flow for any non-trivial scene is:
 
 1. `riv_design_tokens` → use only the returned palette/gradients/durations/easings (never invent raw hex or ad-hoc timings)
-2. `riv_create` with motion `presets` instead of hand-authored keyframes wherever one fits
-3. `riv_critique` → look at the frames, score the 6-axis checklist, fix anything below 4, re-run (at least twice)
+2. ingest professional artwork when appropriate, then `riv_create` and keep the returned immutable `assetRef`
+3. run `riv_lint({assetRef})` + `riv_critique({assetRef})`, inspect the filmstrip/onion-skin/motion report and the **7-axis** checklist, then edit the child revision and re-review it
+4. deliver only with `riv_finalize({assetRef,outPath})` so the reviewed and delivered bytes are the same revision
 
-The same workflow plus hand-authoring craft rules (bezier curves, easing semantics, rigging) is exposed as the `rive-design-guidelines` MCP prompt. It also carries numeric recipes (spacing/timing tokens, composition & layering rules, anti-patterns to avoid) across 6 dedicated sections. For clients without MCP prompts support, it ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
+Workflow routing is split across [`rive-author`](skills/rive-author/SKILL.md), [`rive-refine`](skills/rive-refine/SKILL.md), [`rive-qa`](skills/rive-qa/SKILL.md), and [`rive-setup`](skills/rive-setup/SKILL.md). Craft knowledge stays in [`rive-design-guidelines`](skills/rive-design-guidelines/SKILL.md) and the matching MCP prompt, so new-authoring, bounded refinement, QA, and setup do not all run the same procedure.
 
 ## Quick start
 
-**Claude Code plugin (recommended)** — one install gets the MCP server, the design-guidelines skill, and the `rive-designer` agent:
+**Claude Code plugin (recommended)** — one install gets the MCP server, the workflow skill suite, craft guidance, and the `rive-designer` routing agent:
 
 ```
 /plugin marketplace add ODU33104/rive-mcp
@@ -231,8 +233,10 @@ Turn a single character PNG into a naturally moving `.riv`:
 ## Development
 
 ```bash
-npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 32 tools over JSON-RPC
+npm run build            # vendor runtime assets + tsc
+npm run test:e2e         # real JSON-RPC server coverage for all 33 tools
+npm run test:generation-harness  # create/edit/review/finalize real .riv artifacts
+npm run test:clean-room  # empty-workspace release gate: setup → author → review → refine → finalize
 ```
 
 `docs/riv-format.md` documents the reverse-engineered knowledge of the `.riv` binary format used by the writer (typeKeys/propertyKeys resolved from the official `rive-runtime` type definitions vendored in `vendor/rive-defs/defs.json`).
