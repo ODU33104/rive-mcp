@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "scale": {
+    "min": 1,
+    "max": 5,
+    "anchors": {
+      "1": "clearly broken or fails the brief",
+      "3": "usable but visibly generic, inconsistent, or under-polished",
+      "5": "production-ready, coherent, deliberate, and strongly satisfies the brief"
+    }
+  },
+  "dimensions": [
+    {
+      "id": "brief_adherence",
+      "label": "Brief adherence",
+      "description": "Does the result actually satisfy the requested content, states and constraints?"
+    },
+    {
+      "id": "composition_hierarchy",
+      "label": "Composition / hierarchy",
+      "description": "Is attention directed correctly and is the layout balanced and intentional?"
+    },
+    {
+      "id": "visual_polish",
+      "label": "Visual polish",
+      "description": "Do shapes, assets, spacing and styling feel production-ready rather than placeholder-like?"
+    },
+    {
+      "id": "motion_quality",
+      "label": "Motion quality / easing",
+      "description": "Does motion have coherent timing, easing, anticipation/settle where appropriate, and avoid robotic or excessive movement?"
+    },
+    {
+      "id": "readability",
+      "label": "Readability / clarity",
+      "description": "Can users understand the primary information or interaction state quickly?"
+    },
+    {
+      "id": "coherence_restraint",
+      "label": "Coherence / restraint",
+      "description": "Do visual and motion choices form one system without unnecessary decoration or conflicting direction?"
+    },
+    {
+      "id": "technical_correctness",
+      "label": "Technical correctness",
+      "description": "Does the Rive behave/render correctly without obvious broken states, clipping, missing assets or invalid interaction behavior?"
+    }
+  ],
+  "binary": [
+    {
+      "id": "broken_artifact",
+      "label": "Obvious broken artifact/state?"
+    },
+    {
+      "id": "ship_without_visual_correction",
+      "label": "Would you ship this without manual visual correction?"
+    }
+  ],
+  "instructions": [
+    "Do not inspect blind-map.keep-hidden.json before scoring.",
+    "Score preview and filmstrip together when both exist.",
+    "Judge against the brief, not against assumptions about which implementation produced the artifact.",
+    "Record scores independently before comparing paired outputs."
+  ]
+}
