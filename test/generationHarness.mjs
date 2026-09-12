@@ -122,11 +122,16 @@ try {
   if (!image || image.data.length < 1000) throw new Error("render did not return a usable image");
   const pngBytes = requireFile(pngPath, 1000);
 
-  // Revision-aware edit: immutable parent stays byte-identical while a child revision is produced.
+  // Revision-aware edit: use the actual binary object index rather than assuming SceneSpec ids
+  // survive as editable .riv names. The immutable parent must stay byte-identical.
+  const dump = await callTool("riv_dump", { path: rivPath, full: true });
+  const dumpJson = JSON.parse(textOf(dump));
+  const panelObject = dumpJson.objects.find((o) => o.typeName === "Rectangle");
+  if (!panelObject) throw new Error("generated file has no Rectangle object to edit");
   const edit = await callTool("riv_edit", {
     assetRef: revision.assetRef,
     outPath: editedRivPath,
-    edits: [{ op: "set", name: "panel", type: "Rectangle", set: { width: 320 } }],
+    edits: [{ op: "set", index: panelObject.index, set: { width: 320 } }],
   });
   const editText = textOf(edit);
   const editRevisionMatch = editText.match(/Revision:\s*(\{[^\n]+\})/);
