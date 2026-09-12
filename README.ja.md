@@ -49,7 +49,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 2. Playwright キャッシュ（`%LOCALAPPDATA%\ms-playwright\chromium-*`）
 3. インストール済み Chrome → Edge
 
-## ツール一覧
+## ツール一覧 (33)
 
 | ツール | 機能 |
 |---|---|
@@ -64,16 +64,17 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_batch_render` | 複数ジョブ（単一ファイル or glob）を png/gif/apng/webm/sprites に一括レンダリング。ジョブごとにエラーを分離して所要時間つきレポートを返す。CI向け |
 | `riv_play_state_machine` | 入力の set / fire → advance → 状態遷移レポート（+任意でフレームキャプチャ）|
 | `riv_generate_code` | 実在の artboard / state machine / input 名を埋め込んだ統合コード生成（react / js / vue / svelte / flutter） |
-| `riv_create` | **JSONシーン仕様から .riv を生成**（エディタ不要）。シェイプ（rect/ellipse/polygon、**ベジェハンドル付き頂点で有機的な曲線も可**）、単色/グラデ塗り、ストローク、**PNG画像埋め込み**、**グループ階層（リグ）**、**メッシュ変形（頂点アニメーション）**、キーフレームアニメーション（イージング付き、**elastic系のバネ挙動対応**）、物理ベイク、パーティクル、State Machine（入力・状態・条件付き遷移・exit time）、**セマンティック・モーションプリセット**（`{"preset":"pop-in","target":"card"}` の1行がプロ調整済みキーフレーム群にサーバー側で展開。入場/退場/強調/常時ループ28種、`stagger`で時差出現）。**音声埋め込み**にも対応: WAV/MP3/FLAC を AudioAsset として埋め込み、タイムライン上の指定フレームまたは State 進入時に AudioEvent を発火（データは正しく書き込まれるが、GPU版Riveランタイムでのみ再生され、このサーバー自身のプレビューでは無音）。生成後に公式ランタイムで自動検証しプレビュー画像を返す |
+| `riv_create` | **JSONシーン仕様から .riv を生成**し、公式ランタイムで検証してプレビューと不変の `assetRef` を返す。SVG/Iconify/Lottie/.riv 由来素材は `source/license/attribution` のprovenanceをrevisionへ保持でき、不明なライセンスは推測せず `unknown` のまま記録 |
 | `riv_design_tokens` | **設計前にデザイントークンを生成**: OKLCH色空間で調和させたパレット（WCAGコントラスト比付き）、グラデーションペア、Material Motion準拠のduration/easingロール、余白・角丸・文字スケール。シード色+ムードから決定論的に生成 |
-| `riv_import_svg` | **SVG → Riveベジェシェイプ変換**（Figma/Illustrator書き出し・アイコン・イラスト）: cubic頂点・複合パス（穴あき）・グラデーション・ストローク・入れ子transformを完全変換。AIが「プリミティブで描く」代わりに「プロが描いたベクターを構成する」ための素材パイプライン。`riv_create` の `imports` で配置 |
+| `riv_import_svg` | **SVG → Riveベジェシェイプ変換**。`riv_create` 用fragmentを書き出し、既知なら `license` / `attribution` もprovenanceとして保持 |
 | `riv_asset_search` | **Iconifyの約20万個のプロ製アイコンを検索**し、そのままRiveシェイプとしてインポート（要ネットワーク） |
 | `riv_lottie_import` | **Lottie/bodymovin JSON → Riveシーン断片**: LottieFilesの膨大な無料プロ製アニメーションを、形状だけでなく振り付けごと取り込む。キーフレーム化されたトランスフォームを名前近似せず正確な3次ベジェイージングのまま変換、パスモーフィング（頂点単位のキーフレーム）、shape/null/precompレイヤー階層、グラデーション、トリムパスのdraw-onアニメ、レイヤーの出現/消滅範囲に対応。未対応機能（テキストレイヤー・マスク・マット等）は隠さずカウント報告 |
-| `riv_decompile` | **.riv → 編集可能なシーン仕様**: プロのファイルを手本として解析・リミックス（ベジェパス・グラデ・Solo・トリムパス・名前付きイージングのアニメを復元）。未対応型は隠さずカウント報告 |
-| `riv_critique` | **ワンコールのレビューバンドル**: アニメ全域からサンプリングしたフレーム + 客観メトリクス（ベジェ/プリミティブ比・彩度フラグ・イージング分布・リグ/SM統計）+ lint結果 + 6軸採点チェックリスト。「レンダ→批評→修正」ループ用 |
+| `riv_decompile` | **.riv → 編集可能なシーン仕様**。未対応型は隠さずカウント報告。ライセンスは素材ごとに異なるため、既知なら明示し、不明なら `unknown` としてprovenanceに残す |
+| `riv_critique` | **ワンコールのレビューバンドル**: フィルムストリップ、オニオンスキン、モーションレポート、客観メトリクス、lint、**7軸チェックリスト**。`assetRef` モードではそのrevision専用のreview receiptを発行 |
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
-| `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
+| `riv_edit` | `path` または不変の `assetRef` から無損失編集。`assetRef` 編集は親を上書きせず子revisionを作り、provenanceを継承 |
+| `riv_finalize` | **納品ゲート**: その `assetRef` 自身に zero-error lint receipt と critique receipt がある場合だけ書き出す。納品直前に公式ランタイムで再検証し、provenanceも返す |
 | `riv_optimize` | **見た目を変えずに.rivを軽量化**: 過去の編集で残った未参照interpolator/event/空トラックの除去、全区間linearのトラックに限定した冗長キーフレーム間引き（Douglas-Peucker、easing安全 — cubic/holdの区間には一切触れない）。`dryRun` で書き込み前に削減プランだけ確認可能 |
 | `riv_extract_assets` | .riv 埋め込み画像/フォントの抽出 |
 | `riv_visual_diff` | 2つの .riv のピクセル差分（一致率 + 相違箇所を赤表示した差分画像） |
@@ -81,8 +82,8 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_rig_character` | **キャラPNG1枚→完成リグをワンコール生成**: パーツ切り出し+2ボーン頭メッシュ+目パチ+idle/happyアニメ+SM |
 | `riv_diff` | 2つの.rivの構造差分（型数変化・オブジェクト単位のプロパティ差分） |
 | `riv_studio` | **ローカルWebスタジオ**（公式エディタ風ダークUI・日英対応）: 階層ツリー（アイコン付き）/ キャンバス選択・ドラッグ・四隅リサイズ / インスペクタ（ラベル横ドラッグで数値変更）/ タイムライン編集（キーフレームのドラッグ移動・ダブルクリック追加・削除）/ **ベジェカーブエディタ**（区間選択→制御点ドラッグ、hold/linear/cubic切替、10種のワンクリックイージングプリセット、riv-onlyモードでも編集可）/ **State Machineグラフビュー**（レイヤー/状態/遷移をノードグラフ表示、遷移条件をクリックで詳細表示、到達不能state・条件無し自己遷移をlint連動で色分け、実行中stateをライブハイライト）/ **オニオンスキン**（前後0-5フレームを距離に応じた濃さで重ね表示、再生中は自動オフ）/ Undo/Redo / 矢印キー移動・Deleteキー削除 / オブジェクト追加ボタン / 再生速度切替 / **ワンクリック書き出し（PNG/APNG/GIF/WebM）** / ライブプレビュー+ホットリロード / SM入力コントロール。scenePath 無しでも .riv を生プロパティ単位で直接編集可能 |
-| `riv_setup` | **ワンコール環境セットアップ**: 同梱の `rive-design-guidelines` スキルを `.claude/skills/`（プロジェクト）または `~/.claude/skills/`（ユーザー共通）へコピー。ツール許可プロンプトがそのまま「確認だけされて任意」の同意UXになる |
-| `riv_studio_notes` | **スタジオの「エージェント」チャットの読み書き**: 人間が書いた修正依頼を取得（選択中オブジェクト・アートボード・アニメーション・再生時刻が自動添付）し、作業後は `reply` で結果を同じチャットに書き戻す。「スタジオの指示を確認して」で呼ばれる |
+| `riv_setup` | **ワンコール環境セットアップ**: `rive-author` / `rive-refine` / `rive-qa` / `rive-setup` / `rive-design-guidelines` のSkill群をクライアントへコピー |
+| `riv_studio_notes` | **スタジオの「エージェント」チャットの読み書き**。指示をconsumeした瞬間の監視中 `.riv` を immutableなStudio handoff revisionとして確定し、AIが安定した `assetRef` から編集を続けられる |
 | `riv_ui_detect` | **UIスクリーンショットを読む** — `svgPath` を渡せば Figma/Illustrator の SVG も: パネル・テキスト行・画像を検出し、矩形・角丸・塗り色つきの入れ子ツリーと番号付きオーバーレイPNGを返す。各要素は「どう再構築されるか」（`vector-panel` / `vector-shape` / `vector-text` / `raster`）と「何に見えるか」（`panel` / `text` / `image` / `line`）を別々のフィールドで持つ。幾何のみ — ボタンとカードの区別はしない |
 | `riv_ui_prototype` | **スクリーンショット→動く `.riv` をもう1コールで**: 検出済み要素にロールを割り当てると動くプロトタイプが出る — 再構築できる面は編集可能なベクター矩形、できない部分は画像スライス、ロールごとの入場アニメ、カードとボタンには hover / press。テキストは色モデルが成り立つ範囲で本物のアルファマットで切り出し、成り立たない要素はその場でフェードに切り替えて warnings で報告する |
 
@@ -98,10 +99,10 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 
 `riv_create` はシーン仕様を雑に書くと、いかにも「AIが仮置きした」ような平坦な図形になりがちです。品質を構造的に担保するため、複雑なシーンでは次のフローを推奨します:
 
-1. `riv_design_tokens` → 返ってきたパレット/グラデ/duration/easing**だけ**を使う（生の16進数や恣意的な時間を発明しない）
-2. **プロ製アートワークを取り込む（イラスト的な要素をAIがフリーハンドで描かない）**: `riv_asset_search`（Iconify約20万アイコン、要ネットワーク）/ `riv_import_svg`（Figma/Illustrator書き出し。ネットワーク制限下でも npm から `npm pack @twemoji/svg`(CC-BY 4.0)・`@mdi/svg`・`@tabler/icons` 等のプロ製SVG集を取得可）/ `riv_decompile`（プロ製.rivの手打ちベジェ+調整済みアニメトラックをリミックス）。プリミティブ手描きは背景・パネル・パーティクル等の単純形状のみ
-3. `riv_create` — キーフレーム手打ちの代わりに、当てはまる箇所は全てモーション`presets`で表現
-4. `riv_critique` → フレームを見て6軸チェックリストで採点し、4未満を修正して再実行（最低2周）
+1. `riv_design_tokens` → 返ってきたパレット/グラデ/duration/easingを使う
+2. 必要ならプロ製素材を取り込み、`riv_create` で生成して返された immutable `assetRef` を保持
+3. `riv_lint({assetRef})` + `riv_critique({assetRef})` でそのrevision自身をレビュー。修正した子revisionは親のreviewを流用せず再レビュー
+4. 最終revisionだけを `riv_finalize({assetRef,outPath})` で納品。レビューしたbytesと納品bytesを一致させる
 
 ### ショーケース: プロ素材イン→プロ品質アウト
 
@@ -116,7 +117,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 
 Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)）、トラックはRive公式サンプル由来。
 
-同じワークフロー+手打ち部分の作法（ベジェ曲線・イージングの意味論・リギング）は `rive-design-guidelines` MCP prompt として公開。数値レシピ（余白・タイミングのトークン、構図・レイヤリングのルール、避けるべきアンチパターン）を扱う6セクションも追加済み。MCP prompts 非対応クライアント向けに [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md) としても同梱している。
+ワークフローは [`rive-author`](skills/rive-author/SKILL.md)（新規作成）、[`rive-refine`](skills/rive-refine/SKILL.md)（既存修正）、[`rive-qa`](skills/rive-qa/SKILL.md)（納品前QA）、[`rive-setup`](skills/rive-setup/SKILL.md)（環境設定）に分離。制作技法そのものは [`rive-design-guidelines`](skills/rive-design-guidelines/SKILL.md) とMCP promptに集約している。
 
 ## キャラクターアニメーション
 
