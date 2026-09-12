@@ -2190,9 +2190,9 @@ toolRegistry.register(
 toolRegistry.register(
   "riv_setup",
   {
-    title: "Install the bundled rive-design-guidelines skill into this environment",
+    title: "Install the bundled Rive workflow skills into this environment",
     description:
-      "One-time setup: copies the bundled `rive-design-guidelines` skill (the mandatory tokens → pro-asset ingestion → presets → critique workflow, asset-source registry, icon-animation recipes and craft rules) into the client's skills directory so it auto-triggers on future Rive work — .claude/skills/ in the current project (scope=project, default) or ~/.claude/skills/ for all projects (scope=user). Idempotent: re-running updates the skill to this server version's copy. Recommended on first use of this server in a new environment; clients without skill support can read the same content via the rive-design-guidelines MCP prompt instead.",
+      "One-time setup: copies all bundled Rive skills (authoring, refinement, QA, setup and craft guidance) into the client\'s skills directory — .claude/skills/ in the current project (scope=project, default) or ~/.claude/skills/ for all projects (scope=user). Idempotent: re-running updates them to this server version. Clients without skill support can still use the rive-design-guidelines MCP prompt for craft guidance.",
     inputSchema: {
       scope: z.enum(["project", "user"]).optional().describe("project = <projectDir>/.claude/skills (default), user = ~/.claude/skills"),
       projectDir: z.string().optional().describe("Project root for scope=project (default: current working directory)"),
