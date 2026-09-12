@@ -467,6 +467,7 @@ let current: {
   notify: (msg: string) => void;
   snapDir: string;
   snapshots: StudioSnapshot[];
+  rivPath: string;
 } | null = null;
 
 export function stopStudio(): void {
@@ -490,6 +491,10 @@ export function takeStudioNotes(): StudioNote[] | null {
 }
 
 // AI からの返信を会話に積む（MCPツール用フォールバック。HTTP経路は POST /chat）
+export function getStudioRivPath(): string | null {
+  return current?.rivPath ?? null;
+}
+
 export function postStudioReply(text: string): boolean {
   if (!current) return false;
   current.chat.push({ role: "assistant", text, time: new Date().toISOString() });
@@ -912,7 +917,7 @@ export function startStudio(opts: StudioOptions): StudioHandle {
     }
   });
   server.listen(port);
-  current = { server, watchers, port, notes, chat, notify, snapDir, snapshots };
+  current = { server, watchers, port, notes, chat, notify, snapDir, snapshots, rivPath };
   return { url: `http://localhost:${port}/`, port, close: stopStudio };
 }
 
