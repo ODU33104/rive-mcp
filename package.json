@@ -44,7 +44,8 @@
     "test:revisions": "node test/revisions.mjs",
     "test:generation-harness": "node test/generationHarness.mjs",
     "test:e2e-baseline": "node test/e2eBaseline.mjs",
-    "test:reviews": "node test/reviews.mjs"
+    "test:reviews": "node test/reviews.mjs",
+    "test:tool-registry": "node test/toolRegistry.mjs"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {

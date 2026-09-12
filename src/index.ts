@@ -37,6 +37,7 @@ import { FileRevisionStore, revisionSummary } from "./revisions/store.js";
 import { stableJson } from "./revisions/hash.js";
 import { FileReviewStore, reviewSummary } from "./review/store.js";
 import { FileFinalizeStore } from "./finalize/store.js";
+import { ToolRegistry } from "./tools/registry.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 const revisionStore = new FileRevisionStore();
@@ -47,6 +48,7 @@ const server = new McpServer({
   name: "rive-mcp",
   version: "0.3.0",
 });
+const toolRegistry = new ToolRegistry(server);
 
 type ToolResult = {
   content: Array<
@@ -115,7 +117,7 @@ function wrap<A extends unknown[]>(fn: (...args: A) => Promise<ToolResult>) {
 const point2D = () => z.array(z.number()).length(2) as unknown as z.ZodTuple<[z.ZodNumber, z.ZodNumber]>;
 
 // ---- riv_list ----------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_list",
   {
     title: "List .riv files",
@@ -161,7 +163,7 @@ server.registerTool(
 );
 
 // ---- riv_inspect -------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_inspect",
   {
     title: "Inspect a .riv file",
@@ -204,7 +206,7 @@ server.registerTool(
 );
 
 // ---- riv_render_frame --------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_render_frame",
   {
     title: "Render a single frame to PNG",
@@ -266,7 +268,7 @@ server.registerTool(
 );
 
 // ---- riv_render_gif ----------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_render_gif",
   {
     title: "Render an animation to GIF",
@@ -339,7 +341,7 @@ server.registerTool(
 );
 
 // ---- riv_render_apng ---------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_render_apng",
   {
     title: "Render an animation to APNG",
@@ -424,7 +426,7 @@ const stepSchema = z.object({
   capture: z.boolean().optional().describe("Capture a PNG frame after this step"),
 });
 
-server.registerTool(
+toolRegistry.register(
   "riv_play_state_machine",
   {
     title: "Interactively drive a state machine",
@@ -479,7 +481,7 @@ server.registerTool(
 );
 
 // ---- riv_generate_code -------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_generate_code",
   {
     title: "Generate integration code",
@@ -499,7 +501,7 @@ server.registerTool(
 );
 
 // ---- riv_dump ----------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_dump",
   {
     title: "Dump .riv binary structure",
@@ -527,7 +529,7 @@ server.registerTool(
 );
 
 // ---- riv_lint ------------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_lint",
   {
     title: "Diagnose a .riv file for structural problems",
@@ -571,7 +573,7 @@ server.registerTool(
 );
 
 // ---- riv_design_tokens -------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_design_tokens",
   {
     title: "Generate a design-token set (palette / motion / layout)",
@@ -590,7 +592,7 @@ server.registerTool(
 );
 
 // ---- riv_critique ------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_critique",
   {
     title: "Critique a .riv: filmstrip + onion skin + motion vectors + metrics + checklist",
@@ -706,7 +708,7 @@ async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string
   };
 }
 
-server.registerTool(
+toolRegistry.register(
   "riv_import_svg",
   {
     title: "Import an SVG as Rive vector shapes",
@@ -728,7 +730,7 @@ server.registerTool(
 );
 
 // ---- riv_asset_search --------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_asset_search",
   {
     title: "Search/fetch professional vector icons (Iconify)",
@@ -777,7 +779,7 @@ server.registerTool(
 // Lottie(bodymovin) JSON → シーン断片。groups/shapes/animations を全て持つ
 // (riv_import_svg のフラグメントより richer: LottieFilesの完成品はタイミング/振付/
 // イージングそのものが素材なので、静止形状だけでなくアニメも一緒に持ち出す)
-server.registerTool(
+toolRegistry.register(
   "riv_lottie_import",
   {
     title: "Import a Lottie/bodymovin JSON as a Rive scene fragment (art + timing + easing)",
@@ -832,7 +834,7 @@ server.registerTool(
 );
 
 // ---- riv_decompile -----------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_decompile",
   {
     title: "Decompile a .riv into an editable scene spec",
@@ -861,7 +863,7 @@ server.registerTool(
 );
 
 // ---- riv_create --------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_create",
   {
     title: "Create a .riv file from a scene spec",
@@ -1009,7 +1011,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
 );
 
 // ---- riv_edit ----------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_edit",
   {
     title: "Edit an existing .riv file",
@@ -1097,7 +1099,7 @@ server.registerTool(
   }));
 
 // ---- riv_finalize ------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_finalize",
   {
     title: "Finalize a reviewed immutable revision",
@@ -1153,7 +1155,7 @@ server.registerTool(
 );
 
 // ---- riv_optimize --------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_optimize",
   {
     title: "Optimize a .riv file (lossless)",
@@ -1196,7 +1198,7 @@ server.registerTool(
 );
 
 // ---- riv_slice_image ---------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_slice_image",
   {
     title: "Slice a PNG into parts for rigging",
@@ -1250,7 +1252,7 @@ server.registerTool(
 );
 
 // ---- riv_rig_character -------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_rig_character",
   {
     title: "Auto-rig a character PNG",
@@ -1329,7 +1331,7 @@ server.registerTool(
 );
 
 // ---- riv_diff ----------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_diff",
   {
     title: "Diff two .riv files",
@@ -1388,7 +1390,7 @@ server.registerTool(
 );
 
 // ---- riv_render_video ---------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_render_video",
   {
     title: "Render an animation to a WebM video",
@@ -1460,7 +1462,7 @@ server.registerTool(
 );
 
 // ---- riv_render_sprites --------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_render_sprites",
   {
     title: "Render an animation to a sprite sheet PNG",
@@ -1563,7 +1565,7 @@ const batchJobSchema = z.object({
   ...batchDefaultsShape(),
 });
 
-server.registerTool(
+toolRegistry.register(
   "riv_batch_render",
   {
     title: "Batch-render many .riv files/formats in one call",
@@ -1588,7 +1590,7 @@ server.registerTool(
 );
 
 // ---- riv_extract_assets --------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_extract_assets",
   {
     title: "Extract embedded assets from a .riv file",
@@ -1630,7 +1632,7 @@ server.registerTool(
 );
 
 // ---- riv_visual_diff ------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_visual_diff",
   {
     title: "Pixel-diff two .riv files",
@@ -1694,7 +1696,7 @@ server.registerTool(
 );
 
 // ---- riv_ab_compare ------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_ab_compare",
   {
     title: "Render two .riv files side by side for visual A/B review",
@@ -1735,7 +1737,7 @@ server.registerTool(
 );
 
 // ---- riv_studio --------------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_studio",
   {
     title: "Start the local Studio web UI",
@@ -1764,7 +1766,7 @@ server.registerTool(
 );
 
 // ---- riv_studio_notes --------------------------------------------------
-server.registerTool(
+toolRegistry.register(
   "riv_studio_notes",
   {
     title: "Read the Studio chat and reply into it",
@@ -1989,7 +1991,7 @@ async function svgPrototype(a: {
   };
 }
 
-server.registerTool(
+toolRegistry.register(
   "riv_ui_detect",
   {
     title: "Detect UI elements in a screenshot",
@@ -2089,7 +2091,7 @@ server.registerTool(
 // **検出をここで再実行してロールを id で突き合わせる。** 要素の全文をもう一度
 // 送らせない代わりに、minArea/maxElements は riv_ui_detect と同じ値でなければ
 // id がずれる（検出自体は決定的なので、同じ画像と同じ引数なら同じ id になる）。
-server.registerTool(
+toolRegistry.register(
   "riv_ui_prototype",
   {
     title: "Turn a detected UI screenshot into an animated .riv",
@@ -2232,7 +2234,7 @@ server.registerTool(
 // ---- riv_setup -----------------------------------------------------------
 // 同梱スキルをクライアント環境へコピーする。MCPのツール許可プロンプトが
 // そのまま「確認だけされて任意」のUXになる（勝手には書き込まれない）。
-server.registerTool(
+toolRegistry.register(
   "riv_setup",
   {
     title: "Install the bundled rive-design-guidelines skill into this environment",
