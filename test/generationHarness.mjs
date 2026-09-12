@@ -112,7 +112,7 @@ try {
   const revisionMatch = createText.match(/Revision:\s*(\{[^\n]+\})/);
   if (!revisionMatch) throw new Error("riv_create did not return revision metadata: " + createText);
   const revision = JSON.parse(revisionMatch[1]);
-  if (!/^r_[0-9a-f]{20}$/.test(revision.assetRef)) throw new Error("invalid assetRef: " + revision.assetRef);
+  if (!/^r_[0-9a-f]{32}$/.test(revision.assetRef)) throw new Error("invalid assetRef: " + revision.assetRef);
   const rivBytes = requireFile(rivPath, 256);
   const baseBytes = readFileSync(rivPath);
   if (baseBytes.subarray(0, 4).toString("latin1") !== "RIVE") throw new Error("generated file has no RIVE fingerprint");
