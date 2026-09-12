@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileRevisionStore } from "../dist/revisions/store.js";
+import { revisionHash } from "../dist/revisions/hash.js";
 
 const root = mkdtempSync(join(tmpdir(), "rive-mcp-revisions-"));
 const rivA = Buffer.from("RIVE\x07\x00\x01revision-a", "latin1");
@@ -57,6 +58,29 @@ const watchedPath = join(root, "watched.riv");
 const p1 = reopened.put({ rivBytes: rivA, sourceKind: "scene-spec", rivPath: watchedPath, operation: { tool: "riv_create" } });
 const p2 = reopened.put({ rivBytes: rivB, parentRef: p1.assetRef, sourceKind: "studio-edit", rivPath: watchedPath, operation: { tool: "riv_studio_notes" } });
 assert.equal(reopened.latestForPath(watchedPath)?.assetRef, p2.assetRef);
+
+// Revisions written before provenance existed keep their original immutable identity.
+const legacyHash = revisionHash({
+  parentRef: undefined,
+  rivHash: a.rivHash,
+  sourceHash: a.sourceHash,
+  sourceKind: a.sourceKind,
+  operation: a.operation,
+});
+const legacyRef = "r_" + legacyHash.slice("sha256:".length, "sha256:".length + 32);
+writeFileSync(join(root, "metadata", legacyRef + ".json"), JSON.stringify({
+  assetRef: legacyRef,
+  revisionHash: legacyHash,
+  rivHash: a.rivHash,
+  sourceHash: a.sourceHash,
+  sourceKind: a.sourceKind,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  operation: a.operation,
+}));
+const legacy = reopened.get(legacyRef).revision;
+assert.equal(legacy.assetRef, legacyRef);
+assert.deepEqual(legacy.provenance, []);
+
 
 // Metadata is part of the immutable identity too: changing lineage must invalidate the ref.
 const metaPath = join(root, "metadata", a.assetRef + ".json");
