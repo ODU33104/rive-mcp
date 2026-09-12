@@ -34,6 +34,7 @@ import { decompileRiv } from "./rivDecompile.js";
 import { runBatchRender, type BatchJobSpec } from "./batchRender.js";
 import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
 import { FileRevisionStore, revisionSummary } from "./revisions/store.js";
+import { stableJson } from "./revisions/hash.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 const revisionStore = new FileRevisionStore();
@@ -871,7 +872,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
   },
   wrap(
     async ({ outPath, scene, previewTime }: { outPath: string; scene: Record<string, unknown>; previewTime?: number }) => {
-      const sourceSnapshot = JSON.stringify(scene);
+      const sourceSnapshot = stableJson(scene);
       const spec = scene as unknown as SceneSpec & {
         imports?: Array<{ spec: string; id?: string; parent?: string; x?: number; y?: number; scale?: number; z?: number }>;
       };
