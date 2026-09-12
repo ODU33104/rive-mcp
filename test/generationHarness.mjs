@@ -14,6 +14,7 @@ const pngPath = join(outDir, "generated.png");
 const reportPath = join(outDir, "report.json");
 const editedRivPath = join(outDir, "edited.riv");
 const editedPngPath = join(outDir, "edited.png");
+const finalRivPath = join(outDir, "final.riv");
 
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
   stdio: ["pipe", "pipe", "inherit"],
@@ -150,6 +151,16 @@ try {
   if (!imageOf(editedRender)) throw new Error("edited revision did not render");
   requireFile(editedPngPath, 1000);
 
+  // Parent reviews must not authorize the child revision.
+  const blockedFinalize = await rpc("tools/call", {
+    name: "riv_finalize",
+    arguments: { assetRef: editedRevision.assetRef, outPath: finalRivPath },
+  });
+  if (!blockedFinalize.isError || !textOf(blockedFinalize).includes("Finalize blocked")) {
+    throw new Error("unreviewed child revision was incorrectly finalized");
+  }
+  if (existsSync(finalRivPath)) throw new Error("blocked finalize wrote an output file");
+
   const lint = await callTool("riv_lint", { assetRef: revision.assetRef });
   const lintJson = JSON.parse(textOf(lint));
   if (lintJson.errorCount !== 0) throw new Error("lint errors: " + JSON.stringify(lintJson.findings));
@@ -174,14 +185,44 @@ try {
   requireFile(join(outDir, "critique-filmstrip.png"), 1000);
   requireFile(join(outDir, "critique-onion.png"), 1000);
 
+  const childLint = await callTool("riv_lint", { assetRef: editedRevision.assetRef });
+  const childLintJson = JSON.parse(textOf(childLint));
+  if (childLintJson.errorCount !== 0 || childLintJson.review?.assetRef !== editedRevision.assetRef) {
+    throw new Error("child lint review invalid: " + textOf(childLint));
+  }
+  const childCritique = await callTool("riv_critique", {
+    assetRef: editedRevision.assetRef, animation: "intro", frames: 6, width: 180,
+  });
+  const childCritiqueMatch = textOf(childCritique).match(/ReviewReceipt:\s*(\{[^\n]+\})/);
+  if (!childCritiqueMatch) throw new Error("child critique review missing");
+  const childCritiqueReview = JSON.parse(childCritiqueMatch[1]);
+  if (childCritiqueReview.assetRef !== editedRevision.assetRef) throw new Error("child critique bound to wrong revision");
+
+  const finalized = await callTool("riv_finalize", {
+    assetRef: editedRevision.assetRef,
+    outPath: finalRivPath,
+  });
+  const finalizeJson = JSON.parse(textOf(finalized));
+  if (!finalizeJson.finalized || finalizeJson.assetRef !== editedRevision.assetRef) {
+    throw new Error("finalize returned wrong revision: " + textOf(finalized));
+  }
+  if (!/^fin_[0-9a-f]{32}$/.test(finalizeJson.finalizeRef)) throw new Error("invalid finalizeRef");
+  requireFile(finalRivPath, 256);
+  if (!readFileSync(finalRivPath).equals(readFileSync(editedRivPath))) {
+    throw new Error("finalized bytes differ from reviewed child revision");
+  }
+
   const report = {
     ok: true,
     revision,
     editedRevision,
-    outputs: { rivPath, rivBytes, pngPath, pngBytes, editedRivPath, editedPngPath },
+    outputs: { rivPath, rivBytes, pngPath, pngBytes, editedRivPath, editedPngPath, finalRivPath },
     create: createText,
     lint: lintJson,
     critiqueReview,
+    childLint: childLintJson.review,
+    childCritiqueReview,
+    finalize: finalizeJson,
     critique: critiqueText,
   };
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
