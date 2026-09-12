@@ -47,7 +47,8 @@
     "test:reviews": "node test/reviews.mjs",
     "test:tool-registry": "node test/toolRegistry.mjs",
     "test:tool-surface": "node test/toolSurfaceBudget.mjs",
-    "test:skills": "node test/skills.mjs"
+    "test:skills": "node test/skills.mjs",
+    "test:clean-room": "node test/cleanRoom.mjs"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
