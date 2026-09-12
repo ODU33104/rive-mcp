@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { revisionHash, sha256Bytes } from "./hash.js";
 import type { AssetRevision, PutRevisionInput, ResolvedRevision } from "./types.js";
 
-const REF_RE = /^r_[0-9a-f]{20}$/;
+const REF_RE = /^r_[0-9a-f]{32}$/;
 
 function hashHex(hash: string): string {
   return hash.startsWith("sha256:") ? hash.slice(7) : hash;
@@ -48,6 +48,17 @@ export class FileRevisionStore {
     if (!existsSync(metaPath)) throw new Error("Unknown assetRef: " + assetRef);
     const revision = JSON.parse(readFileSync(metaPath, "utf8")) as AssetRevision;
     if (revision.assetRef !== assetRef) throw new Error("Corrupt revision metadata for " + assetRef);
+    const expectedRevisionHash = revisionHash({
+      parentRef: revision.parentRef,
+      rivHash: revision.rivHash,
+      sourceHash: revision.sourceHash,
+      sourceKind: revision.sourceKind,
+      operation: revision.operation,
+    });
+    const expectedAssetRef = "r_" + hashHex(expectedRevisionHash).slice(0, 32);
+    if (revision.revisionHash !== expectedRevisionHash || expectedAssetRef !== assetRef) {
+      throw new Error("Revision metadata integrity check failed for " + assetRef);
+    }
     const rivPath = this.objectPath(revision.rivHash);
     if (!existsSync(rivPath)) throw new Error("Revision object missing for " + assetRef);
     const rivBytes = readFileSync(rivPath);
@@ -71,7 +82,7 @@ export class FileRevisionStore {
       operation: input.operation,
     };
     const fullRevisionHash = revisionHash(identity);
-    const assetRef = "r_" + hashHex(fullRevisionHash).slice(0, 20);
+    const assetRef = "r_" + hashHex(fullRevisionHash).slice(0, 32);
 
     const existingPath = this.metadataPath(assetRef);
     if (existsSync(existingPath)) {
