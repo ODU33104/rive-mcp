@@ -1,0 +1,30 @@
+name: revision-core-ci
+
+on:
+  push:
+    branches:
+      - feat/immutable-revision-core
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:revisions
+      - run: npm run test:phase1
+      - run: npm run test:phase2
+      - run: npm run test:e2e-baseline
+      - run: npm run test:generation-harness
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generation-harness
+          path: test/tmp/generation-harness
+          if-no-files-found: warn

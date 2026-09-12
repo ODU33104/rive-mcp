@@ -3,11 +3,27 @@
   "version": "0.6.1",
   "mcpName": "io.github.ODU33104/rive-mcp",
   "description": "Free, editor-less MCP server for Rive: create, edit, inspect, render and live-preview .riv animations from Claude or any MCP client",
-  "keywords": ["rive", "riv", "mcp", "model-context-protocol", "animation", "claude", "state-machine", "rigging"],
-  "repository": { "type": "git", "url": "git+https://github.com/ODU33104/rive-mcp.git" },
+  "keywords": [
+    "rive",
+    "riv",
+    "mcp",
+    "model-context-protocol",
+    "animation",
+    "claude",
+    "state-machine",
+    "rigging"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ODU33104/rive-mcp.git"
+  },
   "homepage": "https://github.com/ODU33104/rive-mcp#readme",
-  "bugs": { "url": "https://github.com/ODU33104/rive-mcp/issues" },
-  "engines": { "node": ">=20" },
+  "bugs": {
+    "url": "https://github.com/ODU33104/rive-mcp/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "bin": {
     "rive-mcp": "dist/index.js"
@@ -24,7 +40,10 @@
     "test:e2e": "node test/e2e.mjs",
     "test:phase1": "node test/phase1.mjs",
     "test:phase2": "node test/phase2.mjs",
-    "test:lottie": "node test/lottie.mjs"
+    "test:lottie": "node test/lottie.mjs",
+    "test:revisions": "node test/revisions.mjs",
+    "test:generation-harness": "node test/generationHarness.mjs",
+    "test:e2e-baseline": "node test/e2eBaseline.mjs"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
