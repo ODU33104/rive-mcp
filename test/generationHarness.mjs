@@ -15,6 +15,7 @@ const reportPath = join(outDir, "report.json");
 const editedRivPath = join(outDir, "edited.riv");
 const editedPngPath = join(outDir, "edited.png");
 const finalRivPath = join(outDir, "final.riv");
+const importedSpecPath = join(outDir, "fixture.scene.json");
 
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
   stdio: ["pipe", "pipe", "inherit"],
@@ -90,8 +91,16 @@ try {
   if (init.serverInfo?.name !== "rive-mcp") throw new Error("unexpected MCP server: " + init.serverInfo?.name);
   notify("notifications/initialized", {});
 
-  const scene = {
-    artboard: { name: "Harness", width: 480, height: 320 },
+  const imported = await callTool("riv_import_svg", {
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><circle cx="20" cy="20" r="16" fill="#ffffff"/></svg>`,
+    outSpec: importedSpecPath,
+    idPrefix: "fixture_",
+    license: "CC0-1.0",
+    attribution: "generation harness fixture",
+  });
+  if (!textOf(imported).includes("Imported")) throw new Error("SVG fixture import failed");
+
+  const scene = {    artboard: { name: "Harness", width: 480, height: 320 },
     backgroundColor: "#101827",
     shapes: [
       { id: "panel", type: "rect", x: 240, y: 160, width: 280, height: 160, cornerRadius: 24,
@@ -100,6 +109,7 @@ try {
       { id: "dot2", type: "ellipse", x: 240, y: 160, width: 34, height: 34, fill: { color: "#dbeafe" } },
       { id: "dot3", type: "ellipse", x: 290, y: 160, width: 34, height: 34, fill: { color: "#bfdbfe" } },
     ],
+    imports: [{ spec: importedSpecPath, x: 24, y: 24, scale: 0.5 }],
     animations: [{
       name: "intro", duration: 90, fps: 60, loop: "oneShot", tracks: [], presets: [
         { preset: "pop-in", target: "panel" },
@@ -114,6 +124,9 @@ try {
   if (!revisionMatch) throw new Error("riv_create did not return revision metadata: " + createText);
   const revision = JSON.parse(revisionMatch[1]);
   if (!/^r_[0-9a-f]{32}$/.test(revision.assetRef)) throw new Error("invalid assetRef: " + revision.assetRef);
+  if (!revision.provenance?.some((p) => p.kind === "svg" && p.license === "CC0-1.0" && p.attribution === "generation harness fixture")) {
+    throw new Error("create revision lost imported SVG provenance: " + JSON.stringify(revision.provenance));
+  }
   const rivBytes = requireFile(rivPath, 256);
   const baseBytes = readFileSync(rivPath);
   if (baseBytes.subarray(0, 4).toString("latin1") !== "RIVE") throw new Error("generated file has no RIVE fingerprint");
@@ -142,6 +155,9 @@ try {
     throw new Error("edited revision parent mismatch: " + JSON.stringify(editedRevision));
   }
   if (editedRevision.assetRef === revision.assetRef) throw new Error("edit reused the parent assetRef");
+  if (JSON.stringify(editedRevision.provenance) !== JSON.stringify(revision.provenance)) {
+    throw new Error("edit did not preserve provenance");
+  }
   if (!baseBytes.equals(readFileSync(rivPath))) throw new Error("assetRef edit mutated the original .riv path");
   requireFile(editedRivPath, 256);
 
@@ -207,6 +223,9 @@ try {
     throw new Error("finalize returned wrong revision: " + textOf(finalized));
   }
   if (!/^fin_[0-9a-f]{32}$/.test(finalizeJson.finalizeRef)) throw new Error("invalid finalizeRef");
+  if (JSON.stringify(finalizeJson.provenance) !== JSON.stringify(editedRevision.provenance)) {
+    throw new Error("finalize did not report reviewed revision provenance");
+  }
   requireFile(finalRivPath, 256);
   if (!readFileSync(finalRivPath).equals(readFileSync(editedRivPath))) {
     throw new Error("finalized bytes differ from reviewed child revision");
