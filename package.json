@@ -42,7 +42,8 @@
     "test:phase2": "node test/phase2.mjs",
     "test:lottie": "node test/lottie.mjs",
     "test:revisions": "node test/revisions.mjs",
-    "test:generation-harness": "node test/generationHarness.mjs"
+    "test:generation-harness": "node test/generationHarness.mjs",
+    "test:e2e-baseline": "node test/e2eBaseline.mjs"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
