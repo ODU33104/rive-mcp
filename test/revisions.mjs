@@ -52,6 +52,12 @@ assert.equal(c.parentRef, a.assetRef);
 assert.notEqual(b.assetRef, c.assetRef);
 assert.deepEqual(reopened.get(a.assetRef).rivBytes, rivA);
 
+// Path lookup supports Studio handoff lineage without creating revisions for every UI gesture.
+const watchedPath = join(root, "watched.riv");
+const p1 = reopened.put({ rivBytes: rivA, sourceKind: "scene-spec", rivPath: watchedPath, operation: { tool: "riv_create" } });
+const p2 = reopened.put({ rivBytes: rivB, parentRef: p1.assetRef, sourceKind: "studio-edit", rivPath: watchedPath, operation: { tool: "riv_studio_notes" } });
+assert.equal(reopened.latestForPath(watchedPath)?.assetRef, p2.assetRef);
+
 // Metadata is part of the immutable identity too: changing lineage must invalidate the ref.
 const metaPath = join(root, "metadata", a.assetRef + ".json");
 const originalMeta = readFileSync(metaPath, "utf8");

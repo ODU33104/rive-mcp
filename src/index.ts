@@ -19,7 +19,7 @@ import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
 import { optimizeRiv } from "./rivOptimize.js";
 import { extractAssets } from "./rivAssets.js";
-import { startStudio, stopStudio, takeStudioNotes, postStudioReply } from "./studio.js";
+import { startStudio, stopStudio, takeStudioNotes, postStudioReply, getStudioRivPath } from "./studio.js";
 import { buildCharacterRig } from "./rigCharacter.js";
 import { generateTokens, paletteFromColors, type Mood } from "./designTokens.js";
 import { detectUiElements, type UiElement } from "./uiDetect.js";
@@ -34,7 +34,7 @@ import { decompileRiv } from "./rivDecompile.js";
 import { runBatchRender, type BatchJobSpec } from "./batchRender.js";
 import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
 import { FileRevisionStore, revisionSummary } from "./revisions/store.js";
-import { stableJson } from "./revisions/hash.js";
+import { stableJson, sha256Bytes } from "./revisions/hash.js";
 import { FileReviewStore, reviewSummary } from "./review/store.js";
 import { FileFinalizeStore } from "./finalize/store.js";
 import { ToolRegistry } from "./tools/registry.js";
@@ -1763,6 +1763,40 @@ toolRegistry.register(
     if (!data.notes.length) {
       return { content: [{ type: "text", text: `${replyNote}No pending instructions from the Studio UI.` }] };
     }
+
+    let handoffRevision: ReturnType<typeof revisionSummary> | null = null;
+    if (!peek) {
+      const watchedPath = getStudioRivPath();
+      if (watchedPath && existsSync(watchedPath)) {
+        const studioBytes = readFileSync(watchedPath);
+        const currentHash = sha256Bytes(studioBytes);
+        const latest = revisionStore.latestForPath(watchedPath);
+        if (latest?.rivHash === currentHash) {
+          handoffRevision = revisionSummary(latest);
+        } else {
+          const context = data.notes[data.notes.length - 1]?.context;
+          const revision = revisionStore.put({
+            rivBytes: studioBytes,
+            parentRef: latest?.assetRef,
+            sourceKind: "studio-edit",
+            rivPath: watchedPath,
+            operation: {
+              tool: "riv_studio_notes",
+              summary: "Studio handoff to AI",
+              details: {
+                noteCount: data.notes.length,
+                selection: context?.selection ?? null,
+                artboard: context?.artboard ?? null,
+                animation: context?.animation ?? null,
+                timeSec: context?.timeSec ?? null,
+              },
+            },
+          });
+          handoffRevision = revisionSummary(revision);
+        }
+      }
+    }
+
     const lines = data.notes.map((n, i) => {
       const c = n.context;
       const ctx = c
@@ -1778,7 +1812,10 @@ toolRegistry.register(
     return {
       content: [{
         type: "text",
-        text: `${replyNote}Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically. When you are done, call riv_studio_notes again with \`reply\` to tell the user in the Studio chat what you changed.`,
+        text:
+          `${replyNote}Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n` +
+          (handoffRevision ? `\nStudio handoff revision: ${JSON.stringify(handoffRevision)}\n` : "") +
+          `\nApply changes from that immutable assetRef when available (prefer riv_edit({assetRef,...}) over mutating the watched path directly). When done, call riv_studio_notes again with \`reply\`.`,
       }],
     };
   })
