@@ -38,6 +38,8 @@ import { stableJson, sha256Bytes } from "./revisions/hash.js";
 import { FileReviewStore, reviewSummary } from "./review/store.js";
 import { FileFinalizeStore } from "./finalize/store.js";
 import { ToolRegistry } from "./tools/registry.js";
+import { fileProvenance, mergeProvenance, provenanceEntry, type ProvenanceFragment } from "./provenance.js";
+import type { ProvenanceEntry } from "./revisions/types.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 const revisionStore = new FileRevisionStore();
@@ -687,10 +689,10 @@ toolRegistry.register(
 
 // ---- riv_import_svg ----------------------------------------------------
 // SVG→シーン断片。プレビュー用の一時rivも組んで画像を返す
-async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string) {
+async function svgToSpecFile(svgText: string, outSpec: string, idPrefix?: string, provenance?: ProvenanceEntry[]) {
   const res = importSvg(svgText, { idPrefix });
   const specPath = resolve(outSpec);
-  writeFileSync(specPath, JSON.stringify({ sourceWidth: res.width, sourceHeight: res.height, shapes: res.shapes }, null, 0));
+  writeFileSync(specPath, JSON.stringify({ sourceWidth: res.width, sourceHeight: res.height, shapes: res.shapes, __provenance: provenance ?? [] }, null, 0));
   const previewScene: SceneSpec = {
     artboard: { name: "SvgPreview", width: Math.max(64, res.width), height: Math.max(64, res.height) },
     shapes: res.shapes,
@@ -719,12 +721,17 @@ toolRegistry.register(
       svg: z.string().optional().describe("Inline SVG markup (alternative to svgPath)"),
       outSpec: z.string().describe("Output scene-fragment JSON path (e.g. logo.scene.json)"),
       idPrefix: z.string().optional().describe("Prefix for generated shape ids (avoid collisions)"),
+      license: z.string().optional().describe("Known license for this source; omitted = unknown"),
+      attribution: z.string().optional().describe("Attribution text when required"),
     },
   },
-  wrap(async ({ svgPath, svg, outSpec, idPrefix }: { svgPath?: string; svg?: string; outSpec: string; idPrefix?: string }) => {
+  wrap(async ({ svgPath, svg, outSpec, idPrefix, license, attribution }: { svgPath?: string; svg?: string; outSpec: string; idPrefix?: string; license?: string; attribution?: string }) => {
     const text = svg ?? (svgPath ? readFileSync(resolve(svgPath), "utf8") : null);
     if (!text) return err("Provide svgPath or svg");
-    const out = await svgToSpecFile(text, outSpec, idPrefix);
+    const provenance = [svgPath
+      ? fileProvenance("svg", svgPath, license, attribution)
+      : provenanceEntry({ kind: "svg", source: "inline-svg", license, attribution })];
+    const out = await svgToSpecFile(text, outSpec, idPrefix, provenance);
     return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
   })
 );
@@ -742,9 +749,11 @@ toolRegistry.register(
       icon: z.string().optional().describe("Icon to fetch, e.g. 'solar:rocket-bold' (from a previous search)"),
       outSpec: z.string().optional().describe("Required with icon: output scene-fragment JSON path"),
       idPrefix: z.string().optional(),
+      license: z.string().optional().describe("Known icon license; omitted = unknown"),
+      attribution: z.string().optional().describe("Attribution text when required"),
     },
   },
-  wrap(async ({ query, limit, icon, outSpec, idPrefix }: { query?: string; limit?: number; icon?: string; outSpec?: string; idPrefix?: string }) => {
+  wrap(async ({ query, limit, icon, outSpec, idPrefix, license, attribution }: { query?: string; limit?: number; icon?: string; outSpec?: string; idPrefix?: string; license?: string; attribution?: string }) => {
     const get = async (url: string): Promise<string> => {
       const res = await fetch(url, { signal: AbortSignal.timeout(15000) }).catch((e) => {
         throw new Error(`Iconify API unreachable (${e.message}) — this tool needs network access to api.iconify.design`);
@@ -758,7 +767,9 @@ toolRegistry.register(
       if (!prefix || !name) return err("icon must be 'prefix:name' (e.g. 'solar:rocket-bold')");
       const svg = await get(`https://api.iconify.design/${prefix}/${name}.svg`);
       if (!svg.includes("<svg")) return err(`Icon '${icon}' not found`);
-      const out = await svgToSpecFile(svg, outSpec, idPrefix ?? name.replace(/[^a-z0-9]/gi, "_") + "_");
+      const out = await svgToSpecFile(svg, outSpec, idPrefix ?? name.replace(/[^a-z0-9]/gi, "_") + "_", [
+        provenanceEntry({ kind: "iconify", source: `iconify:${icon}`, license, attribution }),
+      ]);
       return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
     }
     if (!query) return err("Provide query (search) or icon (fetch)");
@@ -790,9 +801,11 @@ toolRegistry.register(
       json: z.string().optional().describe("Inline Lottie JSON text (alternative to path)"),
       outSpec: z.string().describe("Output scene-fragment JSON path (e.g. anim.scene.json)"),
       idPrefix: z.string().optional().describe("Prefix for generated group/shape ids (avoid collisions)"),
+      license: z.string().optional().describe("Known source license; omitted = unknown"),
+      attribution: z.string().optional().describe("Attribution text when required"),
     },
   },
-  wrap(async ({ path, json, outSpec, idPrefix }: { path?: string; json?: string; outSpec: string; idPrefix?: string }) => {
+  wrap(async ({ path, json, outSpec, idPrefix, license, attribution }: { path?: string; json?: string; outSpec: string; idPrefix?: string; license?: string; attribution?: string }) => {
     const text = json ?? (path ? readFileSync(resolve(path), "utf8") : null);
     if (!text) return err("Provide path or json");
     const res = importLottie(text, { idPrefix });
@@ -800,7 +813,8 @@ toolRegistry.register(
     writeFileSync(
       specPath,
       JSON.stringify(
-        { sourceWidth: res.width, sourceHeight: res.height, fps: res.fps, durationFrames: res.durationFrames, groups: res.groups, shapes: res.shapes, animations: res.animations },
+        { sourceWidth: res.width, sourceHeight: res.height, fps: res.fps, durationFrames: res.durationFrames, groups: res.groups, shapes: res.shapes, animations: res.animations,
+          __provenance: [path ? fileProvenance("lottie", path, license, attribution) : provenanceEntry({ kind: "lottie", source: "inline-lottie", license, attribution })] },
         null,
         0
       )
@@ -839,20 +853,22 @@ toolRegistry.register(
   {
     title: "Decompile a .riv into an editable scene spec",
     description:
-      "Reverse a .riv file into a riv_create scene spec (shapes with bezier vertices, solid/gradient fills incl. gradient opacity, blend modes, artboard background, groups/solos, trim paths, clipping, animations with named easings, loop modes). Paint objects are resolved by parentId, so editor-authored files (paints deferred to the stream tail) decompile correctly. Use it to study professional files as few-shot examples, or to remix them — art AND hand-tuned animation tracks — into new scenes (decompile → edit spec → riv_create; see samples/night-delivery). Object types outside the writer's coverage are counted in 'skipped', not silently dropped. Note: community/marketplace files are CC BY 4.0 — keep attribution.",
+      "Reverse a .riv file into a riv_create scene spec (shapes with bezier vertices, solid/gradient fills incl. gradient opacity, blend modes, artboard background, groups/solos, trim paths, clipping, animations with named easings, loop modes). Paint objects are resolved by parentId, so editor-authored files (paints deferred to the stream tail) decompile correctly. Use it to study professional files as few-shot examples, or to remix them — art AND hand-tuned animation tracks — into new scenes (decompile → edit spec → riv_create; see samples/night-delivery). Object types outside the writer's coverage are counted in 'skipped', not silently dropped. Licensing is source-specific: pass known license/attribution explicitly; otherwise provenance records it as unknown.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
       outSpec: z.string().optional().describe("Write the scene spec JSON here (default: return summary only)"),
+      license: z.string().optional().describe("Known license for this .riv source; omitted = unknown"),
+      attribution: z.string().optional().describe("Attribution text when required"),
     },
   },
-  wrap(async ({ path, outSpec }: { path: string; outSpec?: string }) => {
+  wrap(async ({ path, outSpec, license, attribution }: { path: string; outSpec?: string; license?: string; attribution?: string }) => {
     const { bytes } = loadRiv(path);
     const { scene, coverage } = decompileRiv(bytes);
     let text = `decompiled ${coverage.decompiled} objects; skipped: ${JSON.stringify(coverage.skipped)}`;
     if (coverage.warnings.length) text += `\nwarnings: ${coverage.warnings.slice(0, 12).join("; ")}`;
     if (outSpec) {
       const p = resolve(outSpec);
-      writeFileSync(p, JSON.stringify(scene, null, 1));
+      writeFileSync(p, JSON.stringify({ ...scene, __provenance: [fileProvenance("riv", path, license, attribution)] }, null, 1));
       text += `\nscene spec -> ${p}`;
     } else {
       const s = JSON.stringify(scene);
@@ -872,11 +888,18 @@ toolRegistry.register(
       outPath: z.string().describe("Output .riv path"),
       scene: z.record(z.unknown()).describe("SceneSpec object; use the rive-design-guidelines skill/prompt for authoring patterns"),
       previewTime: z.number().optional().describe("Seconds into first animation for the preview frame (default 0.4)"),
+      provenance: z.array(z.object({
+        kind: z.enum(["svg","iconify","lottie","riv","image","audio","font","generated","user-file"]),
+        source: z.string(),
+        license: z.string().optional(),
+        attribution: z.string().optional(),
+      })).optional().describe("Additional source provenance; omitted licenses are recorded as unknown"),
     },
   },
   wrap(
-    async ({ outPath, scene, previewTime }: { outPath: string; scene: Record<string, unknown>; previewTime?: number }) => {
+    async ({ outPath, scene, previewTime, provenance }: { outPath: string; scene: Record<string, unknown>; previewTime?: number; provenance?: ProvenanceEntry[] }) => {
       const sourceSnapshot = stableJson(scene);
+      const collectedProvenance: ProvenanceEntry[] = mergeProvenance(provenance);
       const spec = scene as unknown as SceneSpec & {
         imports?: Array<{ spec: string; id?: string; parent?: string; x?: number; y?: number; scale?: number; z?: number }>;
       };
@@ -887,7 +910,8 @@ toolRegistry.register(
         for (const imp of spec.imports) {
           const p = resolve(imp.spec);
           if (!existsSync(p)) return err(`import spec not found: ${p}`);
-          const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> };
+          const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> } & ProvenanceFragment;
+          collectedProvenance.push(...mergeProvenance(frag.__provenance));
           const gid = imp.id ?? basename(p).replace(/\.(scene\.)?json$/i, "");
           spec.groups.push({
             id: gid, x: imp.x ?? 0, y: imp.y ?? 0, parent: imp.parent,
@@ -906,6 +930,7 @@ toolRegistry.register(
           const p = resolve(img.pngPath);
           if (!existsSync(p)) return err(`Image file not found: ${p}`);
           img.bytes = new Uint8Array(readFileSync(p));
+          collectedProvenance.push(fileProvenance("image", p));
         }
       }
       const audioLists = [spec.audio ?? [], ...(spec.artboards ?? []).map((a) => a.audio ?? [])];
@@ -914,6 +939,7 @@ toolRegistry.register(
           const p = resolve(clip.path);
           if (!existsSync(p)) return err(`Audio file not found: ${p}`);
           clip.bytes = new Uint8Array(readFileSync(p));
+          collectedProvenance.push(fileProvenance("audio", p));
         }
       }
       for (const font of spec.fonts ?? []) {
@@ -924,6 +950,9 @@ toolRegistry.register(
             : join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "inter.ttf");
           if (!existsSync(p)) return err(`Font file not found: ${p}`);
           font.bytes = new Uint8Array(readFileSync(p));
+          collectedProvenance.push(font.path
+            ? fileProvenance("font", p)
+            : provenanceEntry({ kind: "font", source: "bundled:Inter", license: "OFL-1.1", attribution: "Inter font" }));
         }
       }
       const { bytes, warnings } = createRiv(spec);
@@ -945,6 +974,7 @@ toolRegistry.register(
         sourceKind: "scene-spec",
         rivPath: out,
         operation: { tool: "riv_create" },
+        provenance: mergeProvenance(collectedProvenance),
       });
       return {
         content: [
@@ -1006,15 +1036,18 @@ toolRegistry.register(
     let bytes: Buffer;
     let abs: string | undefined;
     let parentRef: string | undefined;
+    let inheritedProvenance: ProvenanceEntry[] = [];
     if (assetRef) {
       const resolvedRevision = revisionStore.get(assetRef);
       bytes = resolvedRevision.rivBytes;
       abs = resolvedRevision.revision.rivPath;
       parentRef = assetRef;
+      inheritedProvenance = resolvedRevision.revision.provenance ?? [];
     } else {
       const loaded = loadRiv(path!);
       bytes = loaded.bytes;
       abs = loaded.abs;
+      inheritedProvenance = [fileProvenance("user-file", loaded.abs)];
     }
 
     const result = editRiv(bytes, edits);
@@ -1035,6 +1068,7 @@ toolRegistry.register(
       sourceKind: "binary-edit",
       rivPath: out,
       operation: { tool: "riv_edit", details: edits },
+      provenance: inheritedProvenance,
     });
     const r = await host.renderFrames(Buffer.from(result.bytes), { frameCount: 1, format: "png" });
     const target = out ?? "(revision store only)";
@@ -1101,6 +1135,7 @@ toolRegistry.register(
           critiqueReviewRef: critique.reviewRef,
           finalizeRef: receipt.finalizeRef,
           runtimeValidation: { ok: true },
+          provenance: resolvedRevision.revision.provenance ?? [],
         }, null, 2),
       }],
     };
@@ -1780,6 +1815,7 @@ toolRegistry.register(
             parentRef: latest?.assetRef,
             sourceKind: "studio-edit",
             rivPath: watchedPath,
+            provenance: latest?.provenance ?? [fileProvenance("user-file", watchedPath)],
             operation: {
               tool: "riv_studio_notes",
               summary: "Studio handoff to AI",

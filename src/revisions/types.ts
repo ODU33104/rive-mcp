@@ -4,6 +4,24 @@ export type RevisionSourceKind =
   | "binary-edit"
   | "studio-edit";
 
+export type ProvenanceKind =
+  | "svg"
+  | "iconify"
+  | "lottie"
+  | "riv"
+  | "image"
+  | "audio"
+  | "font"
+  | "generated"
+  | "user-file";
+
+export interface ProvenanceEntry {
+  kind: ProvenanceKind;
+  source: string;
+  license: string;
+  attribution?: string;
+}
+
 export interface RevisionOperation {
   tool: string;
   summary?: string;
@@ -21,6 +39,7 @@ export interface AssetRevision {
   rivPath?: string;
   sourcePath?: string;
   operation?: RevisionOperation;
+  provenance: ProvenanceEntry[];
 }
 
 export interface PutRevisionInput {
@@ -31,6 +50,7 @@ export interface PutRevisionInput {
   rivPath?: string;
   sourcePath?: string;
   operation?: RevisionOperation;
+  provenance?: ProvenanceEntry[];
 }
 
 export interface ResolvedRevision {
