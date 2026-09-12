@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "briefs": [
+    {
+      "id": "fintech-status-card",
+      "kind": "author",
+      "pilot": true,
+      "brief": "Create a polished dark-mode fintech status card for a mobile app. It should show a primary balance/status area, a clear success state, restrained premium motion, and strong information hierarchy. Avoid decorative noise and excessive bounce. Deliver a finished .riv."
+    },
+    {
+      "id": "weather-micro-interaction",
+      "kind": "author",
+      "pilot": true,
+      "brief": "Create a compact weather card with an icon-led composition, readable temperature/status information, and a subtle ambient loop. Motion should feel alive without distracting from the information. Use professional vector artwork when appropriate. Deliver a finished .riv."
+    },
+    {
+      "id": "music-player-control",
+      "kind": "author",
+      "pilot": false,
+      "brief": "Create a polished music-player control with artwork, track information, play/pause interaction, and a tactile state change. Keep hierarchy clear and motion concise. Deliver a finished .riv."
+    },
+    {
+      "id": "onboarding-progress",
+      "kind": "author",
+      "pilot": false,
+      "brief": "Create a three-step onboarding progress component with clear completed, current, and upcoming states. Include a transition between steps that feels intentional and readable. Deliver a finished .riv."
+    },
+    {
+      "id": "game-reward-reveal",
+      "kind": "author",
+      "pilot": false,
+      "brief": "Create a game reward reveal with anticipation, impact, and settle. It should feel rewarding but controlled: avoid endless bounce and visual clutter. Deliver a finished .riv."
+    },
+    {
+      "id": "upload-state-machine",
+      "kind": "author",
+      "pilot": false,
+      "brief": "Create an upload component with idle, uploading, success, and error states using a state machine. Status feedback must remain readable and transitions should communicate progress clearly. Deliver a finished .riv."
+    },
+    {
+      "id": "data-visualization-tile",
+      "kind": "author",
+      "pilot": false,
+      "brief": "Create a compact analytics metric tile with a small chart or visual data cue, a clear primary metric, and a restrained entrance/emphasis animation. It should feel production-ready rather than decorative. Deliver a finished .riv."
+    },
+    {
+      "id": "vector-reaction",
+      "kind": "author",
+      "pilot": false,
+      "brief": "Create a short expressive reaction animation around imported professional vector artwork rather than drawing the main illustration from primitive shapes. The reaction should be readable, coherent, and under two seconds. Deliver a finished .riv."
+    },
+    {
+      "id": "existing-file-refinement",
+      "kind": "refine",
+      "pilot": true,
+      "brief": "Refine the provided starter .riv without redesigning unrelated parts. Improve hierarchy, make the primary motion less robotic, and tighten timing so the result feels more polished. Preserve the overall structure and deliver the corrected .riv."
+    }
+  ]
+}
