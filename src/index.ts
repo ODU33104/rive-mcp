@@ -647,6 +647,7 @@ toolRegistry.register(
             kind: "critique",
             payload: {
               runtimeValidation: { ok: true },
+          provenance: resolvedRevision.revision.provenance ?? [],
               target: {
                 artboard: ab?.name ?? a.artboard ?? null,
                 animation: anim?.name ?? null,
@@ -888,11 +889,18 @@ toolRegistry.register(
       outPath: z.string().describe("Output .riv path"),
       scene: z.record(z.unknown()).describe("SceneSpec object; use the rive-design-guidelines skill/prompt for authoring patterns"),
       previewTime: z.number().optional().describe("Seconds into first animation for the preview frame (default 0.4)"),
+      provenance: z.array(z.object({
+        kind: z.enum(["svg","iconify","lottie","riv","image","audio","font","generated","user-file"]),
+        source: z.string(),
+        license: z.string().optional(),
+        attribution: z.string().optional(),
+      })).optional().describe("Additional source provenance; omitted licenses are recorded as unknown"),
     },
   },
   wrap(
-    async ({ outPath, scene, previewTime }: { outPath: string; scene: Record<string, unknown>; previewTime?: number }) => {
+    async ({ outPath, scene, previewTime, provenance }: { outPath: string; scene: Record<string, unknown>; previewTime?: number; provenance?: ProvenanceEntry[] }) => {
       const sourceSnapshot = stableJson(scene);
+      const collectedProvenance: ProvenanceEntry[] = mergeProvenance(provenance);
       const spec = scene as unknown as SceneSpec & {
         imports?: Array<{ spec: string; id?: string; parent?: string; x?: number; y?: number; scale?: number; z?: number }>;
       };
@@ -903,7 +911,8 @@ toolRegistry.register(
         for (const imp of spec.imports) {
           const p = resolve(imp.spec);
           if (!existsSync(p)) return err(`import spec not found: ${p}`);
-          const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> };
+          const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> } & ProvenanceFragment;
+          collectedProvenance.push(...mergeProvenance(frag.__provenance));
           const gid = imp.id ?? basename(p).replace(/\.(scene\.)?json$/i, "");
           spec.groups.push({
             id: gid, x: imp.x ?? 0, y: imp.y ?? 0, parent: imp.parent,
@@ -922,6 +931,7 @@ toolRegistry.register(
           const p = resolve(img.pngPath);
           if (!existsSync(p)) return err(`Image file not found: ${p}`);
           img.bytes = new Uint8Array(readFileSync(p));
+          collectedProvenance.push(fileProvenance("image", p));
         }
       }
       const audioLists = [spec.audio ?? [], ...(spec.artboards ?? []).map((a) => a.audio ?? [])];
@@ -930,6 +940,7 @@ toolRegistry.register(
           const p = resolve(clip.path);
           if (!existsSync(p)) return err(`Audio file not found: ${p}`);
           clip.bytes = new Uint8Array(readFileSync(p));
+          collectedProvenance.push(fileProvenance("audio", p));
         }
       }
       for (const font of spec.fonts ?? []) {
@@ -940,6 +951,9 @@ toolRegistry.register(
             : join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "inter.ttf");
           if (!existsSync(p)) return err(`Font file not found: ${p}`);
           font.bytes = new Uint8Array(readFileSync(p));
+          collectedProvenance.push(font.path
+            ? fileProvenance("font", p)
+            : provenanceEntry({ kind: "font", source: "bundled:Inter", license: "OFL-1.1", attribution: "Inter font" }));
         }
       }
       const { bytes, warnings } = createRiv(spec);
@@ -961,6 +975,7 @@ toolRegistry.register(
         sourceKind: "scene-spec",
         rivPath: out,
         operation: { tool: "riv_create" },
+        provenance: mergeProvenance(collectedProvenance),
       });
       return {
         content: [
@@ -1022,15 +1037,18 @@ toolRegistry.register(
     let bytes: Buffer;
     let abs: string | undefined;
     let parentRef: string | undefined;
+    let inheritedProvenance: ProvenanceEntry[] = [];
     if (assetRef) {
       const resolvedRevision = revisionStore.get(assetRef);
       bytes = resolvedRevision.rivBytes;
       abs = resolvedRevision.revision.rivPath;
       parentRef = assetRef;
+      inheritedProvenance = resolvedRevision.revision.provenance ?? [];
     } else {
       const loaded = loadRiv(path!);
       bytes = loaded.bytes;
       abs = loaded.abs;
+      inheritedProvenance = [fileProvenance("user-file", loaded.abs)];
     }
 
     const result = editRiv(bytes, edits);
@@ -1051,6 +1069,7 @@ toolRegistry.register(
       sourceKind: "binary-edit",
       rivPath: out,
       operation: { tool: "riv_edit", details: edits },
+      provenance: inheritedProvenance,
     });
     const r = await host.renderFrames(Buffer.from(result.bytes), { frameCount: 1, format: "png" });
     const target = out ?? "(revision store only)";
