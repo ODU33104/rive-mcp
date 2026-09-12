@@ -36,10 +36,12 @@ import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
 import { FileRevisionStore, revisionSummary } from "./revisions/store.js";
 import { stableJson } from "./revisions/hash.js";
 import { FileReviewStore, reviewSummary } from "./review/store.js";
+import { FileFinalizeStore } from "./finalize/store.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 const revisionStore = new FileRevisionStore();
 const reviewStore = new FileReviewStore(revisionStore);
+const finalizeStore = new FileFinalizeStore(revisionStore, reviewStore);
 
 const server = new McpServer({
   name: "rive-mcp",
@@ -1093,6 +1095,62 @@ server.registerTool(
       ],
     };
   }));
+
+// ---- riv_finalize ------------------------------------------------------
+server.registerTool(
+  "riv_finalize",
+  {
+    title: "Finalize a reviewed immutable revision",
+    description:
+      "Export an immutable assetRef only after the exact same revision has a zero-error lint review receipt and a critique review receipt. Re-validates the .riv with the official Rive runtime before writing. Reviews from a parent or sibling revision never count.",
+    inputSchema: {
+      assetRef: z.string().describe("Immutable revision to finalize"),
+      outPath: z.string().describe("Destination .riv path"),
+    },
+  },
+  wrap(async ({ assetRef, outPath }: { assetRef: string; outPath: string }) => {
+    const resolvedRevision = revisionStore.get(assetRef);
+    const reviews = reviewStore.listForAsset(assetRef);
+    const lint = reviews.find((receipt) => {
+      if (receipt.kind !== "lint") return false;
+      const payload = receipt.payload as { errorCount?: unknown };
+      return payload && payload.errorCount === 0;
+    });
+    const critique = reviews.find((receipt) => receipt.kind === "critique");
+
+    if (!lint) return err("Finalize blocked: this exact revision has no zero-error lint review receipt");
+    if (!critique) return err("Finalize blocked: this exact revision has no critique review receipt");
+
+    // Official runtime validation is intentionally repeated at the delivery boundary.
+    await host.inspect(resolvedRevision.rivBytes);
+
+    const out = resolve(outPath);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, resolvedRevision.rivBytes);
+
+    const receipt = finalizeStore.put({
+      assetRef,
+      lintReviewRef: lint.reviewRef,
+      critiqueReviewRef: critique.reviewRef,
+      outPath: out,
+    });
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          finalized: true,
+          assetRef,
+          rivHash: resolvedRevision.revision.rivHash,
+          outPath: out,
+          lintReviewRef: lint.reviewRef,
+          critiqueReviewRef: critique.reviewRef,
+          finalizeRef: receipt.finalizeRef,
+          runtimeValidation: { ok: true },
+        }, null, 2),
+      }],
+    };
+  })
+);
 
 // ---- riv_optimize --------------------------------------------------------
 server.registerTool(
