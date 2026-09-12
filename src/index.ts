@@ -1812,7 +1812,10 @@ toolRegistry.register(
     return {
       content: [{
         type: "text",
-        text: `${replyNote}Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n\nApply them to the watched .riv (riv_edit / riv_create) — the browser hot-reloads automatically. When you are done, call riv_studio_notes again with \`reply\` to tell the user in the Studio chat what you changed.`,
+        text:
+          `${replyNote}Instructions from the Studio UI (${data.notes.length}):\n${lines.join("\n")}\n` +
+          (handoffRevision ? `\nStudio handoff revision: ${JSON.stringify(handoffRevision)}\n` : "") +
+          `\nApply changes from that immutable assetRef when available (prefer riv_edit({assetRef,...}) over mutating the watched path directly). When done, call riv_studio_notes again with \`reply\`.`,
       }],
     };
   })
