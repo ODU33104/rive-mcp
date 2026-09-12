@@ -647,7 +647,6 @@ toolRegistry.register(
             kind: "critique",
             payload: {
               runtimeValidation: { ok: true },
-          provenance: resolvedRevision.revision.provenance ?? [],
               target: {
                 artboard: ab?.name ?? a.artboard ?? null,
                 animation: anim?.name ?? null,
@@ -1136,6 +1135,7 @@ toolRegistry.register(
           critiqueReviewRef: critique.reviewRef,
           finalizeRef: receipt.finalizeRef,
           runtimeValidation: { ok: true },
+          provenance: resolvedRevision.revision.provenance ?? [],
         }, null, 2),
       }],
     };
@@ -1815,6 +1815,7 @@ toolRegistry.register(
             parentRef: latest?.assetRef,
             sourceKind: "studio-edit",
             rivPath: watchedPath,
+            provenance: latest?.provenance ?? [fileProvenance("user-file", watchedPath)],
             operation: {
               tool: "riv_studio_notes",
               summary: "Studio handoff to AI",
