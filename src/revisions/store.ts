@@ -48,14 +48,25 @@ export class FileRevisionStore {
     if (!existsSync(metaPath)) throw new Error("Unknown assetRef: " + assetRef);
     const revision = JSON.parse(readFileSync(metaPath, "utf8")) as AssetRevision;
     if (revision.assetRef !== assetRef) throw new Error("Corrupt revision metadata for " + assetRef);
-    const expectedRevisionHash = revisionHash({
-      parentRef: revision.parentRef,
-      rivHash: revision.rivHash,
-      sourceHash: revision.sourceHash,
-      sourceKind: revision.sourceKind,
-      operation: revision.operation,
-      provenance: revision.provenance ?? [],
-    });
+    const hasProvenanceIdentity = Array.isArray(revision.provenance);
+    const expectedRevisionHash = revisionHash(
+      hasProvenanceIdentity
+        ? {
+            parentRef: revision.parentRef,
+            rivHash: revision.rivHash,
+            sourceHash: revision.sourceHash,
+            sourceKind: revision.sourceKind,
+            operation: revision.operation,
+            provenance: revision.provenance,
+          }
+        : {
+            parentRef: revision.parentRef,
+            rivHash: revision.rivHash,
+            sourceHash: revision.sourceHash,
+            sourceKind: revision.sourceKind,
+            operation: revision.operation,
+          }
+    );
     const expectedAssetRef = "r_" + hashHex(expectedRevisionHash).slice(0, 32);
     if (revision.revisionHash !== expectedRevisionHash || expectedAssetRef !== assetRef) {
       throw new Error("Revision metadata integrity check failed for " + assetRef);
@@ -66,6 +77,7 @@ export class FileRevisionStore {
     assertRiv(rivBytes);
     const actualHash = sha256Bytes(rivBytes);
     if (actualHash !== revision.rivHash) throw new Error("Revision integrity check failed for " + assetRef);
+    if (!Array.isArray(revision.provenance)) revision.provenance = [];
     return { revision, rivBytes };
   }
 
