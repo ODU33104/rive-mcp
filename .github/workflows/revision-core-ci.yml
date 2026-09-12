@@ -26,9 +26,12 @@ jobs:
       - run: npm run test:phase2
       - run: npm run test:e2e-baseline
       - run: npm run test:generation-harness
+      - run: npm run test:clean-room
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: generation-harness
-          path: test/tmp/generation-harness
+          path: |
+            test/tmp/generation-harness
+            test/tmp/clean-room
           if-no-files-found: warn
