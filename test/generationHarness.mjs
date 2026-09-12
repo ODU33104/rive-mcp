@@ -150,11 +150,23 @@ try {
   if (!imageOf(editedRender)) throw new Error("edited revision did not render");
   requireFile(editedPngPath, 1000);
 
-  const lint = await callTool("riv_lint", { path: rivPath });
+  const lint = await callTool("riv_lint", { assetRef: revision.assetRef });
   const lintJson = JSON.parse(textOf(lint));
   if (lintJson.errorCount !== 0) throw new Error("lint errors: " + JSON.stringify(lintJson.findings));
+  if (!lintJson.review || lintJson.review.assetRef !== revision.assetRef || lintJson.review.rivHash !== revision.rivHash) {
+    throw new Error("lint review receipt is not bound to the parent revision: " + JSON.stringify(lintJson.review));
+  }
+  if (!/^rv_[0-9a-f]{32}$/.test(lintJson.review.reviewRef)) throw new Error("invalid lint reviewRef");
 
-  const critique = await callTool("riv_critique", { path: rivPath, animation: "intro", frames: 6, width: 180 });
+  const critique = await callTool("riv_critique", { assetRef: revision.assetRef, animation: "intro", frames: 6, width: 180 });
+  const critiqueText = textOf(critique);
+  const critiqueReviewMatch = critiqueText.match(/ReviewReceipt:\s*(\{[^\n]+\})/);
+  if (!critiqueReviewMatch) throw new Error("critique did not return a review receipt: " + critiqueText);
+  const critiqueReview = JSON.parse(critiqueReviewMatch[1]);
+  if (critiqueReview.assetRef !== revision.assetRef || critiqueReview.rivHash !== revision.rivHash) {
+    throw new Error("critique review receipt is not bound to the parent revision: " + JSON.stringify(critiqueReview));
+  }
+  if (critiqueReview.assetRef === editedRevision.assetRef) throw new Error("parent critique receipt leaked to child revision");
   const critiqueImages = (critique.content || []).filter((c) => c.type === "image");
   if (critiqueImages.length < 2) throw new Error("critique did not return filmstrip + onion skin");
   writeFileSync(join(outDir, "critique-filmstrip.png"), Buffer.from(critiqueImages[0].data, "base64"));
@@ -169,7 +181,8 @@ try {
     outputs: { rivPath, rivBytes, pngPath, pngBytes, editedRivPath, editedPngPath },
     create: createText,
     lint: lintJson,
-    critique: textOf(critique),
+    critiqueReview,
+    critique: critiqueText,
   };
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ ok: true, assetRef: revision.assetRef, rivBytes, pngBytes, reportPath }, null, 2));
