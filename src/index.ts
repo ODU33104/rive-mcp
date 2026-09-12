@@ -867,57 +867,10 @@ toolRegistry.register(
   "riv_create",
   {
     title: "Create a .riv file from a scene spec",
-    description: `Create a working .riv animation file from scratch (no Rive editor needed) and validate it with the official runtime. Returns a rendered preview frame.
-For non-flat, non-"AI placeholder" quality (gradients, organic bezier curves, proper easing, springy motion), read the "rive-design-guidelines" prompt this server exposes before designing a non-trivial scene.
-Scene spec example:
-{
-  "artboard": {"name":"Demo","width":400,"height":300},
-  "backgroundColor": "#1a1a2e",
-  "shapes": [
-    {"id":"box","type":"rect","x":120,"y":150,"width":80,"height":80,"cornerRadius":12,"rotation":0,"opacity":1,
-     "fill":{"color":"#e94560"},"stroke":{"color":"#fff","thickness":3}},
-    {"id":"ball","type":"ellipse","x":280,"y":150,"width":70,"height":70,
-     "fill":{"gradient":{"type":"linear","stops":[{"color":"#00d9ff"},{"color":"#0066ff"}]}}},
-    {"id":"tri","type":"polygon","x":200,"y":100,"points":[{"x":0,"y":-40},{"x":35,"y":20},{"x":-35,"y":20}],"fill":{"color":"#ffd700"}}
-  ],
-  "animations": [
-    {"name":"spin","fps":60,"duration":60,"loop":"loop","tracks":[
-      {"target":"box","property":"rotation","keyframes":[{"frame":0,"value":0},{"frame":60,"value":360,"easing":"linear"}]},
-      {"target":"ball","property":"y","keyframes":[{"frame":0,"value":150},{"frame":30,"value":80,"easing":"ease-out"},{"frame":60,"value":150,"easing":"ease-in"}]}
-    ]}
-  ],
-  "stateMachine": {"name":"SM","inputs":[{"name":"go","type":"bool"}],
-    "states":[{"name":"spinning","animation":"spin"}],
-    "transitions":[{"from":"entry","to":"spinning","condition":{"input":"go"}}]}
-}
-Character animation (images/groups/mesh):
-{
-  "groups": [{"id":"rig","x":300,"y":200}],
-  "images": [{"id":"chara","pngPath":"./cat.png","x":0,"y":0,"scale":0.25,"parent":"rig",
-    "mesh":{"columns":6,"rows":6}}],
-  "animations": [{"name":"idle","duration":240,"loop":"loop","tracks":[
-    {"target":"rig","property":"y","keyframes":[{"frame":0,"value":200},{"frame":120,"value":195,"easing":"ease-in-out"},{"frame":240,"value":200,"easing":"ease-in-out"}]},
-    {"target":"chara#v0_3","property":"x","keyframes":[{"frame":0,"value":0},{"frame":120,"value":40,"easing":"ease-in-out"},{"frame":240,"value":0,"easing":"ease-in-out"}]}
-  ]}]
-}
-- images[].pngPath: PNG file embedded into the .riv. mesh enables vertex deformation; vertices addressed as "<imageId>#v<row>_<col>" (row 0 = top), coordinates in the image's natural pixel space centered at origin. Mesh vertex tracks support x/y only.
-- groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
-- transitions support exitTimeMs (play source animation this long before transitioning).
-Motion presets — PREFER these over hand-authored keyframes (professionally tuned amplitudes/easings, ~10x fewer tokens):
-"animations":[{"name":"intro","duration":90,"presets":[
-  {"preset":"pop-in","target":"logo"},
-  {"preset":"rise-in","targets":["c1","c2","c3"],"at":12,"stagger":4},
-  {"preset":"float","target":"logo"}
-],"tracks":[]}]
-Available: fade-in rise-in drop-in slide-in pop-in bounce-in | fade-out sink-out slide-out pop-out | pulse heartbeat tada shake wobble | breathing float sway spin glow-pulse blink(for eyelid overlays). Options: at(start frame), stagger(frames between targets), intensity(0.25-3), direction(left|right|up|down), cycleSeconds. Ambient presets (breathing..blink) span the whole animation seamlessly. A preset and a manual track must not drive the same target+property.
-Pro features: stroke.trim {start,end,mode} + trimStart/trimEnd tracks (draw-on effect), shapes[].clipBy (mask via an invisible shape), groups[].solo+active + soloActive track with keyframes[].ref (pose/mouth switching), constraints [{type:"followPath",item,path}] + followDistance track 0-1 (motion along a path), open paths (closed:false), multi-contour shapes (subpaths), stroke cap/join.
-"imports":[{"spec":"logo.scene.json","x":200,"y":150,"scale":0.8}] places riv_import_svg / riv_asset_search fragments under a wrapper group (id = file basename) — animate the wrapper or individual shape ids. PREFER imported real vector art over drawing with primitives for anything illustrative.
-Recommended flow: riv_design_tokens → (riv_import_svg / riv_asset_search for artwork) → riv_create (token values + presets + imports) → riv_critique → fix → re-critique.
-Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).
-Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (path resolved relative to cwd, or pass bytes directly). "events":[{"id":"beepEvent","type":"audio","audio":"beep"}] declares an AudioEvent bound to that clip. Trigger it either from a state machine state ("states":[{"name":"s1","fireEvent":"beepEvent"}]) or at specific frames inside a timeline via animations[].events: {"name":"anim1","duration":60,"tracks":[...],"events":[{"event":"beepEvent","frame":0},{"event":"beepEvent","frame":30}]}. NOTE: playback support depends on the runtime — this server's own preview (a Canvas2D-based renderer) does not play audio, so rendered PNG/GIF/video previews and riv_studio will stay silent even though the AudioAsset/AudioEvent are written correctly and will play in a GPU-backed Rive runtime (WebGL/Skia, e.g. rive.app or the production player).`,
+    description: `Create a .riv from a SceneSpec, validate it with the official Rive runtime, return a preview, and record an immutable revision. Supports vector shapes, text/fonts, images/meshes, groups, bones/constraints, animations, state machines, audio/events and imported scene fragments. Prefer riv_design_tokens + professional SVG/icon assets + motion presets; use manual keyframes only when needed. For non-trivial work follow the rive-design-guidelines skill/prompt, then riv_critique and revise before riv_finalize. File paths are resolved from cwd. Canvas previews do not play embedded audio even though production GPU runtimes can.`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
-      scene: z.record(z.unknown()).describe("Scene spec (see tool description for schema)"),
+      scene: z.record(z.unknown()).describe("SceneSpec object; use the rive-design-guidelines skill/prompt for authoring patterns"),
       previewTime: z.number().optional().describe("Seconds into first animation for the preview frame (default 0.4)"),
     },
   },
