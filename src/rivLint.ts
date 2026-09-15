@@ -202,6 +202,7 @@ function lintReferences(objects: RivObject[], findings: LintFinding[]) {
     const localSize = abEnd - abStart;
     for (let gi = abStart; gi < abEnd; gi++) {
       const o = objects[gi];
+      const ownLocalIndex = gi - abStart;
       for (const propName of LOCAL_REF_PROPS) {
         const v = o.properties[propName];
         if (typeof v !== "number") continue;
@@ -210,6 +211,23 @@ function lintReferences(objects: RivObject[], findings: LintFinding[]) {
             severity: "error",
             rule: "broken-reference",
             message: `${abName}: ${o.typeName}#${o.index} の ${propName}=${v} がアートボードのローカルindex範囲外です`,
+            objectIndex: o.index,
+          });
+        } else if (propName === "parentId" && v >= ownLocalIndex) {
+          // parentId は「自分より前に出現した（=既にimport済みの）オブジェクト」を指さなければならない
+          // （rive-runtimeのストリーミングimportは、参照先が先に存在することを前提にする）。
+          // v===ownLocalIndex は自分自身を親にする不正な自己参照、v>ownLocalIndexはまだ存在しない
+          // 前方参照。範囲内(v<localSize)でも構造的に壊れている——rive-mcp自身が2026-09-15に
+          // 出力バグで作ってしまった実例（DataBind系オブジェクトがローカルindexを消費しない仕様を
+          // 見落とし、後続オブジェクトのparentIdが1つズレた）があり、この壊れ方は公式ランタイムで
+          // 「何も描画されない」または「読み込みが無限ループでハングする」という重大な症状を引き起こす
+          findings.push({
+            severity: "error",
+            rule: "invalid-parent-order",
+            message:
+              v === ownLocalIndex
+                ? `${abName}: ${o.typeName}#${o.index} の parentId が自分自身を指しています（自己参照）`
+                : `${abName}: ${o.typeName}#${o.index} の parentId=${v} がまだ出現していないオブジェクト（前方参照）を指しています`,
             objectIndex: o.index,
           });
         }

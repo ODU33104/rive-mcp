@@ -100,12 +100,137 @@ ToC: varuint propertyKey... 0終端
 - 自動ウェイトは点-線分距離の 1/(d+1)^4。減衰が緩いとボーン影響が薄まり曲げが弱くなる
 - C2Dレンダラ（プレビュー）はメッシュ描画にシームが出る。**本番プレイヤー（WebGL/Skia）では出ない**
 
-## Data Binding / ViewModel（読み取り実装済み・書き込みは未実装）
+## Data Binding / ViewModel（読み取り・書き込みとも実装済み）
 
 実装: `src/dataBinding.ts`（デコーダ、`riv_inspect` の `dataBinding` フィールドとして合流）。
+書き込み（create側）: `src/rivWriter.ts` の `viewModels`/`viewModelInstances`/`dataEnums`/
+`ArtboardSpec.viewModel`/`ArtboardSpec.viewModelInstance`/各スペックの `bind`/`binds`。
+2026-09-15 時点のステータスは本節末尾「create側の既知の状況」参照。
 出典: rive-runtime `src/file.cpp` / `src/importers/*.cpp` / `src/viewmodel/*.cpp` /
 `src/data_bind/*.cpp` と `dev/defs/**/*.json` の `"runtime"`/`"typeRuntime"` フラグを実際に読んで検証
 （defs.json 自体にはこの帰属規則までは書かれていない）。
+
+### sourcePathIds の意味（DataBindContext.sourcePathIds、List<Id>）
+
+rive-runtime `src/data_bind/data_context.cpp` の `DataContext::tryGetViewModelProperty(instance, path)`
+を実際に読んで検証（2026-09-15）:
+
+```cpp
+ViewModelInstanceValue* DataContext::tryGetViewModelProperty(
+    rcp<ViewModelInstance> instance, const std::vector<uint32_t>& path) const
+{
+    if (instance == nullptr || instance->viewModelId() != path[0]) return nullptr;
+    if (path.size() == 1) return nullptr;
+    rcp<ViewModelInstance> current = instance;
+    for (auto it = path.begin() + 1; it != path.end() - 1; it++) {
+        auto v = current->propertyValue(*it);
+        if (v != nullptr && v->is<ViewModelInstanceViewModel>()) {
+            current = v->as<ViewModelInstanceViewModel>()->referenceViewModelInstance();
+            if (current == nullptr) return nullptr;
+        } else return nullptr;
+    }
+    return current->propertyValue(path.back());
+}
+```
+
+- `path[0]`: バインド先インスタンスが属する ViewModel の**グローバル通し番号**（instance側の
+  `viewModelId()` と一致しないと即 `nullptr`。ガード用で「辿る」対象ではない）
+- 中間要素（あれば）: 現在の ViewModel インスタンス内の**ローカルpropertyIndex**を1段ずつ辿り、
+  その値が `ViewModelInstanceViewModel`（ネストしたViewModel参照）ならその参照先インスタンスへ降りる
+- 最後の要素: 最終的な ViewModel インスタンス内での**leafプロパティのローカルindex**
+- **非ネスト・直接バインドなら `[vmGlobalIndex, propLocalIndex]` の2要素で足りる**
+  （中間ループが0回実行され、ガード通過後すぐ最後の要素で引く）
+
+### Artboardの既定ViewModelバインドはファイルの記述だけでは自動適用されない
+
+`Artboard.viewModelId`/`viewModelInstanceId`（ファイルに書く値）は「どれを使うつもりか」という
+データに過ぎない。低レベル `@rive-app/canvas-advanced` の WASM API はこれを自動では適用しない
+（`autoBind: true` は上位ラッパー `@rive-app/canvas` 側の機能）。このプロジェクトのプレビュー
+（`src/pageScript.ts`）では明示的に `file.defaultArtboardViewModel(artboard).instanceByIndex(0)` →
+`stateMachineInstance.bindViewModelInstance(vmi)` を呼んで対応している
+（`Artboard.bindViewModelInstance()` もあるが、`sm.advanceAndApply()` 経由の描画には
+`StateMachineInstance` 側へのbindが要る）。**複数インスタンスを持つViewModelでは常にindex 0を
+プレビューする既知の制限**（ファイルの `viewModelInstanceId` を低レベルAPIから読む手段が無いため）。
+ViewModelを持つArtboardは `stateMachineCount()` が1になる（"Auto Generated State Machine" という
+ランタイム合成のSMが常に見える）。
+
+### create側の既知の状況（2026-09-15時点、数値バインドも含め解決済み）
+
+実測（`riv_create` で生成→公式ランタイムで描画して確認）:
+
+| ターゲットのフィールド型 | 例 | 結果 |
+|---|---|---|
+| `Color`（`SolidColor.colorValue`） | fill色バインド | ✅ 正常に反映される |
+| `String`（`TextValueRun.text`） | テキストバインド | ✅ 正常に反映される（ただしフォントsubsetは`run.text`の文字だけを見て作られるため、バインド先の実際の文字列に無い文字はtofuになる — `run.name`の既存の注意点と同じ。`subset:false`か想定文字を明示すること） |
+| `double`（`WorldTransformComponent.opacity`） | 不透明度バインド | ✅ 正常に反映される |
+| `double`（`ParametricPath.width`） | 幅バインド | ✅ 正常に反映される（color+width+opacityの複合バインドを1ファイルで同時に動作確認済み） |
+
+`boolean`/`enum`をShapeの視覚プロパティに直接バインドする経路はまだ用意していない（BIND_PROP_KEYSに
+項目が無い。ViewModelの定義・インスタンス値としては作れる）。
+
+**調査の過程で分かったこと**（再調査時に同じ道を辿らないためのメモ。真因は末尾参照）:
+- DataBindContextオブジェクトのストリーム上の位置（targetの直後）は自前デコーダで実際に確認済み。
+  target・propertyKey・sourcePathIdsはopacity/width双方とも正しく解決されている（Shape/Rectangleを
+  正しくtargetとして指している）。「書き込み位置がズレている」という仮説は**否定済み**
+- `ViewModelInstanceNumber.playbackValue`（`propertyValue`と並ぶもう1つのフィールド）を
+  `propertyValue`と同じ値で明示的に書いても症状は変わらない（**試したが直らなかった**。ただし
+  安全な変更なのでコードには残してある）
+- `sm.advanceAndApply()`に加えて`ab.advance()`も明示的に呼んでも症状は変わらない（**試したが
+  直らなかった**、この変更はrevert済み）
+- サブエージェントによるrive-runtimeソース調査（`DataBind::update()`→`ContextValueNumber::apply()`→
+  `CoreRegistry::setDouble()`）では、target型の検証が一切無くpropertyKeyだけで分岐することを確認。
+  ただしこの経路はkeyframeアニメーション（既存機能、動作確認済み）とも共有されているはずの汎用
+  double書き込み経路であり、「この経路自体が壊れている」という説明は既存機能との整合性が取れない。
+  真因は依然として未特定（source値解決の別経路の疑いが強いが未確認）
+- 次に調べるなら: rive-runtimeの `Artboard::advance()`/`Component::advanceComponents()` が
+  DataBindオブジェクトをdirty-graphにどう組み込むか（`DataBind::initialize()`の「collapsable」
+  登録の仕組み）。ここがopacity(Shape直下)とcolor(Fill/SolidColor)で扱いが違う可能性がある
+- ランタイムのバージョンアップ（2.38.5→2.42.1）で古いバージョンでの`function signature mismatch`
+  クラッシュは解消したが、これは副次的な効果で根本原因ではなかった（後述）
+- コンバータ（`DataConverterRangeMapper`の恒等変換）を明示的に付けると旧ランタイムでのクラッシュが
+  避けられることがあったが、これも副次的な効果（オブジェクトの並び・サイズが変わって偶然壊れた
+  メモリ領域を踏まなくなっただけ）で、根本原因ではなかった
+
+**真因（2026-09-15判明・修正済み）**: 数値バインドだけ「値が反映されない/クラッシュする」ように
+見えていたのは、Rive公式ランタイム側の不具合ではなく、**`src/rivWriter.ts`側のバグ**だった。
+`DataBind`/`DataBindContext` は `Component` を継承しない（`vendor/rive-defs/defs.json`:
+`DataBind.extends = null`）ため、rive-runtime の `ArtboardImporter::addDataBind()` は
+`addComponent()`（=アートボード内ローカルIDを消費する経路）を通らない。ところが `emitArtboard()`
+内の `push()` は、DataBindContextを書いた場合も無条件に `localIndex` を進めてしまっていたため、
+**DataBindContextより後に出力した全オブジェクトの`parentId`が実際のランタイム側ローカルindexと
+1つズレる**という副作用が起きていた。
+
+- color/stringバインドが「動いて見えた」のは、その配線先（SolidColor/TextValueRun）がいつも
+  そのシェイプの最後尾に出力されていたため、後続オブジェクトのparentIdがズレる被害が無かっただけ
+- width（Rectangle直後にDataBindContextを書く）のケースでは、後続の Fill / SolidColor の
+  parentId が +1 ズレ、**SolidColorが自分自身をparentにする不正な状態**になり、塗りが一切付かず
+  何も描画されなくなっていた（「値が反映されない」のではなく「オブジェクトが描画されない」が実体）
+- 旧ランタイム(2.38.5)で発生していた `function signature mismatch` クラッシュも、ズレたparentIdが
+  型の異なる親オブジェクトに接続された結果と説明が付く
+
+**修正**: `emitArtboard()` に `pushNoId()`（`objects.push()`のみでlocalIndexを進めない版）を追加し、
+`emitDataBind()` はこちらを使うよう変更（`src/rivWriter.ts`）。`push()`は`LinearAnimation`/
+`KeyedObject`/`StateMachine`等、他の非Componentオブジェクトにも使われている（現状は全Component出力
+後に配置されるため実害無し）が、同じ地雷なので新しい書き込みパスを追加するときは要注意。
+
+この調査の過程で「Rive公式ランタイム側の不具合」と誤認し `github.com/rive-app/rive-wasm` に
+issue #426 を立ててしまったが、原因判明後に事情を説明してclose済み。**教訓**: fill色（常に
+配線先がシェイプの最後尾に来る）だけで検証して「動く」と判断し、他のケース（配線先の後に
+別オブジェクトが続く場合）を検証しないまま「ランタイムの型別の不具合」と早合点した。
+**新しい書き込みパスを検証するときは、「配線先が常に同じ相対位置に来る」ケースだけでなく、
+「配線先の後にさらに他のオブジェクトが続く」ケースも必ず含めること**（このプロジェクトの他の
+stream-adjacency系コード全般に言える教訓）。
+
+### 副産物: アニメーショントラックの width/height が Shape 相手だと無効だったバグ（修正済み）
+
+この調査中に発見。`riv_create` の `animations[].tracks[]` で `property: "width"/"height"` を
+rect/ellipse/triangle の Shape に対して指定すると、**Shape自身の `LayoutComponent.width/height`
+（key=7/8）に書き込んでいたが、実際に描画サイズを決めるのは実体（Rectangle/Ellipse/Triangle が
+継承する `ParametricPath.width/height`、key=20/21）で、両者は無関係の別プロパティ**だったため、
+アニメーションが見た目に一切反映されていなかった（image/text/nested相手のwidth/heightアニメは
+LayoutComponentが正しいターゲットなので影響なし）。`src/rivWriter.ts` の `pathIds` マップで
+rect/ellipse/triangle相手のときだけ `ParametricPath` へリダイレクトするよう修正済み（実描画で
+確認済み）。polygonはwidth/heightの概念が無いため対象外。
 
 ### 重大な既知の罠: `List<Id>` フィールドの直列化
 
@@ -155,4 +280,4 @@ StateTransition→直前のstate）と同じ「ストリーム上で直前に出
 3. `DataEnumSystem`（組み込み enum。`enumType` で種別を識別）は `DataEnumValue` を持たない。
    値は defs.json だけからは分からないランタイム内蔵テーブル由来なので、バイナリ解析だけでは列挙できない
    （`src/dataBinding.ts` は `systemEnums` として `enumType` のみ返す）
-4. 生成（create）側は未実装。読み取り専用（`riv_inspect` の `dataBinding` フィールド）
+4. 生成（create）側は実装済み。「create側の既知の状況」節参照

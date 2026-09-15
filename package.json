@@ -30,7 +30,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@rive-app/canvas": "^2.38.5",
-    "@rive-app/canvas-advanced": "^2.30.3",
+    "@rive-app/canvas-advanced": "^2.42.1",
     "gifenc": "^1.0.3",
     "playwright-core": "^1.53.0",
     "zod": "^3.25.0"

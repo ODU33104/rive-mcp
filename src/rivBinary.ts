@@ -114,6 +114,22 @@ export function decodeVaruintList(bytes: Uint8Array): number[] {
   return out;
 }
 
+// decodeVaruintList の逆（書き込み側）。List<Id> フィールド（sourcePathIds 等）は
+// fieldTypeOf() で "string" 扱いになるため、writeRiv() には Uint8Array（生バイト列）として渡す。
+export function encodeVaruintList(values: number[]): Uint8Array {
+  const out: number[] = [];
+  for (let v of values) {
+    if (v < 0 || !Number.isInteger(v)) throw new Error(`varuint list expects non-negative int, got ${v}`);
+    do {
+      let b = v & 0x7f;
+      v >>>= 7;
+      if (v) b |= 0x80;
+      out.push(b);
+    } while (v);
+  }
+  return new Uint8Array(out);
+}
+
 // ---- リーダー -----------------------------------------------------------
 export interface RawProp {
   key: number;

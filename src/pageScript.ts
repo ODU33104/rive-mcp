@@ -96,6 +96,23 @@ function collectStateChanges(sm) {
   return states;
 }
 
+// ファイルに書かれた Artboard.viewModelId/viewModelInstanceId は「どのViewModel/インスタンスを
+// 使うつもりか」というデータでしかなく、canvas-advanced(低レベルWASM API)はこれを自動適用しない
+// （autoBind:true は上位の @rive-app/canvas 側の機能。ここでは明示的に bindViewModelInstance()
+// を呼ぶ必要がある。file.defaultArtboardViewModel(artboard) は artboard.viewModelId を見て
+// ViewModel を返すが、どのインスタンスかまでは教えてくれないため instanceByIndex(0) を既定にする
+// — 複数インスタンスを使い分けるファイルでは常にインスタンス0がプレビューされる既知の制限）
+function bindDefaultViewModel(file, ab, target) {
+  try {
+    const vm = file.defaultArtboardViewModel(ab);
+    if (!vm || vm.instanceCount < 1) return;
+    const vmi = vm.instanceByIndex(0);
+    if (vmi) target.bindViewModelInstance(vmi);
+  } catch (e) {
+    // データバインディング非対応のランタイム/ファイルでは黙って無視（描画自体には影響しない）
+  }
+}
+
 function makeScene(file, opts) {
   const ab = getArtboard(file, opts.artboard);
   const b = ab.bounds;
@@ -128,6 +145,7 @@ function makeScene(file, opts) {
       );
     }
     sm = new rive.StateMachineInstance(def, ab);
+    bindDefaultViewModel(file, ab, sm);
   } else if (opts.animation) {
     const def = ab.animationByName(opts.animation);
     if (!def) {
@@ -137,10 +155,13 @@ function makeScene(file, opts) {
       );
     }
     anim = new rive.LinearAnimationInstance(def, ab);
+    bindDefaultViewModel(file, ab, ab);
   } else if (ab.stateMachineCount() > 0) {
     sm = new rive.StateMachineInstance(ab.stateMachineByIndex(0), ab);
+    bindDefaultViewModel(file, ab, sm);
   } else if (ab.animationCount() > 0) {
     anim = new rive.LinearAnimationInstance(ab.animationByIndex(0), ab);
+    bindDefaultViewModel(file, ab, ab);
   }
 
   const step = (sec) => {
