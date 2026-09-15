@@ -161,7 +161,7 @@ ViewModelを持つArtboardは `stateMachineCount()` が1になる（"Auto Genera
 | ターゲットのフィールド型 | 例 | 結果 |
 |---|---|---|
 | `Color`（`SolidColor.colorValue`） | fill色バインド | ✅ 正常に反映される |
-| `String`（`TextValueRun.text`） | テキストバインド | ✅ 正常に反映される（ただしフォントsubsetは`run.text`の文字だけを見て作られるため、バインド先の実際の文字列に無い文字はtofuになる — `run.name`の既存の注意点と同じ。`subset:false`か想定文字を明示すること）。**enum型プロパティをそのままテキストにバインドする経路も動作確認済み**（ランタイムがenumの現在値を文字列として描画する。追加コード不要 — 文字列バインドと同じ経路を通るだけ） |
+| `String`（`TextValueRun.text`） | テキストバインド | ✅ `string`型プロパティなら正常に反映される（ただしフォントsubsetは`run.text`の文字だけを見て作られるため、バインド先の実際の文字列に無い文字はtofuになる — `run.name`の既存の注意点と同じ。`subset:false`か想定文字を明示すること）。**`enum`型プロパティのバインドは動作しない**（実測で確認・2026-09-15訂正: 一度「動く」と誤報告したが、実際に描画画像を目視したら配線元の値ではなく静的な初期テキストのままだった。ピクセル数だけを見て「何か描画されている」を「バインドが効いている」と誤認したのが原因。`propertyKey`・`sourcePathIds`は他の型と同じ経路で正しく解決されているが、ランタイム側で`ViewModelInstanceEnum`（Id型）から`String`ターゲットへの暗黙変換は行われないらしい。`DataConverterStringFormat`のような文字列化コンバータもこのdefs.jsonには存在せず、v1では未対応として諦めた） |
 | `double`（`WorldTransformComponent.opacity`） | 不透明度バインド | ✅ 正常に反映される |
 | `double`（`ParametricPath.width`） | 幅バインド | ✅ 正常に反映される（color+width+opacityの複合バインドを1ファイルで同時に動作確認済み） |
 | `bool`（`ShapePaint.isVisible`） | Fill/Strokeの表示/非表示バインド（`fill.visibleBind` / `stroke.visibleBind`） | ✅ 正常に反映される（true→塗りが見える、false→消える、を中心ピクセルの実測で確認済み）。Rive公式ランタイム(このバージョン)にはComponent/Node単位の汎用可視性プロパティが無く、bindable boolなフィールドは`ShapePaint.isVisible`が実質唯一なため、これがv1のboolean配線先 |
