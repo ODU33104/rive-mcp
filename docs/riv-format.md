@@ -154,19 +154,31 @@ ViewModelInstanceValue* DataContext::tryGetViewModelProperty(
 ViewModelを持つArtboardは `stateMachineCount()` が1になる（"Auto Generated State Machine" という
 ランタイム合成のSMが常に見える）。
 
-### create側の既知の状況（2026-09-15時点、数値バインドも含め解決済み）
+### create側の既知の状況（2026-09-15時点、数値バインド・ネストVM・リスト・コンバータ・bool可視化すべて解決済み）
 
 実測（`riv_create` で生成→公式ランタイムで描画して確認）:
 
 | ターゲットのフィールド型 | 例 | 結果 |
 |---|---|---|
 | `Color`（`SolidColor.colorValue`） | fill色バインド | ✅ 正常に反映される |
-| `String`（`TextValueRun.text`） | テキストバインド | ✅ 正常に反映される（ただしフォントsubsetは`run.text`の文字だけを見て作られるため、バインド先の実際の文字列に無い文字はtofuになる — `run.name`の既存の注意点と同じ。`subset:false`か想定文字を明示すること） |
+| `String`（`TextValueRun.text`） | テキストバインド | ✅ 正常に反映される（ただしフォントsubsetは`run.text`の文字だけを見て作られるため、バインド先の実際の文字列に無い文字はtofuになる — `run.name`の既存の注意点と同じ。`subset:false`か想定文字を明示すること）。**enum型プロパティをそのままテキストにバインドする経路も動作確認済み**（ランタイムがenumの現在値を文字列として描画する。追加コード不要 — 文字列バインドと同じ経路を通るだけ） |
 | `double`（`WorldTransformComponent.opacity`） | 不透明度バインド | ✅ 正常に反映される |
 | `double`（`ParametricPath.width`） | 幅バインド | ✅ 正常に反映される（color+width+opacityの複合バインドを1ファイルで同時に動作確認済み） |
+| `bool`（`ShapePaint.isVisible`） | Fill/Strokeの表示/非表示バインド（`fill.visibleBind` / `stroke.visibleBind`） | ✅ 正常に反映される（true→塗りが見える、false→消える、を中心ピクセルの実測で確認済み）。Rive公式ランタイム(このバージョン)にはComponent/Node単位の汎用可視性プロパティが無く、bindable boolなフィールドは`ShapePaint.isVisible`が実質唯一なため、これがv1のboolean配線先 |
+| ネストしたViewModel参照（`ViewModelPropertyViewModel`/`ViewModelInstanceViewModel`） | `source: "profile.col"` のような `.` 区切りパス | ✅ 正常に反映される（2階層のVM参照を辿って葉プロパティにバインドできることを実測確認） |
+| `DataConverterRangeMapper`（`DataBindSpec.converter`） | health 0-100 を width 0-160 にマップ | ✅ 正常に反映される（コンバータ無しの直接バインドと同一の描画結果になることをピクセル単位で実測確認）。**コンバータオブジェクトはconverterIdを参照するDataBindより前、かつ配線対象オブジェクトより前（target-adjacency解決を壊さないため）に書く必要がある**（詳細は実装コード内コメント参照） |
+| `ViewModelInstanceList` | 複数の`ViewModelInstanceSpec`を配列で束ねる | ✅ 書き込み・`riv_inspect`での読み取りとも正常（`riv_lint`も0件）。**ただし視覚的な消費経路（繰り返し表示・nested artboardのリストバインド等）は本プロジェクトに無いため、現状は「定義してインスタンスを持たせられる」だけの書き込み専用機能**（将来nested artboardのリストバインドを実装する時の土台） |
 
-`boolean`/`enum`をShapeの視覚プロパティに直接バインドする経路はまだ用意していない（BIND_PROP_KEYSに
-項目が無い。ViewModelの定義・インスタンス値としては作れる）。
+### コンバータのconverterIdが「参照する側より前に必ず出す」必要がある理由
+
+`ViewModel`/`ViewModelInstance`と同じ「ファイル全体でのその型の出現順」というグローバル通し番号方式
+（`docs/riv-format.md`の他の節参照）は、**その番号を持つオブジェクトが実際にその時点までにストリーム上へ
+出現していて初めて意味を持つ**（indexは「今まで何個出たか」のカウンタであり、後方に置いても解決してくれる
+仕組みは無い——parentId等のローカルindexと同じ構造上の制約）。そのため `emitConverterIfNeeded()` は
+配線対象オブジェクト（Fill/SolidColor/Shape/Rectangle等）を push する前に呼ぶ設計にしてある。また
+コンバータをDataBindContextの直前（対象オブジェクトとDataBindContextの間）に置くと、target-adjacency解決
+（「直前の非DataBindオブジェクト」）がコンバータ自身を誤ってtargetと解釈してしまうため、必ず対象オブジェクト
+より**前**（対象オブジェクトとDataBindContextの間ではない位置）に置く。
 
 **調査の過程で分かったこと**（再調査時に同じ道を辿らないためのメモ。真因は末尾参照）:
 - DataBindContextオブジェクトのストリーム上の位置（targetの直後）は自前デコーダで実際に確認済み。

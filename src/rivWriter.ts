@@ -240,7 +240,14 @@ export interface ShapeSpec {
       inRotation?: number; // 度。入り側の接線方向（指定すると CubicDetachedVertex。SVGインポート用）
     };
   }>;
-  fill?: { color?: string; gradient?: GradientSpec; feather?: FeatherSpec; bind?: DataBindSpec };
+  fill?: {
+    color?: string;
+    gradient?: GradientSpec;
+    feather?: FeatherSpec;
+    bind?: DataBindSpec;
+    // 真偽値プロパティをFillの表示/非表示（ShapePaint.isVisible）に配線する
+    visibleBind?: DataBindSpec;
+  };
   // 数値/真偽値プロパティをViewModelの値に配線する。sourceはアートボードのviewModel内のプロパティ名
   // （ArtboardSpec.viewModel が必須）。対応プロパティ: opacity/rotation/scaleX/scaleY/width/height/x/y
   binds?: DataBindSpec[];
@@ -253,6 +260,8 @@ export interface ShapeSpec {
     // トリムパス: ストロークの一部だけ描く。start/end 0-1。trimStart/trimEnd トラックで
     // アニメすると「線が描かれていく」draw-on 演出になる
     trim?: { start?: number; end?: number; offset?: number; mode?: "sequential" | "synchronized" };
+    // 真偽値プロパティをStrokeの表示/非表示（ShapePaint.isVisible）に配線する
+    visibleBind?: DataBindSpec;
   };
 }
 export interface FeatherSpec {
@@ -403,14 +412,23 @@ export interface FontSpec {
   subset?: boolean | string;
 }
 
-// ---- データバインディング（v1: 単一ViewModel直下のフラットなプロパティのみ。
-// ネストしたViewModel参照・リスト・コンバータ・組み込みenumは非対応。詳細は docs/riv-format.md）
+// ---- データバインディング（詳細は docs/riv-format.md の Data Binding 節）
+export interface DataConverterSpec {
+  type: "rangeMapper"; // 数値レンジ変換のみ対応（DataConverterRangeMapper）
+  minInput?: number; // 既定 0
+  maxInput?: number; // 既定 1
+  minOutput?: number; // 既定 0
+  maxOutput?: number; // 既定 1
+}
 export interface DataBindSpec {
-  source: string; // ArtboardSpec.viewModel 内のプロパティ名
+  // ArtboardSpec.viewModel 内のプロパティ名。"." 区切りでネストしたViewModel参照を辿れる
+  // （例: "profile.name" は viewModel 型プロパティ profile の先にある viewModel の name プロパティ）
+  source: string;
   // ShapeSpec.binds[] でのみ必須（どのプロパティに配線するか）。
-  // fill.bind / TextRunSpec.bind は対象が1つに決まっているため不要
+  // fill.bind / fill.visibleBind / stroke.visibleBind / TextRunSpec.bind は対象が1つに決まっているため不要
   property?: "opacity" | "rotation" | "scaleX" | "scaleY" | "width" | "height" | "x" | "y";
   twoWay?: boolean; // 既定false（ViewModel→ビジュアルの一方向）
+  converter?: DataConverterSpec; // 数値レンジ変換（例: health 0-100 を width 0-300 にマップ）
 }
 export interface DataEnumSpec {
   name: string;
@@ -418,8 +436,11 @@ export interface DataEnumSpec {
 }
 export interface ViewModelPropertySpec {
   name: string;
-  type: "number" | "string" | "boolean" | "color" | "trigger" | "enum";
+  type: "number" | "string" | "boolean" | "color" | "trigger" | "enum" | "viewModel" | "list";
   enum?: string; // type: "enum" のとき、dataEnums[].name を指す
+  // type: "viewModel" のとき、参照先の ViewModelSpec.name を指す（ネスト構造）。
+  // type: "list" では使わない（リスト要素の型はインスタンス側 values で渡す最初の要素から決まる）
+  viewModel?: string;
 }
 export interface ViewModelSpec {
   name: string;
@@ -428,8 +449,9 @@ export interface ViewModelSpec {
 export interface ViewModelInstanceSpec {
   name: string;
   viewModel: string; // ViewModelSpec.name
-  // プロパティ名 → 初期値。enum型は values 内の文字列を指定
-  values?: Record<string, string | number | boolean>;
+  // プロパティ名 → 初期値。enum型は values 内の文字列、viewModel型は別の ViewModelInstanceSpec.name、
+  // list型は ViewModelInstanceSpec.name の配列（全要素が同じViewModelに属する必要あり）を指定
+  values?: Record<string, string | number | boolean | string[]>;
 }
 
 export interface SceneSpec extends Partial<Omit<ArtboardSpec, "name" | "width" | "height">> {
@@ -595,10 +617,16 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
   const vmIndexByName = new Map<string, number>(); // ViewModelSpec.name → グローバルVM index
   const vmPropIndexByName = new Map<string, Map<string, number>>(); // VM名 → (プロパティ名 → ローカルindex)
   const vmPropTypeByName = new Map<string, Map<string, ViewModelPropertySpec["type"]>>();
+  // VM名 → (プロパティ名 → 参照先VM名)。type: "viewModel" のプロパティのみ持つ（ネストパス解決用）
+  const vmPropViewModelRefByName = new Map<string, Map<string, string>>();
   const enumIndexByName = new Map<string, number>();
   const enumValuesByName = new Map<string, string[]>();
   // VMインスタンス名 → {所属VMのグローバルindex, そのVM内でのローカルindex}
   const vmInstanceByName = new Map<string, { vmIndex: number; localIndex: number }>();
+  // DataConverter系オブジェクト（DataConverterGroupItem/FormulaToken*を除く）のファイル全体での出現順。
+  // Backboard直後のこのブロックだけでなく emitArtboard() 内のバインド配線からも増分するため、
+  // アートボードを跨いで共有できる buildScene のスコープに置く（docs/riv-format.md 参照）
+  let converterIndex = 0;
 
   for (const de of spec.dataEnums ?? []) {
     enumIndexByName.set(de.name, enumIndexByName.size);
@@ -614,12 +642,17 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     color: "ViewModelPropertyColor",
     trigger: "ViewModelPropertyTrigger",
     enum: "ViewModelPropertyEnumCustom",
+    viewModel: "ViewModelPropertyViewModel",
+    list: "ViewModelPropertyList",
   };
+  // VM名→グローバルindexを先に全部確定させる（VM同士の前方参照を許すため。ViewModel自体の
+  // push順は下のループと同じ spec.viewModels 順で行うので、事前採番したindexとストリーム順は一致する）
+  for (const vm of spec.viewModels ?? []) vmIndexByName.set(vm.name, vmIndexByName.size);
   for (const vm of spec.viewModels ?? []) {
-    vmIndexByName.set(vm.name, vmIndexByName.size);
     objects.push({ type: "ViewModel", props: { name: vm.name } });
     const propIdx = new Map<string, number>();
     const propType = new Map<string, ViewModelPropertySpec["type"]>();
+    const propViewModelRef = new Map<string, string>();
     vm.properties.forEach((p, i) => {
       propIdx.set(p.name, i);
       propType.set(p.name, p.type);
@@ -631,11 +664,20 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           throw new Error(`viewModel '${vm.name}' property '${p.name}': unknown enum '${p.enum}' (define it in dataEnums)`);
         }
         props.enumId = enumIdx;
+      } else if (p.type === "viewModel") {
+        if (!p.viewModel) throw new Error(`viewModel '${vm.name}' property '${p.name}': type "viewModel" requires "viewModel"`);
+        const refIdx = vmIndexByName.get(p.viewModel);
+        if (refIdx === undefined) {
+          throw new Error(`viewModel '${vm.name}' property '${p.name}': unknown viewModel '${p.viewModel}'`);
+        }
+        props.viewModelReferenceId = refIdx;
+        propViewModelRef.set(p.name, p.viewModel);
       }
       objects.push({ type: VM_PROPERTY_TYPE_OF[p.type], props });
     });
     vmPropIndexByName.set(vm.name, propIdx);
     vmPropTypeByName.set(vm.name, propType);
+    vmPropViewModelRefByName.set(vm.name, propViewModelRef);
   }
 
   const VM_INSTANCE_VALUE_TYPE_OF: Record<ViewModelPropertySpec["type"], string> = {
@@ -645,14 +687,22 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
     color: "ViewModelInstanceColor",
     trigger: "ViewModelInstanceTrigger",
     enum: "ViewModelInstanceEnum",
+    viewModel: "ViewModelInstanceViewModel",
+    list: "ViewModelInstanceList", // 実際には下の分岐で専用形状(ViewModelInstanceListItem付き)を書く。ここは不使用
   };
+  // インスタンス名→{所属VM, ローカルindex}を先に全部確定させる（インスタンス同士の前方参照
+  // ——例: リストが後で定義されるインスタンスを含む——を許すため。localIndexは「同じVMに属する
+  // インスタンスの、spec.viewModelInstances配列内での出現順」で、下のpushループの実際の出現順と一致する）
   for (const inst of spec.viewModelInstances ?? []) {
     const vmIdx = vmIndexByName.get(inst.viewModel);
     if (vmIdx === undefined) throw new Error(`viewModelInstance '${inst.name}': unknown viewModel '${inst.viewModel}'`);
-    const propIdx = vmPropIndexByName.get(inst.viewModel)!;
-    const propType = vmPropTypeByName.get(inst.viewModel)!;
     const localIndex = [...vmInstanceByName.values()].filter((v) => v.vmIndex === vmIdx).length;
     vmInstanceByName.set(inst.name, { vmIndex: vmIdx, localIndex });
+  }
+  for (const inst of spec.viewModelInstances ?? []) {
+    const { vmIndex: vmIdx } = vmInstanceByName.get(inst.name)!;
+    const propIdx = vmPropIndexByName.get(inst.viewModel)!;
+    const propType = vmPropTypeByName.get(inst.viewModel)!;
     objects.push({ type: "ViewModelInstance", props: { name: inst.name, viewModelId: vmIdx } });
     for (const [propName, rawValue] of Object.entries(inst.values ?? {})) {
       const localPropIdx = propIdx.get(propName);
@@ -660,6 +710,35 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         throw new Error(`viewModelInstance '${inst.name}': viewModel '${inst.viewModel}' has no property '${propName}'`);
       }
       const type = propType.get(propName)!;
+      if (type === "list") {
+        // ViewModelInstanceList自身には要素の値そのものは持たせず、"listSource"（要素の共通ViewModel、
+        // グローバルindex）と、直後に並べる ViewModelInstanceListItem 群（ストリーム帰属。
+        // instanceListId/order は runtime:false のため書かない）で表す
+        if (!Array.isArray(rawValue) || rawValue.some((v) => typeof v !== "string")) {
+          throw new Error(`viewModelInstance '${inst.name}': '${propName}' (type list) needs an array of viewModelInstance names`);
+        }
+        const itemNames = rawValue as string[];
+        const itemRefs = itemNames.map((n) => {
+          const r = vmInstanceByName.get(n);
+          if (!r) throw new Error(`viewModelInstance '${inst.name}': list '${propName}' references unknown viewModelInstance '${n}'`);
+          return r;
+        });
+        if (itemRefs.length === 0) {
+          throw new Error(`viewModelInstance '${inst.name}': list '${propName}' needs at least one item`);
+        }
+        const listSource = itemRefs[0].vmIndex;
+        if (itemRefs.some((r) => r.vmIndex !== listSource)) {
+          throw new Error(`viewModelInstance '${inst.name}': list '${propName}' items must all belong to the same viewModel`);
+        }
+        objects.push({ type: "ViewModelInstanceList", props: { viewModelPropertyId: localPropIdx, listSource } });
+        itemNames.forEach((n, i) => {
+          objects.push({
+            type: "ViewModelInstanceListItem",
+            props: { name: `${i}`, viewModelId: itemRefs[i].vmIndex, viewModelInstanceId: itemRefs[i].localIndex },
+          });
+        });
+        continue;
+      }
       let propertyValue: unknown;
       if (type === "color") {
         propertyValue = parseColor(String(rawValue));
@@ -672,14 +751,23 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           throw new Error(`viewModelInstance '${inst.name}': '${rawValue}' is not a value of enum '${propSpec.enum}' (${values.join(", ")})`);
         }
         propertyValue = idx;
+      } else if (type === "viewModel") {
+        const refName = String(rawValue);
+        const refInst = vmInstanceByName.get(refName);
+        if (!refInst) {
+          throw new Error(`viewModelInstance '${inst.name}': '${propName}' references unknown viewModelInstance '${refName}'`);
+        }
+        propertyValue = refInst.localIndex;
       } else {
         propertyValue = rawValue;
       }
       // playbackValueはエディタの「実行中の一時値」用フィールドだが、念のためpropertyValueと
-      // 同じ値を書いておく（片方しか読まれない/初期化ロジックが違う場合への保険。挙動未確定 — 検証中）
+      // 同じ値を書いておく（片方しか読まれない/初期化ロジックが違う場合への保険。挙動未確定 — 検証中）。
+      // ViewModelInstanceViewModel だけは playbackValue フィールド自体を持たない（defs.json実測）ので除外
+      const extraProps = type === "viewModel" ? {} : { playbackValue: propertyValue };
       objects.push({
         type: VM_INSTANCE_VALUE_TYPE_OF[type],
-        props: { viewModelPropertyId: localPropIdx, propertyValue, playbackValue: propertyValue },
+        props: { viewModelPropertyId: localPropIdx, propertyValue, ...extraProps },
       });
     }
   }
@@ -795,17 +883,58 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       scaleY: { type: "TransformComponent", prop: "scaleY" },
       opacity: { type: "WorldTransformComponent", prop: "opacity" },
     };
-    const emitDataBind = (propKey: { type: string; prop: string }, bind: DataBindSpec): void => {
+    // sourcePathIds の意味（DataContext::tryGetViewModelProperty()、docs/riv-format.md参照）:
+    // [0]=ルートVMのグローバルindex（検証用）、中間要素=viewModel型プロパティを辿るローカルindex、
+    // 末尾=リーフプロパティのローカルindex。"." 区切りのsourceを1要素ずつ辿って組み立てる
+    const resolveSourcePath = (rootVm: string, sourcePath: string): number[] => {
+      const vmIdx = vmIndexByName.get(rootVm)!;
+      const segments = sourcePath.split(".");
+      const path: number[] = [vmIdx];
+      let curVm = rootVm;
+      segments.forEach((seg, i) => {
+        const propIdx = vmPropIndexByName.get(curVm)?.get(seg);
+        if (propIdx === undefined) {
+          throw new Error(`bind source '${sourcePath}': property '${seg}' not found on viewModel '${curVm}'`);
+        }
+        path.push(propIdx);
+        if (i < segments.length - 1) {
+          const propType = vmPropTypeByName.get(curVm)?.get(seg);
+          if (propType !== "viewModel") {
+            throw new Error(`bind source '${sourcePath}': '${seg}' is not a nested viewModel property (needed to continue the path)`);
+          }
+          curVm = vmPropViewModelRefByName.get(curVm)!.get(seg)!;
+        }
+      });
+      return path;
+    };
+    // 数値レンジ変換コンバータを必要なら書き出し、DataBind.converterId用のグローバルindexを返す。
+    // converterId は「ファイル全体でのDataConverter系オブジェクトの出現順」（runtime:falseな targetId
+    // とは異なり実際にファイルへ書かれる数値なので、参照する側より前に必ず出しておく必要がある）。
+    // 呼び出し側は配線対象オブジェクトを push する前に呼ぶこと（対象の直前に来るとDataBindContextの
+    // target-adjacency解決を壊すため。詳細は docs/riv-format.md）
+    const emitConverterIfNeeded = (bind: DataBindSpec): number | undefined => {
+      if (!bind.converter) return undefined;
+      const idx = converterIndex++;
+      const c = bind.converter;
+      pushNoId({
+        type: "DataConverterRangeMapper",
+        props: {
+          minInput: c.minInput ?? 0, maxInput: c.maxInput ?? 1,
+          minOutput: c.minOutput ?? 0, maxOutput: c.maxOutput ?? 1,
+        },
+      });
+      return idx;
+    };
+    const emitDataBind = (propKey: { type: string; prop: string }, bind: DataBindSpec, converterId?: number): void => {
       if (!ab.viewModel) throw new Error(`bind on '${propKey.prop}' requires the artboard to declare 'viewModel'`);
-      const vmIdx = vmIndexByName.get(ab.viewModel)!;
-      const localIdx = vmPropIndexByName.get(ab.viewModel)?.get(bind.source);
-      if (localIdx === undefined) throw new Error(`bind source '${bind.source}' not found on viewModel '${ab.viewModel}'`);
+      const sourcePathIds = resolveSourcePath(ab.viewModel, bind.source);
       pushNoId({
         type: "DataBindContext",
         props: {
           propertyKey: resolveProp(propKey.type, propKey.prop).key,
           flags: bind.twoWay ? 0b10 : 0,
-          sourcePathIds: encodeVaruintList([vmIdx, localIdx]),
+          sourcePathIds: encodeVaruintList(sourcePathIds),
+          ...(converterId !== undefined ? { converterId } : {}),
         },
       });
     };
@@ -1040,13 +1169,12 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       if (s.scaleY !== undefined && s.scaleY !== 1) shapeProps.scaleY = s.scaleY;
       if (s.opacity !== undefined) shapeProps.opacity = s.opacity;
       if (s.blendMode && s.blendMode !== "srcOver") shapeProps.blendModeValue = BLEND_MODE_VALUE[s.blendMode];
-      const shape = push({ type: "Shape", props: shapeProps });
-      shapeIds.set(s.id, shape);
       // Shape自身が持つプロパティ（Node/TransformComponent/WorldTransformComponent由来）。
       // width/heightはShapeではなく描画サイズを決めるパス側（Rectangle等）のParametricPathが
       // 持つ別プロパティなので、ここでは扱わない（パス側 push 直後で別途扱う）
       const SHAPE_BIND_PROPS = new Set(["opacity", "rotation", "scaleX", "scaleY", "x", "y"]);
       const widthHeightBinds: DataBindSpec[] = [];
+      const shapeBinds: Array<{ propKey: { type: string; prop: string }; bind: DataBindSpec; converterId?: number }> = [];
       for (const b of s.binds ?? []) {
         if (!b.property) throw new Error(`shape '${s.id}': binds[] entries need a 'property' (opacity/rotation/scaleX/scaleY/width/height/x/y)`);
         if (b.property === "width" || b.property === "height") {
@@ -1054,8 +1182,13 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           continue;
         }
         if (!SHAPE_BIND_PROPS.has(b.property)) throw new Error(`shape '${s.id}': unsupported bind property '${b.property}'`);
-        emitDataBind(BIND_PROP_KEYS[b.property], b);
+        // コンバータはターゲット（Shape自身）より前に出す必要がある（target-adjacency解決を壊さないため）
+        const converterId = emitConverterIfNeeded(b);
+        shapeBinds.push({ propKey: BIND_PROP_KEYS[b.property], bind: b, converterId });
       }
+      const shape = push({ type: "Shape", props: shapeProps });
+      shapeIds.set(s.id, shape);
+      for (const sb of shapeBinds) emitDataBind(sb.propKey, sb.bind, sb.converterId);
 
       if (s.clipBy) pendingClips.push({ nodeId: shape, source: s.clipBy, owner: s.id });
 
@@ -1121,11 +1254,13 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           props.linkCornerRadius = true;
           props.cornerRadiusTL = s.cornerRadius;
         }
+        // コンバータはターゲット（Rectangle/Ellipse/Triangle自身）より前に出す
+        const whConverterIds = widthHeightBinds.map((b) => emitConverterIfNeeded(b));
         const pathId = push({ type: typeName, props });
         pathIds.set(s.id, pathId);
-        for (const b of widthHeightBinds) {
-          emitDataBind({ type: "ParametricPath", prop: b.property! }, b);
-        }
+        widthHeightBinds.forEach((b, i) => {
+          emitDataBind({ type: "ParametricPath", prop: b.property! }, b, whConverterIds[i]);
+        });
       }
       if (widthHeightBinds.length && s.type === "polygon") {
         throw new Error(`shape '${s.id}': width/height binds are not supported on polygon shapes`);
@@ -1145,7 +1280,10 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       };
 
       if (s.fill) {
+        // Fill自身のisVisibleに配線するコンバータ/バインドはFillより前/直後に出す（target=Fill自身）
+        const visConverterId = s.fill.visibleBind ? emitConverterIfNeeded(s.fill.visibleBind) : undefined;
         const fill = push({ type: "Fill", props: { parentId: shape } });
+        if (s.fill.visibleBind) emitDataBind({ type: "ShapePaint", prop: "isVisible" }, s.fill.visibleBind, visConverterId);
         if (s.fill.feather) emitFeather(fill, s.fill.feather);
         if (s.fill.gradient) {
           const g = s.fill.gradient;
@@ -1172,12 +1310,13 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             });
           });
         } else {
+          const colorConverterId = s.fill.bind ? emitConverterIfNeeded(s.fill.bind) : undefined;
           const sc = push({
             type: "SolidColor",
             props: { parentId: fill, colorValue: parseColor(s.fill.color ?? "#888888") },
           });
           fillColorIds.set(s.id, sc);
-          if (s.fill.bind) emitDataBind({ type: "SolidColor", prop: "colorValue" }, s.fill.bind);
+          if (s.fill.bind) emitDataBind({ type: "SolidColor", prop: "colorValue" }, s.fill.bind, colorConverterId);
         }
       }
 
@@ -1185,7 +1324,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         const strokeProps: Record<string, unknown> = { parentId: shape, thickness: s.stroke.thickness };
         if (s.stroke.cap) strokeProps.cap = { butt: 0, round: 1, square: 2 }[s.stroke.cap];
         if (s.stroke.join) strokeProps.join = { miter: 0, round: 1, bevel: 2 }[s.stroke.join];
+        const strokeVisConverterId = s.stroke.visibleBind ? emitConverterIfNeeded(s.stroke.visibleBind) : undefined;
         const stroke = push({ type: "Stroke", props: strokeProps });
+        if (s.stroke.visibleBind) emitDataBind({ type: "ShapePaint", prop: "isVisible" }, s.stroke.visibleBind, strokeVisConverterId);
         if (s.stroke.feather) emitFeather(stroke, s.stroke.feather);
         push({ type: "SolidColor", props: { parentId: stroke, colorValue: parseColor(s.stroke.color) } });
         if (s.stroke.trim) {
@@ -1240,8 +1381,9 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       for (const run of t.runs) {
         const rp: Record<string, unknown> = { parentId: text, styleId: styleOf(run), text: run.text };
         if (run.name) rp.name = run.name;
+        const runConverterId = run.bind ? emitConverterIfNeeded(run.bind) : undefined;
         push({ type: "TextValueRun", props: rp });
-        if (run.bind) emitDataBind({ type: "TextValueRun", prop: "text" }, run.bind);
+        if (run.bind) emitDataBind({ type: "TextValueRun", prop: "text" }, run.bind, runConverterId);
       }
     };
 
