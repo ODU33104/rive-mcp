@@ -7,7 +7,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";\nimport { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { RiveCliBackend } from "../../dist/backends/riveCliBackend.js";
 import { createEvidenceManifest } from "../../dist/evidence/manifest.js";
 import { EvidenceStore } from "../../dist/evidence/store.js";
