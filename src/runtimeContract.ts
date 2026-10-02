@@ -231,7 +231,10 @@ export function buildRuntimeContract(
             typeName: property.typeName,
           };
 
-          if (property.enumIndex != null) {
+          if (
+            property.enumIndex != null &&
+            property.typeName === "ViewModelPropertyEnumCustom"
+          ) {
             const enumeration = dataBinding?.enums[property.enumIndex];
             if (enumeration) {
               result.enumValues = enumeration.values
