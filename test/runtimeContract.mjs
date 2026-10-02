@@ -5,6 +5,7 @@ import { PAGE_SCRIPT } from "../dist/pageScript.js";
 import {
   buildRuntimeContract,
   diffRuntimeContracts,
+  fingerprintRuntimeContract,
   runtimeContractFromRiv,
 } from "../dist/runtimeContract.js";
 
@@ -139,6 +140,14 @@ function contract(overrides = {}) {
   assert.equal(byPath.get("/viewModels/App/instances/Default:removed")?.severity, "breaking");
   assert.ok(diff.summary.breaking >= 7);
   assert.ok(diff.summary.behavior >= 2);
+  const beforeHashes = fingerprintRuntimeContract(before);
+  const afterHashes = fingerprintRuntimeContract(after);
+  assert.notEqual(beforeHashes.api, afterHashes.api, "breaking API changes alter API fingerprint");
+  assert.notEqual(
+    beforeHashes.behavior,
+    afterHashes.behavior,
+    "breaking API changes also alter behavior fingerprint"
+  );
 }
 
 {
@@ -195,6 +204,19 @@ function contract(overrides = {}) {
   assert.ok(kinds.has("instanceDefaultChanged"), "authored instance default changes are behavioral");
   assert.ok(kinds.has("bindingChanged"), "binding flag/converter changes are behavioral");
   assert.equal(diff.breaking.length, 0);
+
+  const beforeHashes = fingerprintRuntimeContract(before);
+  const afterHashes = fingerprintRuntimeContract(after);
+  assert.equal(
+    beforeHashes.api,
+    afterHashes.api,
+    "behavior-only changes keep the host-facing API contract fingerprint stable"
+  );
+  assert.notEqual(
+    beforeHashes.behavior,
+    afterHashes.behavior,
+    "behavior-only changes alter the behavior contract fingerprint"
+  );
 }
 
 {
@@ -212,6 +234,11 @@ function contract(overrides = {}) {
     diff.summary.total,
     0,
     "opaque numeric source path changes are not treated as semantic behavior changes"
+  );
+  assert.deepEqual(
+    fingerprintRuntimeContract(before),
+    fingerprintRuntimeContract(after),
+    "opaque numeric source paths do not destabilize contract fingerprints"
   );
 }
 
@@ -402,6 +429,9 @@ function contract(overrides = {}) {
     assert.ok(realContract.artboards.length > 0, "real fixture exposes at least one artboard");
     const selfDiff = diffRuntimeContracts(realContract, realContract);
     assert.deepEqual(selfDiff.summary, { breaking: 0, behavior: 0, nonBreaking: 0, total: 0 });
+    const hashes = fingerprintRuntimeContract(realContract);
+    assert.match(hashes.api, /^[0-9a-f]{64}$/);
+    assert.match(hashes.behavior, /^[0-9a-f]{64}$/);
     assert.deepEqual(
       runtimeContractFromRiv(bytes, inspect),
       realContract,
