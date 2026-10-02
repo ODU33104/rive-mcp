@@ -9,66 +9,70 @@ import {
 import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
 
 const spec = {
-  name: "Main",
-  width: 200,
-  height: 120,
-  groups: [{ id: "box", x: 0, y: 40 }],
-  shapes: [
+  artboards: [
     {
-      id: "rect",
-      parent: "box",
-      type: "rect",
-      x: 0,
-      y: 0,
-      width: 40,
-      height: 40,
-      fill: { color: "#3366ff" },
-    },
-  ],
-  animations: [
-    {
-      name: "idle",
-      duration: 30,
-      loop: "loop",
-      tracks: [
+      name: "Main",
+      width: 200,
+      height: 120,
+      groups: [{ id: "box", x: 0, y: 40 }],
+      shapes: [
         {
-          target: "box",
-          property: "x",
-          keyframes: [
-            { frame: 0, value: 0 },
-            { frame: 30, value: 0 },
+          id: "rect",
+          parent: "box",
+          type: "rect",
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 40,
+          fill: { color: "#3366ff" },
+        },
+      ],
+      animations: [
+        {
+          name: "idle",
+          duration: 30,
+          loop: "loop",
+          tracks: [
+            {
+              target: "box",
+              property: "x",
+              keyframes: [
+                { frame: 0, value: 0 },
+                { frame: 30, value: 0 },
+              ],
+            },
+          ],
+        },
+        {
+          name: "moved",
+          duration: 30,
+          loop: "oneShot",
+          tracks: [
+            {
+              target: "box",
+              property: "x",
+              keyframes: [
+                { frame: 0, value: 0 },
+                { frame: 30, value: 100 },
+              ],
+            },
           ],
         },
       ],
-    },
-    {
-      name: "moved",
-      duration: 30,
-      loop: "oneShot",
-      tracks: [
-        {
-          target: "box",
-          property: "x",
-          keyframes: [
-            { frame: 0, value: 0 },
-            { frame: 30, value: 100 },
-          ],
-        },
-      ],
+      stateMachine: {
+        name: "Logic",
+        inputs: [{ name: "go", type: "trigger" }],
+        states: [
+          { name: "idleState", animation: "idle" },
+          { name: "movedState", animation: "moved" },
+        ],
+        transitions: [
+          { from: "entry", to: "idleState" },
+          { from: "idleState", to: "movedState", condition: { input: "go" } },
+        ],
+      },
     },
   ],
-  stateMachine: {
-    name: "Logic",
-    inputs: [{ name: "go", type: "trigger" }],
-    states: [
-      { name: "idleState", animation: "idle" },
-      { name: "movedState", animation: "moved" },
-    ],
-    transitions: [
-      { from: "entry", to: "idleState" },
-      { from: "idleState", to: "movedState", condition: { input: "go" } },
-    ],
-  },
 };
 
 const { bytes } = createRiv(spec);
