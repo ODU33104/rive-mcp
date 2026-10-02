@@ -102,3 +102,28 @@ Decision: KEEP. It removes repeated backend work while preserving the exact obse
 Lesson: cache evidence at the exact action-prefix boundary, but isolate determinism/reproduction checks with fresh backend instances. Optimization must not reuse evidence across independent replay attempts.
 
 Evidence: GitHub Actions run `37077104994`, Rive CLI `1.3.0`, artifact `explorer-rive-cli-report`, artifact digest `sha256:a9dc94d6a144f173271da3adc424f5ab9a6eb54a4fe1706f0653a151a487aeee`.
+
+
+## Follow-up experiment — schema-proven RML numeric boundaries
+
+Question: can the official CLI/RML project structure yield real numeric transition boundaries without treating arbitrary numeric fields as state-machine conditions?
+
+Corpus: all 22 projects bundled with official Rive CLI 1.3.0 were statically scanned. Runtime A/B reporting remains on the fixed real-project pair `pointer_reactive` and `keyboard_menu`.
+
+Evidence contract: before extraction, CI queries official `rive schema --json` and verifies the fields the extractor depends on: `TransitionViewModelCondition.opValue`, `TransitionValueNumberComparator.value`, `BindablePropertyNumber.propertyValue` (property key 636 in CLI 1.3.0), and `DataBindContext.sourcePathIds`. The extractor then accepts a boundary only when RML contains a `TransitionViewModelCondition` with exactly one ViewModel property comparator and one number comparator, the property side is a `BindablePropertyNumber`, its `DataBindContext.sourcePathIds` resolves completely through `rive inspect` to named ViewModel properties ending in `ViewModelPropertyNumber`, and the operation is a documented symbolic enum (or the documented default `equal`). Numeric enum values are rejected rather than guessed.
+
+Negative-control rule: numeric fields outside that exact structure are ignored. In particular, fields such as `ScrollConstraint.threshold` are not boundary hints.
+
+Synthetic regression: `rive-number-conditions.rml` plus `rive-inspect-number-condition.json` proves extraction of four numeric conditions, including a nested path and reversed comparator order. It also proves fail-closed behavior for an unresolved source ID, a wrong property key, a boolean comparator, an unrelated threshold field, and a numeric operation enum.
+
+Official scan result: 22 bundled samples, 22 `TransitionViewModelCondition` nodes, 0 `TransitionValueNumberComparator` nodes, 12 `TransitionValueBooleanComparator` nodes, 0 proven numeric boundary hints. No heuristic fallback was enabled.
+
+Coverage result on the fixed real runtime pair: because there were no proven numeric hints, the action corpora did not change and no redundant guided execution was launched. Reported coverage therefore remains `pointer_reactive` 7 state signatures / 6 transitions and `keyboard_menu` 4 / 4. Failures remain 0. Cached backend cost remains 14 commands total versus 34 uncached.
+
+False positives: 0 emitted failures and 0 numeric hints on the official corpus. This is corpus-specific evidence, not a general precision claim.
+
+Decision: KEEP the conservative extractor and schema guard. Coverage gain on the current official bundled corpus is INCONCLUSIVE because that corpus contains no numeric transition comparator to exercise it. Do not widen matching merely to manufacture coverage.
+
+Lesson: absence is useful evidence. The verifier should prefer an explicit no-op over interpreting unrelated numeric fields as transition boundaries. A future real numeric-condition artifact is needed to measure coverage gain against the official backend.
+
+Evidence: GitHub Actions run `37079495739`, Rive CLI `1.3.0`, artifact `explorer-rive-cli-report`, artifact digest `sha256:7536880a7fac1760602ea9e2b631bbaee5e14fc8fb0d17af4ab2d7fc87055a48`.
