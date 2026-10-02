@@ -59,6 +59,15 @@ Data Binding `sourcePathIds` are currently numeric/opaque. They are retained in 
 
 Those belong to later analysis layers and should be supported by evidence rather than guessed here.
 
+## Fingerprints
+
+`fingerprintRuntimeContract(contract)` returns two SHA-256 fingerprints:
+
+- `api` — host-facing names/types: artboards, animation names, State Machines/inputs, events, View Models/properties/enums/references, and named instance identities.
+- `behavior` — API projection plus dimensions, animation timing, authored/default values, and normalized binding configuration.
+
+Warnings and opaque `sourcePathIds` are excluded from fingerprints. A behavior-only edit can therefore keep `api` stable while changing `behavior`.
+
 ## API
 
 `buildRuntimeContract(inspect, dump, dataBinding?)`
