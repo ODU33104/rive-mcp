@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { RiveHost } from "../dist/riveHost.js";
+import { PAGE_SCRIPT } from "../dist/pageScript.js";
 import {
   buildRuntimeContract,
   diffRuntimeContracts,
+  runtimeContractFromRiv,
 } from "../dist/runtimeContract.js";
 
 function contract(overrides = {}) {
@@ -231,6 +235,25 @@ function contract(overrides = {}) {
     "Child"
   );
   assert.deepEqual(built.viewModels[0].instances, ["Default"]);
+}
+
+{
+  const bytes = readFileSync("samples/showcase.riv");
+  const host = new RiveHost(PAGE_SCRIPT);
+  try {
+    const inspect = await host.inspect(bytes);
+    const realContract = runtimeContractFromRiv(bytes, inspect);
+    assert.ok(realContract.artboards.length > 0, "real fixture exposes at least one artboard");
+    const selfDiff = diffRuntimeContracts(realContract, realContract);
+    assert.deepEqual(selfDiff.summary, { breaking: 0, behavior: 0, nonBreaking: 0, total: 0 });
+    assert.deepEqual(
+      runtimeContractFromRiv(bytes, inspect),
+      realContract,
+      "contract extraction is deterministic for the same real fixture"
+    );
+  } finally {
+    await host.close();
+  }
 }
 
 console.log("runtimeContract: all tests passed");
