@@ -34,13 +34,9 @@ jobs:
           "$HOME/.rive/bin/rive" --version
 
       - name: Official CLI backend test
-        env:
-          RIVE_CLI_BIN: ${{ env.HOME }}/.rive/bin/rive
         run: node test/backends/riveCliBackend.mjs
 
       - name: Reality pilot
-        env:
-          RIVE_CLI_BIN: ${{ env.HOME }}/.rive/bin/rive
         run: node test/benchmark/realityPilot.mjs
 
       - uses: actions/upload-artifact@v4
