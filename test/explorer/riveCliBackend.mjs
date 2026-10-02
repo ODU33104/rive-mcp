@@ -34,7 +34,7 @@ try {
   const trace = await backend.execute(sequence);
   assert.equal(trace.backend?.version, "rive 9.9.9-test");
   assert.equal(trace.steps.length, sequence.length);
-  assert.equal(trace.cost, 5, "one initial CLI observation plus one per prefix");
+  assert.equal(trace.cost, 5, "first execution should run one initial CLI observation plus one per prefix");
   assert.equal(trace.initial.viewModel.score, 0);
   assert.equal(trace.steps[0].observation.viewModel.score, 50);
   assert.equal(trace.steps[1].observation.viewModel.clicked, true);
@@ -44,6 +44,17 @@ try {
   assert.notEqual(trace.initial.dataHash, trace.steps[0].observation.dataHash);
   assert.notEqual(trace.initial.frameHash, trace.steps[0].observation.frameHash);
 
+  const replay = await backend.execute(sequence);
+  assert.equal(replay.cost, 0, "an identical sequence should reuse all successful prefix observations");
+  assert.deepEqual(
+    replay.steps.map((step) => step.observation),
+    trace.steps.map((step) => step.observation),
+    "prefix cache must preserve observations exactly"
+  );
+
+  const uncached = new RiveCliBackend({ projectDir, command, viewport: { width: 320, height: 240 }, cachePrefixes: false });
+  assert.equal((await uncached.execute(sequence)).cost, 5, "cache can be disabled for external-mutation/debug scenarios");
+
   const determinism = await checkSequenceDeterminism(
     () => new RiveCliBackend({ projectDir, command, viewport: { width: 320, height: 240 } }),
     sequence,
@@ -51,7 +62,7 @@ try {
   );
   assert.equal(determinism.deterministic, true);
   assert.equal(determinism.uniqueTraceSignatures.length, 1);
-  console.log(JSON.stringify({ ok: true, cost: trace.cost, determinism }, null, 2));
+  console.log(JSON.stringify({ ok: true, firstCost: trace.cost, replayCost: replay.cost, determinism }, null, 2));
 } finally {
   rmSync(projectDir, { recursive: true, force: true });
 }
