@@ -17,7 +17,8 @@ Its job is to answer a narrower engineering question:
 - View Model property names/types
 - custom enum keys/values used by properties
 - referenced View Model targets
-- named View Model instances
+- named View Model instances and authored/default values
+- Data Binding target/property, direction flags, converter identity, and binding mode
 
 ## Classification
 
@@ -32,6 +33,9 @@ Its job is to answer a narrower engineering question:
 - artboard dimensions changed
 - animation timing/playback changed
 - State Machine input authored/default value changed
+- named View Model authored/default value changed
+- Data Binding added/removed
+- Data Binding direction/two-way/once/name-based/converter configuration changed
 
 **Non-breaking**
 - public item added
@@ -39,12 +43,16 @@ Its job is to answer a narrower engineering question:
 
 The classifier is deliberately conservative. It does not guess renames. A rename appears as remove + add, because CI should prefer explainable false-positive conservatism over an unsafe inferred compatibility claim.
 
+## Deliberate limitations
+
+Data Binding `sourcePathIds` are currently numeric/opaque. They are retained in the contract as evidence but are **not** used for semantic change classification, because re-indexing could create false positives. The next step is to normalize those IDs into stable View Model/property paths before treating source-path changes as behavioral regressions.
+
 ## Not included in v1
 
 - visual severity
 - semantic rename inference
 - listener/script behavior
-- Data Binding path compatibility
+- normalized Data Binding source-path compatibility
 - accessibility semantics
 - cross-runtime behavior
 - dynamic state reachability
@@ -55,7 +63,7 @@ Those belong to later analysis layers and should be supported by evidence rather
 
 `buildRuntimeContract(inspect, dump, dataBinding?)`
 
-Builds a deterministic normalized contract from official-runtime inspect output plus the existing binary/Data Binding decoder.
+Builds a deterministic normalized contract from official-runtime inspect output plus the existing binary/Data Binding decoder. Instance defaults are normalized to property names; enum and nested/list references are represented by semantic names where the decoder can resolve them.
 
 `runtimeContractFromRiv(bytes, inspect)`
 
