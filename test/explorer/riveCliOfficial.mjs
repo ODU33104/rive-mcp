@@ -50,6 +50,35 @@ function compactHints(hints) {
   return out;
 }
 
+const STRUCTURAL_KEY = /(condition|operator|comparison|threshold|input|view.?model|property.?path|source.?path)/i;
+const STRUCTURAL_TYPE = /(condition|transition|input|view.?model)/i;
+
+function structuralPreview(value, path = "$", out = [], limit = 12) {
+  if (out.length >= limit || value == null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length && out.length < limit; index++) {
+      structuralPreview(value[index], `${path}[${index}]`, out, limit);
+    }
+    return out;
+  }
+
+  const entries = Object.entries(value);
+  const type = typeof value.type === "string" ? value.type : "";
+  if (entries.some(([key]) => STRUCTURAL_KEY.test(key)) || STRUCTURAL_TYPE.test(type)) {
+    const scalars = {};
+    for (const [key, child] of entries) {
+      if (child == null || ["string", "number", "boolean"].includes(typeof child)) scalars[key] = child;
+    }
+    out.push({ path, keys: entries.map(([key]) => key).sort(), scalars });
+  }
+
+  for (const [key, child] of entries) {
+    if (out.length >= limit) break;
+    structuralPreview(child, `${path}.${key}`, out, limit);
+  }
+  return out;
+}
+
 async function staticHintProbe() {
   const entries = [];
   const sampleNames = readdirSync(samplesRoot)
@@ -77,20 +106,32 @@ async function staticHintProbe() {
       timeoutMs: 90_000,
       env: { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off" },
     });
+    let inspectParsed;
+    try {
+      inspectParsed = inspect.code === 0 ? JSON.parse(inspect.stdout) : undefined;
+    } catch {
+      inspectParsed = undefined;
+    }
     const inspectHints = inspect.code === 0
       ? extractNumericBoundaryHints(inspect.stdout).map((hint) => ({
           ...hint,
           source: `inspect:${hint.source}`,
         }))
       : [];
+    const structure = inspectParsed ? structuralPreview(inspectParsed) : [];
+    const topLevelKeys = inspectParsed && typeof inspectParsed === "object" && !Array.isArray(inspectParsed)
+      ? Object.keys(inspectParsed).sort()
+      : [];
 
-    if (rmlHints.length || inspectHints.length || inspect.code !== 0) {
+    if (rmlHints.length || inspectHints.length || inspect.code !== 0 || structure.length) {
       entries.push({
         sample: sampleName,
         inspectExitCode: inspect.code,
         inspectError: inspect.code === 0 ? undefined : (inspect.stderr.trim() || inspect.stdout.trim()).slice(0, 1000),
+        topLevelKeys,
         rmlHints: compactHints(rmlHints),
         inspectHints: compactHints(inspectHints),
+        structure,
       });
     }
   }
