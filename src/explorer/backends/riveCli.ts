@@ -18,12 +18,22 @@ export interface RiveCliBackendOptions {
   dataDumpFilter?: readonly string[];
   timeoutMs?: number;
   env?: Record<string, string | undefined>;
+  /**
+   * Cache successful prefix observations for the lifetime of this backend.
+   * Exploration assumes the project is immutable during one backend lifetime.
+   * Determinism checks should construct a fresh backend per attempt.
+   */
+  cachePrefixes?: boolean;
 }
 interface PrefixObservation { observation: StateObservation; diagnostics: string[]; cost: number; }
 
 function jsonObject(value: unknown): Record<string, JsonValue> | undefined {
   if (!value || Array.isArray(value) || typeof value !== "object") return undefined;
   return value as Record<string, JsonValue>;
+}
+
+function prefixKey(sequence: readonly Action[]): string {
+  return stableJson(sequence);
 }
 
 export class RiveCliBackend implements ExplorationBackend {
@@ -36,6 +46,8 @@ export class RiveCliBackend implements ExplorationBackend {
   private readonly dataDumpFilter?: readonly string[];
   private readonly timeoutMs: number;
   private readonly env: NodeJS.ProcessEnv;
+  private readonly cachePrefixes: boolean;
+  private readonly prefixCache = new Map<string, Omit<PrefixObservation, "cost">>();
   private versionPromise?: Promise<string | undefined>;
 
   constructor(options: RiveCliBackendOptions) {
@@ -46,6 +58,7 @@ export class RiveCliBackend implements ExplorationBackend {
     this.viewport = options.viewport;
     this.dataDumpFilter = options.dataDumpFilter;
     this.timeoutMs = options.timeoutMs ?? 60_000;
+    this.cachePrefixes = options.cachePrefixes ?? true;
     this.env = { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off", ...options.env };
   }
 
@@ -59,6 +72,12 @@ export class RiveCliBackend implements ExplorationBackend {
   }
 
   private async observe(sequence: readonly Action[]): Promise<PrefixObservation> {
+    const key = prefixKey(sequence);
+    if (this.cachePrefixes) {
+      const cached = this.prefixCache.get(key);
+      if (cached) return { ...cached, cost: 0 };
+    }
+
     const workDir = await mkdtemp(join(tmpdir(), "rive-cli-explorer-"));
     const screenshotPath = join(workDir, "frame.png");
     const dataDumpPath = join(workDir, "data.json");
@@ -75,15 +94,16 @@ export class RiveCliBackend implements ExplorationBackend {
       }
       const [png, dataBytes] = await Promise.all([readFile(screenshotPath), readFile(dataDumpPath)]);
       const parsed = JSON.parse(dataBytes.toString("utf8")) as unknown;
-      return {
+      const observed = {
         observation: {
           viewModel: jsonObject(parsed),
           frameHash: hashPngVisualPayload(png),
           dataHash: hashCanonicalData(stableJson(parsed)),
         },
         diagnostics: diagnosticLines(result.stderr),
-        cost: 1,
       };
+      if (this.cachePrefixes) this.prefixCache.set(key, observed);
+      return { ...observed, cost: 1 };
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }
