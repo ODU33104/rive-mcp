@@ -174,7 +174,8 @@ const refinedManifest = createEvidenceManifest({
     },
   ],
 });
-const refinedEvidence = store.put(refinedManifest);\nconst refineElapsedMs = Date.now() - refineStarted;
+const refinedEvidence = store.put(refinedManifest);
+const refineElapsedMs = Date.now() - refineStarted;
 
 const report = {
   schemaVersion: "rive-mcp.reality-pilot/v1",
