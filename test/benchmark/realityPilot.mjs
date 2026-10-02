@@ -124,15 +124,12 @@ const rawBad = await run([
 ]);
 const behaviorStarted = Date.now();
 const behavior = await backend.execute(project, badDataScenario);
-const rawReportedDrop = /^data:\s+no\b/im.test(rawBad.stderr)
+const rawRejectedInput = rawBad.code !== 0;
+const rawReportedReason = /--data .*: no view model is bound/i.test(rawBad.stderr)
   || /data: no property at/i.test(rawBad.stderr);
-const adapterDetectedDrop = !behavior.ok
-  && behavior.diagnostics.some((d) => d.code === "CLI_DATA_NOT_APPLIED");
-const behaviorElapsedMs = Date.now() - behaviorStarted;\nconst behaviorDecision = rawBad.code === 0 && rawReportedDrop && adapterDetectedDrop
-  ? "KEEP"
-  : rawBad.code !== 0
-    ? "INCONCLUSIVE"
-    : "REVERT";
+const adapterPreservedFailure = !behavior.ok
+  && behavior.diagnostics.some((d) => d.code === "RIVE_CLI_EXIT");
+const behaviorElapsedMs = Date.now() - behaviorStarted;
 
 const beforeRefineManifest = visualManifestA;
 writeFileSync(scenePath, initialScene.replace("FF57A5E0", "FFFF5A3C"));
