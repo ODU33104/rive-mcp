@@ -218,7 +218,6 @@ export class RiveCliBackend implements RiveExecutionBackend {
     const raw = parseJson(result.stdout);
     const diagnostics = [
       ...problemDiagnostics(raw),
-      ...stderrDiagnostics(result.stderr),
       ...failedProcessDiagnostic(result, "rive --verify"),
     ];
     const success = raw && typeof raw === "object"
@@ -254,7 +253,6 @@ export class RiveCliBackend implements RiveExecutionBackend {
     const raw = parseJson(result.stdout);
     const diagnostics = [
       ...problemDiagnostics(raw),
-      ...stderrDiagnostics(result.stderr),
       ...failedProcessDiagnostic(result, "rive inspect"),
     ];
     return {
@@ -339,7 +337,6 @@ export class RiveCliBackend implements RiveExecutionBackend {
 
     const result = await runProcess(this.binary, args, { timeoutMs: this.timeoutMs });
     const diagnostics = [
-      ...stderrDiagnostics(result.stderr),
       ...failedProcessDiagnostic(result, "rive --screenshot"),
     ];
     if (diagnostics.some((d) => d.severity === "error")) {
