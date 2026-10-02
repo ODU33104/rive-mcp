@@ -23,3 +23,8 @@ Dynamic exploration may report a state as **not reached within exploration budge
 ## Observation rule
 
 A state signature is observational equivalence only. It is constructed from observables the backend actually provides (active state labels, selected ViewModel values, emitted events, frame/data hashes, and adapter metadata). The explorer does not invent hidden runtime state to make signatures look complete.
+
+
+## Boundary-evidence rule
+
+Numeric "interesting values" must come from a condition structure the verifier can prove, not from field names alone. For RML/official-CLI projects, the current extractor requires a ViewModel transition condition whose numeric comparator and `DataBindContext.sourcePathIds` resolve through `rive inspect` to a named `ViewModelPropertyNumber`. Unresolved IDs, ambiguous IDs, non-number properties, undocumented numeric operation enums, and unrelated numeric fields are ignored rather than guessed.
