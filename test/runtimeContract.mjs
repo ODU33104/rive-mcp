@@ -193,8 +193,26 @@ function contract(overrides = {}) {
   const diff = diffRuntimeContracts(before, after);
   const kinds = new Set(diff.behavior.map((change) => change.kind));
   assert.ok(kinds.has("instanceDefaultChanged"), "authored instance default changes are behavioral");
-  assert.ok(kinds.has("bindingChanged"), "binding flag/source changes are behavioral");
+  assert.ok(kinds.has("bindingChanged"), "binding flag/converter changes are behavioral");
   assert.equal(diff.breaking.length, 0);
+}
+
+{
+  const before = contract();
+  const after = contract({
+    bindings: [
+      {
+        ...contract().bindings[0],
+        sourcePathIds: [99, 4],
+      },
+    ],
+  });
+  const diff = diffRuntimeContracts(before, after);
+  assert.equal(
+    diff.summary.total,
+    0,
+    "opaque numeric source path changes are not treated as semantic behavior changes"
+  );
 }
 
 {
@@ -355,6 +373,10 @@ function contract(overrides = {}) {
     },
   ]);
   assert.equal(built.bindings.length, 1);
+  assert.ok(
+    built.warnings.some((warning) => warning.includes("sourcePathIds")),
+    "opaque binding source paths are disclosed as a limitation"
+  );
   assert.deepEqual(built.bindings[0], {
     name: "Node:submitButton:opacity",
     targetType: "Node",
