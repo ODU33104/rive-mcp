@@ -39,7 +39,7 @@ jobs:
       - name: Install official Rive CLI
         shell: bash
         run: |
-          curl -fsSL https://releases.rive.app/cli/install.sh | sh
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
           echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
 
       - name: Inspect official CLI
