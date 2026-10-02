@@ -50,17 +50,44 @@ export interface RuntimeContractViewModelProperty {
   referencedViewModel?: string;
 }
 
+export interface RuntimeContractInstanceValue {
+  name: string;
+  kind: string;
+  value: unknown;
+}
+
+export interface RuntimeContractViewModelInstance {
+  name: string;
+  values: RuntimeContractInstanceValue[];
+}
+
 export interface RuntimeContractViewModel {
   name: string;
   viewModelType?: number;
   properties: RuntimeContractViewModelProperty[];
-  instances: string[];
+  instances: RuntimeContractViewModelInstance[];
+}
+
+export interface RuntimeContractBinding {
+  name: string;
+  targetType: string;
+  targetName: string;
+  targetProperty?: string;
+  direction: "toSource" | "toTarget";
+  twoWay: boolean;
+  once: boolean;
+  sourceToTargetRunsFirst: boolean;
+  nameBased: boolean;
+  converterName?: string;
+  converterType?: string;
+  sourcePathIds?: number[];
 }
 
 export interface RuntimeContract {
   schemaVersion: 1;
   artboards: RuntimeContractArtboard[];
   viewModels: RuntimeContractViewModel[];
+  bindings: RuntimeContractBinding[];
   warnings: string[];
 }
 
@@ -76,7 +103,11 @@ export type ContractChangeKind =
   | "referenceChanged"
   | "enumValueAdded"
   | "enumValueRemoved"
-  | "enumValueChanged";
+  | "enumValueChanged"
+  | "instanceDefaultChanged"
+  | "bindingAdded"
+  | "bindingRemoved"
+  | "bindingChanged";
 
 export interface RuntimeContractChange {
   severity: ContractSeverity;
@@ -161,6 +192,33 @@ function publicEventsByArtboard(dump: RivDump, warnings: string[]): RuntimeContr
   });
 }
 
+function normalizeInstanceValue(
+  dataBinding: DataBindingResult,
+  value: DataBindingResult["viewModelInstances"][number]["values"][number]
+): unknown {
+  if (value.enum) {
+    return { enumKey: value.enum.key, enumValue: value.enum.value };
+  }
+  if (value.referenceInstance) {
+    return {
+      viewModel:
+        dataBinding.viewModels[value.referenceInstance.viewModelIndex]?.name ??
+        `<missing-view-model:${value.referenceInstance.viewModelIndex}>`,
+      instance: value.referenceInstance.name,
+    };
+  }
+  if (value.listItems) {
+    return value.listItems.map((item) => ({
+      name: item.name,
+      viewModel:
+        dataBinding.viewModels[item.viewModelIndex]?.name ??
+        `<missing-view-model:${item.viewModelIndex}>`,
+      instance: item.instanceName ?? `<missing-instance:${item.localInstanceIndex}>`,
+    }));
+  }
+  return value.value ?? null;
+}
+
 export function buildRuntimeContract(
   inspect: InspectResult,
   dump: RivDump,
@@ -217,11 +275,28 @@ export function buildRuntimeContract(
 
   const viewModels: RuntimeContractViewModel[] = (dataBinding?.viewModels ?? [])
     .map((viewModel) => {
-      const instances = (dataBinding?.viewModelInstances ?? [])
-        .filter((instance) => instance.viewModelIndex === viewModel.index)
-        .map((instance) => instance.name)
-        .filter(Boolean)
-        .sort();
+      const instances: RuntimeContractViewModelInstance[] = (dataBinding?.viewModelInstances ?? [])
+        .filter((instance) => instance.viewModelIndex === viewModel.index && Boolean(instance.name))
+        .map((instance) => ({
+          name: instance.name,
+          values: instance.values
+            .filter((value) => Boolean(value.propertyName))
+            .map((value) => ({
+              name: value.propertyName!,
+              kind: value.kind,
+              value: dataBinding ? normalizeInstanceValue(dataBinding, value) : value.value ?? null,
+            }))
+            .sort(byName),
+        }))
+        .sort(byName);
+
+      for (const instance of instances) {
+        warnDuplicateNames(
+          `viewModel/${viewModel.name}/instance/${instance.name}.values`,
+          instance.values,
+          warnings
+        );
+      }
 
       const properties: RuntimeContractViewModelProperty[] = viewModel.properties
         .map((property) => {
@@ -254,8 +329,7 @@ export function buildRuntimeContract(
         .sort(byName);
 
       warnDuplicateNames(`viewModel/${viewModel.name}.properties`, properties, warnings);
-      const instanceObjects = instances.map((name) => ({ name }));
-      warnDuplicateNames(`viewModel/${viewModel.name}.instances`, instanceObjects, warnings);
+      warnDuplicateNames(`viewModel/${viewModel.name}.instances`, instances, warnings);
 
       return {
         name: viewModel.name,
@@ -268,10 +342,42 @@ export function buildRuntimeContract(
 
   warnDuplicateNames("viewModels", viewModels, warnings);
 
+  const bindings: RuntimeContractBinding[] = [];
+  for (const binding of dataBinding?.dataBinds ?? []) {
+    const targetName = binding.target?.name;
+    const targetType = binding.target?.typeName;
+    if (!targetName || !targetType) {
+      warnings.push(
+        `dataBind@${binding.objectIndex}: unnamed or missing target omitted from normalized contract`
+      );
+      continue;
+    }
+
+    const converter =
+      binding.converterIndex != null ? dataBinding?.converters[binding.converterIndex] : undefined;
+    bindings.push({
+      name: `${targetType}:${targetName}:${binding.propertyName ?? `property#${binding.propertyKey ?? "unknown"}`}`,
+      targetType,
+      targetName,
+      targetProperty: binding.propertyName,
+      direction: binding.flags.direction,
+      twoWay: binding.flags.twoWay,
+      once: binding.flags.once,
+      sourceToTargetRunsFirst: binding.flags.sourceToTargetRunsFirst,
+      nameBased: binding.flags.nameBased,
+      converterName: binding.converterName,
+      converterType: converter?.typeName,
+      sourcePathIds: binding.sourcePathIds ? [...binding.sourcePathIds] : undefined,
+    });
+  }
+  bindings.sort(byName);
+  warnDuplicateNames("bindings", bindings, warnings);
+
   return {
     schemaVersion: 1,
     artboards: artboards.sort(byName),
     viewModels,
+    bindings,
     warnings: [...new Set(warnings)].sort(),
   };
 }
@@ -554,18 +660,86 @@ export function diffRuntimeContracts(
         }
       );
 
-      const leftInstances = leftViewModel.instances.map((name) => ({ name }));
-      const rightInstances = rightViewModel.instances.map((name) => ({ name }));
       pairNamed(
-        leftInstances,
-        rightInstances,
+        leftViewModel.instances,
+        rightViewModel.instances,
         `${viewModelPath}/instances`,
         (instance, path) =>
-          add("breaking", "removed", path, `Named View Model instance "${instance.name}" was removed`, instance.name),
+          add("breaking", "removed", path, `Named View Model instance "${instance.name}" was removed`, instance),
         (instance, path) =>
-          add("nonBreaking", "added", path, `Named View Model instance "${instance.name}" was added`, undefined, instance.name),
-        () => {}
+          add("nonBreaking", "added", path, `Named View Model instance "${instance.name}" was added`, undefined, instance),
+        (leftInstance, rightInstance, instancePath) => {
+          pairNamed(
+            leftInstance.values,
+            rightInstance.values,
+            `${instancePath}/defaults`,
+            (value, path) =>
+              add(
+                "behavior",
+                "instanceDefaultChanged",
+                path,
+                `Authored default "${value.name}" was removed from instance "${leftInstance.name}"`,
+                value
+              ),
+            (value, path) =>
+              add(
+                "behavior",
+                "instanceDefaultChanged",
+                path,
+                `Authored default "${value.name}" was added to instance "${rightInstance.name}"`,
+                undefined,
+                value
+              ),
+            (leftValue, rightValue, path) => {
+              if (leftValue.kind !== rightValue.kind || !sameValue(leftValue.value, rightValue.value)) {
+                add(
+                  "behavior",
+                  "instanceDefaultChanged",
+                  path,
+                  `Authored default "${leftValue.name}" changed in instance "${leftInstance.name}"`,
+                  { kind: leftValue.kind, value: leftValue.value },
+                  { kind: rightValue.kind, value: rightValue.value }
+                );
+              }
+            }
+          );
+        }
       );
+    }
+  );
+
+  pairNamed(
+    before.bindings,
+    after.bindings,
+    "/bindings",
+    (binding, path) =>
+      add(
+        "behavior",
+        "bindingRemoved",
+        path,
+        `Data Binding for ${binding.targetType} "${binding.targetName}" property "${binding.targetProperty ?? "unknown"}" was removed`,
+        binding
+      ),
+    (binding, path) =>
+      add(
+        "behavior",
+        "bindingAdded",
+        path,
+        `Data Binding for ${binding.targetType} "${binding.targetName}" property "${binding.targetProperty ?? "unknown"}" was added`,
+        undefined,
+        binding
+      ),
+    (leftBinding, rightBinding, path) => {
+      if (!sameValue(leftBinding, rightBinding)) {
+        add(
+          "behavior",
+          "bindingChanged",
+          path,
+          `Data Binding configuration changed for ${leftBinding.targetType} "${leftBinding.targetName}" property "${leftBinding.targetProperty ?? "unknown"}"`,
+          leftBinding,
+          rightBinding
+        );
+      }
     }
   );
 
