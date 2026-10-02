@@ -36,6 +36,12 @@ jobs:
       - name: Run CLI adapter unit tests
         run: node test/explorer/riveCliBackend.mjs
 
+      - name: Install Rive CLI runtime libraries
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+
       - name: Install official Rive CLI
         shell: bash
         run: |
