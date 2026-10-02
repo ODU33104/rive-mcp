@@ -36,7 +36,12 @@ function contract(overrides = {}) {
       {
         name: "App",
         viewModelType: 0,
-        instances: ["Default"],
+        instances: [
+          {
+            name: "Default",
+            values: [{ name: "enabled", kind: "boolean", value: true }],
+          },
+        ],
         properties: [
           {
             name: "mode",
@@ -53,6 +58,22 @@ function contract(overrides = {}) {
             typeName: "ViewModelPropertyBoolean",
           },
         ],
+      },
+    ],
+    bindings: [
+      {
+        name: "Node:submitButton:opacity",
+        targetType: "Node",
+        targetName: "submitButton",
+        targetProperty: "opacity",
+        direction: "toTarget",
+        twoWay: false,
+        once: false,
+        sourceToTargetRunsFirst: false,
+        nameBased: true,
+        converterName: "opacityConverter",
+        converterType: "DataConverterToNumber",
+        sourcePathIds: [0],
       },
     ],
     ...overrides,
@@ -118,6 +139,62 @@ function contract(overrides = {}) {
   assert.equal(byPath.get("/viewModels/App/instances/Default:removed")?.severity, "breaking");
   assert.ok(diff.summary.breaking >= 7);
   assert.ok(diff.summary.behavior >= 2);
+}
+
+{
+  const before = contract();
+  const after = contract({
+    viewModels: [
+      {
+        name: "App",
+        viewModelType: 0,
+        instances: [
+          {
+            name: "Default",
+            values: [{ name: "enabled", kind: "boolean", value: false }],
+          },
+        ],
+        properties: [
+          {
+            name: "mode",
+            kind: "enumCustom",
+            typeName: "ViewModelPropertyEnumCustom",
+            enumValues: [
+              { key: "a", value: "A" },
+              { key: "b", value: "B" },
+            ],
+          },
+          {
+            name: "enabled",
+            kind: "boolean",
+            typeName: "ViewModelPropertyBoolean",
+          },
+        ],
+      },
+    ],
+    bindings: [
+      {
+        name: "Node:submitButton:opacity",
+        targetType: "Node",
+        targetName: "submitButton",
+        targetProperty: "opacity",
+        direction: "toSource",
+        twoWay: true,
+        once: false,
+        sourceToTargetRunsFirst: false,
+        nameBased: true,
+        converterName: "opacityConverter",
+        converterType: "DataConverterToNumber",
+        sourcePathIds: [1],
+      },
+    ],
+  });
+
+  const diff = diffRuntimeContracts(before, after);
+  const kinds = new Set(diff.behavior.map((change) => change.kind));
+  assert.ok(kinds.has("instanceDefaultChanged"), "authored instance default changes are behavioral");
+  assert.ok(kinds.has("bindingChanged"), "binding flag/source changes are behavioral");
+  assert.equal(diff.breaking.length, 0);
 }
 
 {
@@ -216,14 +293,51 @@ function contract(overrides = {}) {
         name: "Default",
         viewModelIndex: 0,
         viewModelName: "App",
-        values: [],
+        values: [
+          {
+            localPropertyIndex: 0,
+            propertyName: "enabled",
+            kind: "boolean",
+            typeName: "ViewModelInstanceBoolean",
+            objectIndex: 7,
+            value: true,
+          },
+        ],
       },
     ],
     enums: [],
     systemEnums: [],
-    converters: [],
+    converters: [
+      {
+        index: 0,
+        objectIndex: 8,
+        name: "toNumber",
+        kind: "toNumber",
+        typeName: "DataConverterToNumber",
+        properties: {},
+      },
+    ],
     converterGroupItems: [],
-    dataBinds: [],
+    dataBinds: [
+      {
+        objectIndex: 9,
+        typeName: "DataBindContext",
+        target: { objectIndex: 10, typeName: "Node", name: "submitButton" },
+        propertyKey: 18,
+        propertyName: "opacity",
+        flags: {
+          raw: 16,
+          direction: "toTarget",
+          twoWay: false,
+          once: false,
+          sourceToTargetRunsFirst: false,
+          nameBased: true,
+        },
+        converterIndex: 0,
+        converterName: "toNumber",
+        sourcePathIds: [0],
+      },
+    ],
     dataBindPaths: [],
   };
 
@@ -234,7 +348,27 @@ function contract(overrides = {}) {
     built.viewModels[0].properties.find((property) => property.name === "child")?.referencedViewModel,
     "Child"
   );
-  assert.deepEqual(built.viewModels[0].instances, ["Default"]);
+  assert.deepEqual(built.viewModels[0].instances, [
+    {
+      name: "Default",
+      values: [{ name: "enabled", kind: "boolean", value: true }],
+    },
+  ]);
+  assert.equal(built.bindings.length, 1);
+  assert.deepEqual(built.bindings[0], {
+    name: "Node:submitButton:opacity",
+    targetType: "Node",
+    targetName: "submitButton",
+    targetProperty: "opacity",
+    direction: "toTarget",
+    twoWay: false,
+    once: false,
+    sourceToTargetRunsFirst: false,
+    nameBased: true,
+    converterName: "toNumber",
+    converterType: "DataConverterToNumber",
+    sourcePathIds: [0],
+  });
 }
 
 {
