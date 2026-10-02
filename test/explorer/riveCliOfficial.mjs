@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exploreBoundedBfs } from "../../dist/explorer/explore.js";
 import { RiveCliBackend } from "../../dist/explorer/backends/riveCli.js";
+import { runCommand } from "../../dist/explorer/backends/riveCliProcess.js";
 import { checkSequenceDeterminism } from "../../dist/explorer/determinism.js";
+import { extractNumericBoundaryHints } from "../../dist/fuzz/boundaries.js";
 import { actionSignature } from "../../dist/stateSpace/signature.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +28,81 @@ function transitionSet(result) {
     .sort();
 }
 
+function filesWithExtension(root, extension) {
+  const out = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const full = join(root, entry.name);
+    if (entry.isDirectory()) out.push(...filesWithExtension(full, extension));
+    else if (entry.isFile() && entry.name.endsWith(extension)) out.push(full);
+  }
+  return out;
+}
+
+function compactHints(hints) {
+  const seen = new Set();
+  const out = [];
+  for (const hint of hints) {
+    const key = JSON.stringify([hint.path, hint.operator, hint.threshold, hint.source]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(hint);
+  }
+  return out;
+}
+
+async function staticHintProbe() {
+  const entries = [];
+  const sampleNames = readdirSync(samplesRoot)
+    .filter((name) => {
+      const full = join(samplesRoot, name);
+      return statSync(full).isDirectory();
+    })
+    .sort();
+
+  for (const sampleName of sampleNames) {
+    const projectDir = resolve(samplesRoot, sampleName);
+    const rmlHints = [];
+    for (const file of filesWithExtension(projectDir, ".rml")) {
+      const text = readFileSync(file, "utf8");
+      for (const hint of extractNumericBoundaryHints(text)) {
+        rmlHints.push({
+          ...hint,
+          source: `rml:${relative(projectDir, file)}:${hint.source}`,
+        });
+      }
+    }
+
+    const inspect = await runCommand(riveCli, ["inspect", projectDir, "--json"], {
+      cwd: projectDir,
+      timeoutMs: 90_000,
+      env: { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off" },
+    });
+    const inspectHints = inspect.code === 0
+      ? extractNumericBoundaryHints(inspect.stdout).map((hint) => ({
+          ...hint,
+          source: `inspect:${hint.source}`,
+        }))
+      : [];
+
+    if (rmlHints.length || inspectHints.length || inspect.code !== 0) {
+      entries.push({
+        sample: sampleName,
+        inspectExitCode: inspect.code,
+        inspectError: inspect.code === 0 ? undefined : (inspect.stderr.trim() || inspect.stdout.trim()).slice(0, 1000),
+        rmlHints: compactHints(rmlHints),
+        inspectHints: compactHints(inspectHints),
+      });
+    }
+  }
+
+  return {
+    samplesScanned: sampleNames.length,
+    samplesWithCandidateHints: entries.filter((entry) => entry.rmlHints.length || entry.inspectHints.length).length,
+    entries,
+  };
+}
+
+const staticProbe = await staticHintProbe();
 const results = [];
 let nondeterministicSequences = 0;
 let responsiveSamples = 0;
@@ -94,10 +171,11 @@ for (const sample of corpus.samples) {
 }
 
 const report = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   generatedAt: new Date().toISOString(),
   corpus: "official-rive-cli-bundled-samples-v1",
   source: "official-rive-cli-samples",
+  staticProbe,
   samples: results,
   totals: {
     samples: results.length,
