@@ -146,14 +146,25 @@ async function staticHintProbe() {
   for (const sampleName of sampleNames) {
     const projectDir = resolve(samplesRoot, sampleName);
     const rmlHints = [];
+    const rmlConditionExcerpts = [];
     for (const file of filesWithExtension(projectDir, ".rml")) {
       const text = readFileSync(file, "utf8");
+      const fileLines = text.split(/\r?\n/);
       for (const hint of extractNumericBoundaryHints(text)) {
         rmlHints.push({
           ...hint,
           source: `rml:${relative(projectDir, file)}:${hint.source}`,
         });
       }
+      fileLines.forEach((line, index) => {
+        if (/Transition(ViewModelCondition|PropertyViewModelComparator|Value(?:Boolean|Number)Comparator)|DataBindContext/.test(line)) {
+          rmlConditionExcerpts.push({
+            file: relative(projectDir, file),
+            line: index + 1,
+            text: line.trim().slice(0, 1000),
+          });
+        }
+      });
     }
 
     const inspect = await runCommand(riveCli, ["inspect", projectDir, "--json"], {
@@ -179,13 +190,14 @@ async function staticHintProbe() {
       ? Object.keys(inspectParsed).sort()
       : [];
 
-    if (rmlHints.length || inspectHints.length || inspect.code !== 0 || structure.length) {
+    if (rmlHints.length || inspectHints.length || inspect.code !== 0 || structure.length || rmlConditionExcerpts.length) {
       entries.push({
         sample: sampleName,
         inspectExitCode: inspect.code,
         inspectError: inspect.code === 0 ? undefined : (inspect.stderr.trim() || inspect.stdout.trim()).slice(0, 1000),
         topLevelKeys,
         rmlHints: compactHints(rmlHints),
+        rmlConditionExcerpts,
         inspectHints: compactHints(inspectHints),
         viewModelComparators,
         structure,
