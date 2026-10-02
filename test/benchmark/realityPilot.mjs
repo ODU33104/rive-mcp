@@ -7,13 +7,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve } from "node:path";\nimport { fileURLToPath } from "node:url";
 import { RiveCliBackend } from "../../dist/backends/riveCliBackend.js";
 import { createEvidenceManifest } from "../../dist/evidence/manifest.js";
 import { EvidenceStore } from "../../dist/evidence/store.js";
 
 const binary = process.env.RIVE_CLI_BIN ?? "rive";
-const repoRoot = resolve(new URL("../..", import.meta.url).pathname);
+const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const outputRoot = join(repoRoot, "test", "tmp", "reality-pilot");
 mkdirSync(outputRoot, { recursive: true });
 const workspace = mkdtempSync(join(tmpdir(), "rive-reality-pilot-"));
@@ -128,7 +128,7 @@ const rawReportedDrop = /^data:\s+no\b/im.test(rawBad.stderr)
   || /data: no property at/i.test(rawBad.stderr);
 const adapterDetectedDrop = !behavior.ok
   && behavior.diagnostics.some((d) => d.code === "CLI_DATA_NOT_APPLIED");
-const behaviorDecision = rawBad.code === 0 && rawReportedDrop && adapterDetectedDrop
+const behaviorElapsedMs = Date.now() - behaviorStarted;\nconst behaviorDecision = rawBad.code === 0 && rawReportedDrop && adapterDetectedDrop
   ? "KEEP"
   : rawBad.code !== 0
     ? "INCONCLUSIVE"
@@ -176,7 +176,7 @@ const refinedManifest = createEvidenceManifest({
     },
   ],
 });
-const refinedEvidence = store.put(refinedManifest);
+const refinedEvidence = store.put(refinedManifest);\nconst refineElapsedMs = Date.now() - refineStarted;
 
 const report = {
   schemaVersion: "rive-mcp.reality-pilot/v1",
@@ -195,7 +195,7 @@ const report = {
       actualModelTokens: "unavailable",
       toolCalls: 4,
       failuresRetries: 0,
-      elapsedMs: Date.now() - visualStarted,
+      elapsedMs: visualElapsedMs,
       visualQualityEvidence: {
         firstScreenshotHash: visualA.artifacts[0]?.sha256,
         repeatScreenshotHash: visualB.artifacts[0]?.sha256,
@@ -221,7 +221,7 @@ const report = {
       actualModelTokens: "unavailable",
       toolCalls: 2,
       failuresRetries: 0,
-      elapsedMs: Date.now() - behaviorStarted,
+      elapsedMs: behaviorElapsedMs,
       rawCli: {
         exitCode: rawBad.code,
         reportedDrop: rawReportedDrop,
@@ -239,7 +239,7 @@ const report = {
       actualModelTokens: "unavailable",
       toolCalls: 3,
       failuresRetries: 0,
-      elapsedMs: Date.now() - refineStarted,
+      elapsedMs: refineElapsedMs,
       visualQualityEvidence: {
         beforeScreenshotHash: beforeRefineManifest.artifacts[0]?.sha256,
         afterScreenshotHash: refinedExecution.artifacts[0]?.sha256,
