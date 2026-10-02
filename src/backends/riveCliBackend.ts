@@ -115,28 +115,6 @@ function problemDiagnostics(raw: unknown): Diagnostic[] {
   });
 }
 
-function stderrDiagnostics(stderr: string): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
-  for (const line of stderr.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) {
-    if (/^data:\s+no\b/i.test(line) || /data: no property at/i.test(line)) {
-      diagnostics.push({
-        severity: "error",
-        code: "CLI_DATA_NOT_APPLIED",
-        message: line,
-        source: "rive-cli",
-      });
-    } else if (/pointer: unknown gesture/i.test(line)) {
-      diagnostics.push({
-        severity: "error",
-        code: "CLI_POINTER_NOT_APPLIED",
-        message: line,
-        source: "rive-cli",
-      });
-    }
-  }
-  return diagnostics;
-}
-
 function failedProcessDiagnostic(result: ProcessResult, command: string): Diagnostic[] {
   if (result.code === 0) return [];
   return [{
