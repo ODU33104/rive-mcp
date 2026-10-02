@@ -275,8 +275,19 @@ export function buildRuntimeContract(
 
   const viewModels: RuntimeContractViewModel[] = (dataBinding?.viewModels ?? [])
     .map((viewModel) => {
-      const instances: RuntimeContractViewModelInstance[] = (dataBinding?.viewModelInstances ?? [])
-        .filter((instance) => instance.viewModelIndex === viewModel.index && Boolean(instance.name))
+      const matchingInstances = (dataBinding?.viewModelInstances ?? []).filter(
+        (instance) => instance.viewModelIndex === viewModel.index && Boolean(instance.name)
+      );
+      for (const instance of matchingInstances) {
+        const unnamedValues = instance.values.filter((value) => !value.propertyName);
+        if (unnamedValues.length > 0) {
+          warnings.push(
+            `viewModel/${viewModel.name}/instance/${instance.name}: ${unnamedValues.length} value(s) omitted because property names could not be resolved`
+          );
+        }
+      }
+
+      const instances: RuntimeContractViewModelInstance[] = matchingInstances
         .map((instance) => ({
           name: instance.name,
           values: instance.values
@@ -372,6 +383,11 @@ export function buildRuntimeContract(
   }
   bindings.sort(byName);
   warnDuplicateNames("bindings", bindings, warnings);
+  if (bindings.some((binding) => (binding.sourcePathIds?.length ?? 0) > 0)) {
+    warnings.push(
+      "Data Binding sourcePathIds are retained as opaque evidence but excluded from semantic change classification until they can be normalized to stable property paths"
+    );
+  }
 
   return {
     schemaVersion: 1,
@@ -431,6 +447,11 @@ function pairNamed<T extends { name: string }>(
 
 function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function bindingBehavior(binding: RuntimeContractBinding): Omit<RuntimeContractBinding, "sourcePathIds"> {
+  const { sourcePathIds: _opaqueSourcePathIds, ...behavior } = binding;
+  return behavior;
 }
 
 export function diffRuntimeContracts(
@@ -730,14 +751,16 @@ export function diffRuntimeContracts(
         binding
       ),
     (leftBinding, rightBinding, path) => {
-      if (!sameValue(leftBinding, rightBinding)) {
+      const leftBehavior = bindingBehavior(leftBinding);
+      const rightBehavior = bindingBehavior(rightBinding);
+      if (!sameValue(leftBehavior, rightBehavior)) {
         add(
           "behavior",
           "bindingChanged",
           path,
           `Data Binding configuration changed for ${leftBinding.targetType} "${leftBinding.targetName}" property "${leftBinding.targetProperty ?? "unknown"}"`,
-          leftBinding,
-          rightBinding
+          leftBehavior,
+          rightBehavior
         );
       }
     }
