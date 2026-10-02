@@ -53,13 +53,13 @@ function compactHints(hints) {
 const STRUCTURAL_KEY = /(condition|operator|comparison|threshold|input|view.?model|property.?path|source.?path)/i;
 const STRUCTURAL_TYPE = /(condition|transition|input|view.?model)/i;
 
-function scalarTree(value, depth = 0, maxDepth = 4) {
+function scalarTree(value, depth = 0, maxDepth = 6) {
   if (depth > maxDepth || value == null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map((child) => scalarTree(child, depth + 1, maxDepth));
+  if (Array.isArray(value)) return value.slice(0, 20).map((child) => scalarTree(child, depth + 1, maxDepth));
   const out = {};
   for (const [key, child] of Object.entries(value)) {
     if (child == null || ["string", "number", "boolean"].includes(typeof child)) out[key] = child;
-    else if (key === "children" || key === "enums") out[key] = scalarTree(child, depth + 1, maxDepth);
+    else if (depth < maxDepth) out[key] = scalarTree(child, depth + 1, maxDepth);
   }
   return out;
 }
@@ -112,6 +112,10 @@ async function staticHintProbe() {
     "TransitionComparator",
     "TransitionValueNumberComparator",
     "ViewModelPropertyNumber",
+    "DataBindContext",
+    "DataBindPath",
+    "BindablePropertyNumber",
+    "BindablePropertyBoolean",
   ];
   const schemas = {};
   for (const type of schemaTypes) {
