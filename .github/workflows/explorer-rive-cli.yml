@@ -36,6 +36,9 @@ jobs:
       - name: Run CLI adapter unit tests
         run: node test/explorer/riveCliBackend.mjs
 
+      - name: Run RML boundary extractor tests
+        run: node test/explorer/riveRmlBoundaries.mjs
+
       - name: Install Rive CLI runtime libraries
         shell: bash
         run: |
