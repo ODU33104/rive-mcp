@@ -53,6 +53,30 @@ function compactHints(hints) {
 const STRUCTURAL_KEY = /(condition|operator|comparison|threshold|input|view.?model|property.?path|source.?path)/i;
 const STRUCTURAL_TYPE = /(condition|transition|input|view.?model)/i;
 
+function scalarTree(value, depth = 0, maxDepth = 4) {
+  if (depth > maxDepth || value == null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((child) => scalarTree(child, depth + 1, maxDepth));
+  const out = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (child == null || ["string", "number", "boolean"].includes(typeof child)) out[key] = child;
+    else if (key === "children" || key === "enums") out[key] = scalarTree(child, depth + 1, maxDepth);
+  }
+  return out;
+}
+
+function comparatorSubtrees(value, path = "$", out = []) {
+  if (value == null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    value.forEach((child, index) => comparatorSubtrees(child, `${path}[${index}]`, out));
+    return out;
+  }
+  if (value.type === "TransitionPropertyViewModelComparator") {
+    out.push({ path, tree: scalarTree(value) });
+  }
+  for (const [key, child] of Object.entries(value)) comparatorSubtrees(child, `${path}.${key}`, out);
+  return out;
+}
+
 function structuralPreview(value, path = "$", out = [], limit = 12) {
   if (out.length >= limit || value == null || typeof value !== "object") return out;
   if (Array.isArray(value)) {
@@ -84,6 +108,8 @@ async function staticHintProbe() {
   const schemaTypes = [
     "TransitionViewModelCondition",
     "TransitionPropertyViewModelComparator",
+    "TransitionPropertyComparator",
+    "TransitionComparator",
     "TransitionValueNumberComparator",
     "ViewModelPropertyNumber",
   ];
@@ -144,6 +170,7 @@ async function staticHintProbe() {
         }))
       : [];
     const structure = inspectParsed ? structuralPreview(inspectParsed) : [];
+    const viewModelComparators = inspectParsed ? comparatorSubtrees(inspectParsed) : [];
     const topLevelKeys = inspectParsed && typeof inspectParsed === "object" && !Array.isArray(inspectParsed)
       ? Object.keys(inspectParsed).sort()
       : [];
@@ -156,6 +183,7 @@ async function staticHintProbe() {
         topLevelKeys,
         rmlHints: compactHints(rmlHints),
         inspectHints: compactHints(inspectHints),
+        viewModelComparators,
         structure,
       });
     }
