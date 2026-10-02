@@ -55,6 +55,8 @@ export interface TraceStep {
   action: Action;
   observation?: StateObservation;
   error?: string;
+  /** Observable delivery/build diagnostics kept outside state identity. */
+  diagnostics?: string[];
   cost?: number;
 }
 
