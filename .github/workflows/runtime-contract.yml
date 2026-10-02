@@ -1,0 +1,28 @@
+name: Runtime Contract
+
+on:
+  pull_request:
+    paths:
+      - "src/runtimeContract.ts"
+      - "src/dataBinding.ts"
+      - "src/rivBinary.ts"
+      - "src/riveHost.ts"
+      - "test/runtimeContract.mjs"
+      - "docs/runtime-contract.md"
+      - ".github/workflows/runtime-contract.yml"
+  push:
+    branches:
+      - "feat/runtime-contract-engine"
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/runtimeContract.mjs
