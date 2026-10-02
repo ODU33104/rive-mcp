@@ -95,5 +95,5 @@ console.log(JSON.stringify({
   artifactHash: manifestA.subject.artifactHash,
   screenshotHash: first.artifacts[0]?.sha256,
   reproducibilityKey: manifestA.reproducibilityKey,
-  silentDropDiagnostic: badData.diagnostics,
+  inputFailureDiagnostic: badData.diagnostics,
 }, null, 2));
