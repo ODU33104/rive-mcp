@@ -52,7 +52,7 @@ export interface CausalAmbiguityReport {
   warnings: string[];
 }
 
-function pathKey(path: Pick<PotentialWriterPath, "nodeIds" | "edgeKinds">): string {
+function pathKey(path: { nodeIds: readonly string[]; edgeKinds: readonly string[] }): string {
   return `${path.nodeIds.join("->")}|${path.edgeKinds.join("->")}`;
 }
 
@@ -153,9 +153,7 @@ export function analyzeCausalAmbiguity(
       );
     }
     const writerPaths = [...uniquePaths.values()].sort((a, b) =>
-      pathKey(a as PotentialWriterPath).localeCompare(
-        pathKey(b as PotentialWriterPath)
-      )
+      pathKey(a).localeCompare(pathKey(b))
     );
 
     const supportedWriterPaths = writerPaths.filter(
