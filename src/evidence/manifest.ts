@@ -1,6 +1,7 @@
 import {
   readFileSync,
   readdirSync,
+  readlinkSync,
   statSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -94,8 +95,8 @@ function toolVersion(): string {
   }
 }
 
-function projectEntries(root: string): Array<{ path: string; sha256: string; bytes: number }> {
-  const entries: Array<{ path: string; sha256: string; bytes: number }> = [];
+function projectEntries(root: string): Array<{ path: string; kind: "file" | "symlink"; sha256: string; bytes: number }> {
+  const entries: Array<{ path: string; kind: "file" | "symlink"; sha256: string; bytes: number }> = [];
   const visit = (dir: string) => {
     for (const item of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (PROJECT_EXCLUDES.has(item.name)) continue;
@@ -106,8 +107,17 @@ function projectEntries(root: string): Array<{ path: string; sha256: string; byt
         const bytes = readFileSync(full);
         entries.push({
           path: relative(root, full).replaceAll("\\", "/"),
+          kind: "file",
           sha256: sha256Bytes(bytes),
           bytes: bytes.length,
+        });
+      } else if (item.isSymbolicLink()) {
+        const target = readlinkSync(full);
+        entries.push({
+          path: relative(root, full).replaceAll("\\", "/"),
+          kind: "symlink",
+          sha256: sha256Bytes(`symlink:${target}`),
+          bytes: Buffer.byteLength(target),
         });
       }
     }
@@ -243,6 +253,6 @@ export function createEvidenceManifest(input: CreateEvidenceInput): EvidenceMani
 
   return {
     ...withoutHash,
-    manifestHash: revisionHash(stableJson(withoutHash)),
+    manifestHash: sha256Bytes(stableJson(withoutHash)),
   };
 }
