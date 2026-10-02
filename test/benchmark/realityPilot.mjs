@@ -25,7 +25,7 @@ const scenePath = join(projectDir, "scene.rml");
 const initialScene = `<Rive version="1" kind="fragment">
   <Artboard width="320" height="180" name="Artboard" id="0:2">
     <Shape x="160" y="90" name="Card">
-      <Rectangle width="180" height="96" cornerRadius="18" name="Path"/>
+      <Triangle originX="0.5" originY="0.5" width="140" height="110" name="Path"/>
       <Fill name="Fill">
         <SolidColor colorValue="FF57A5E0" name="Color"/>
       </Fill>
