@@ -83,9 +83,9 @@ const badData = await backend.execute(project, {
   steps: [{ type: "data", path: "__rive_mcp_missing_property__", value: 42 }],
   capture: { screenshot: true },
 });
-assert.equal(badData.ok, false, "CLI data drop must be promoted to failed evidence");
+assert.equal(badData.ok, false, "CLI input failure must remain failed evidence");
 assert.ok(
-  badData.diagnostics.some((d) => d.code === "CLI_DATA_NOT_APPLIED"),
+  badData.diagnostics.some((d) => d.code === "RIVE_CLI_EXIT"),
   JSON.stringify(badData.diagnostics)
 );
 
