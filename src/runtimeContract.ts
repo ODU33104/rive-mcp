@@ -360,7 +360,7 @@ export function buildRuntimeContract(
       targetType,
       targetName,
       targetProperty: binding.propertyName,
-      direction: binding.flags.direction,
+      direction: binding.flags.direction === "toSource" ? "toSource" : "toTarget",
       twoWay: binding.flags.twoWay,
       once: binding.flags.once,
       sourceToTargetRunsFirst: binding.flags.sourceToTargetRunsFirst,
