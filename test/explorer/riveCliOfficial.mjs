@@ -6,7 +6,8 @@ import { exploreBoundedBfs } from "../../dist/explorer/explore.js";
 import { RiveCliBackend } from "../../dist/explorer/backends/riveCli.js";
 import { runCommand } from "../../dist/explorer/backends/riveCliProcess.js";
 import { checkSequenceDeterminism } from "../../dist/explorer/determinism.js";
-import { extractNumericBoundaryHints } from "../../dist/fuzz/boundaries.js";
+import { extractRiveRmlNumericBoundaryHints } from "../../dist/fuzz/riveRmlBoundaries.js";
+import { prioritizeBoundaryActions } from "../../dist/fuzz/boundaries.js";
 import { actionSignature } from "../../dist/stateSpace/signature.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,8 @@ const riveCli = process.env.RIVE_CLI;
 const samplesRoot = process.env.RIVE_CLI_SAMPLES_PATH;
 if (!riveCli) throw new Error("RIVE_CLI must point to the official Rive CLI executable");
 if (!samplesRoot) throw new Error("RIVE_CLI_SAMPLES_PATH must point to `rive samples --path`");
+
+const cliEnv = { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off" };
 
 function stateSet(result) {
   return [...result.coverage.observedStateSignatures].sort();
@@ -38,182 +41,121 @@ function filesWithExtension(root, extension) {
   return out;
 }
 
-function compactHints(hints) {
+function count(text, expression) {
+  return [...text.matchAll(expression)].length;
+}
+
+function dedupeHints(hints) {
   const seen = new Set();
-  const out = [];
-  for (const hint of hints) {
+  return hints.filter((hint) => {
     const key = JSON.stringify([hint.path, hint.operator, hint.threshold, hint.source]);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return false;
     seen.add(key);
-    out.push(hint);
-  }
-  return out;
+    return true;
+  });
 }
 
-const STRUCTURAL_KEY = /(condition|operator|comparison|threshold|input|view.?model|property.?path|source.?path)/i;
-const STRUCTURAL_TYPE = /(condition|transition|input|view.?model)/i;
-
-function scalarTree(value, depth = 0, maxDepth = 6) {
-  if (depth > maxDepth || value == null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.slice(0, 20).map((child) => scalarTree(child, depth + 1, maxDepth));
-  const out = {};
-  for (const [key, child] of Object.entries(value)) {
-    if (child == null || ["string", "number", "boolean"].includes(typeof child)) out[key] = child;
-    else if (depth < maxDepth) out[key] = scalarTree(child, depth + 1, maxDepth);
-  }
-  return out;
+async function loadSchema(type) {
+  const result = await runCommand(riveCli, ["schema", type, "--json"], {
+    cwd: samplesRoot,
+    timeoutMs: 30_000,
+    env: cliEnv,
+  });
+  assert.equal(result.code, 0, `rive schema ${type} failed: ${result.stderr || result.stdout}`);
+  return JSON.parse(result.stdout);
 }
 
-function comparatorSubtrees(value, path = "$", out = []) {
-  if (value == null || typeof value !== "object") return out;
-  if (Array.isArray(value)) {
-    value.forEach((child, index) => comparatorSubtrees(child, `${path}[${index}]`, out));
-    return out;
-  }
-  if (value.type === "TransitionPropertyViewModelComparator") {
-    out.push({ path, tree: scalarTree(value) });
-  }
-  for (const [key, child] of Object.entries(value)) comparatorSubtrees(child, `${path}.${key}`, out);
-  return out;
+function schemaProperty(schema, name) {
+  return schema.properties?.find((property) => property.name === name);
 }
 
-function structuralPreview(value, path = "$", out = [], limit = 12) {
-  if (out.length >= limit || value == null || typeof value !== "object") return out;
-  if (Array.isArray(value)) {
-    for (let index = 0; index < value.length && out.length < limit; index++) {
-      structuralPreview(value[index], `${path}[${index}]`, out, limit);
-    }
-    return out;
-  }
+async function verifyBoundarySchemaContract() {
+  const [condition, numberComparator, bindableNumber, dataBindContext] = await Promise.all([
+    loadSchema("TransitionViewModelCondition"),
+    loadSchema("TransitionValueNumberComparator"),
+    loadSchema("BindablePropertyNumber"),
+    loadSchema("DataBindContext"),
+  ]);
 
-  const entries = Object.entries(value);
-  const type = typeof value.type === "string" ? value.type : "";
-  if (entries.some(([key]) => STRUCTURAL_KEY.test(key)) || STRUCTURAL_TYPE.test(type)) {
-    const scalars = {};
-    for (const [key, child] of entries) {
-      if (child == null || ["string", "number", "boolean"].includes(typeof child)) scalars[key] = child;
-    }
-    out.push({ path, keys: entries.map(([key]) => key).sort(), scalars });
-  }
+  const op = schemaProperty(condition, "opValue");
+  assert.equal(op?.default, "equal");
+  assert.deepEqual(
+    [...(op?.accepts ?? [])].sort(),
+    ["equal", "greaterThan", "greaterThanOrEqual", "lessThan", "lessThanOrEqual", "notEqual"].sort()
+  );
+  const value = schemaProperty(numberComparator, "value");
+  assert.equal(value?.type, "double");
+  const propertyValue = schemaProperty(bindableNumber, "propertyValue");
+  assert.equal(propertyValue?.type, "double");
+  assert.equal(propertyValue?.key, 636);
+  const sourcePathIds = schemaProperty(dataBindContext, "sourcePathIds");
+  assert.equal(sourcePathIds?.type, "List<Id>");
 
-  for (const [key, child] of entries) {
-    if (out.length >= limit) break;
-    structuralPreview(child, `${path}.${key}`, out, limit);
-  }
-  return out;
+  return {
+    transitionViewModelConditionTypeKey: condition.typeKey,
+    transitionValueNumberComparatorTypeKey: numberComparator.typeKey,
+    bindablePropertyNumberTypeKey: bindableNumber.typeKey,
+    bindablePropertyNumberValueKey: propertyValue.key,
+    dataBindContextTypeKey: dataBindContext.typeKey,
+    sourcePathIdsType: sourcePathIds.type,
+  };
 }
 
-async function staticHintProbe() {
+async function scanStaticBoundaries() {
   const entries = [];
-  const schemaTypes = [
-    "TransitionViewModelCondition",
-    "TransitionPropertyViewModelComparator",
-    "TransitionPropertyComparator",
-    "TransitionComparator",
-    "TransitionValueNumberComparator",
-    "ViewModelPropertyNumber",
-    "DataBindContext",
-    "DataBindPath",
-    "BindablePropertyNumber",
-    "BindablePropertyBoolean",
-  ];
-  const schemas = {};
-  for (const type of schemaTypes) {
-    const schema = await runCommand(riveCli, ["schema", type, "--json"], {
-      cwd: samplesRoot,
-      timeoutMs: 30_000,
-      env: { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off" },
-    });
-    let parsed;
-    try {
-      parsed = schema.code === 0 ? JSON.parse(schema.stdout) : undefined;
-    } catch {
-      parsed = undefined;
-    }
-    schemas[type] = {
-      exitCode: schema.code,
-      data: parsed,
-      error: schema.code === 0 ? undefined : (schema.stderr.trim() || schema.stdout.trim()).slice(0, 1000),
-    };
-  }
   const sampleNames = readdirSync(samplesRoot)
-    .filter((name) => {
-      const full = join(samplesRoot, name);
-      return statSync(full).isDirectory();
-    })
+    .filter((name) => statSync(join(samplesRoot, name)).isDirectory())
     .sort();
 
   for (const sampleName of sampleNames) {
     const projectDir = resolve(samplesRoot, sampleName);
-    const rmlHints = [];
-    const rmlConditionExcerpts = [];
-    for (const file of filesWithExtension(projectDir, ".rml")) {
-      const text = readFileSync(file, "utf8");
-      const fileLines = text.split(/\r?\n/);
-      for (const hint of extractNumericBoundaryHints(text)) {
-        rmlHints.push({
-          ...hint,
-          source: `rml:${relative(projectDir, file)}:${hint.source}`,
-        });
-      }
-      fileLines.forEach((line, index) => {
-        if (/Transition(ViewModelCondition|PropertyViewModelComparator|Value(?:Boolean|Number)Comparator)|DataBindContext/.test(line)) {
-          rmlConditionExcerpts.push({
-            file: relative(projectDir, file),
-            line: index + 1,
-            text: line.trim().slice(0, 1000),
-          });
-        }
-      });
-    }
-
-    const inspect = await runCommand(riveCli, ["inspect", projectDir, "--json"], {
+    const inspectResult = await runCommand(riveCli, ["inspect", projectDir, "--json"], {
       cwd: projectDir,
       timeoutMs: 90_000,
-      env: { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off" },
+      env: cliEnv,
     });
-    let inspectParsed;
-    try {
-      inspectParsed = inspect.code === 0 ? JSON.parse(inspect.stdout) : undefined;
-    } catch {
-      inspectParsed = undefined;
-    }
-    const inspectHints = inspect.code === 0
-      ? extractNumericBoundaryHints(inspect.stdout).map((hint) => ({
-          ...hint,
-          source: `inspect:${hint.source}`,
-        }))
-      : [];
-    const structure = inspectParsed ? structuralPreview(inspectParsed) : [];
-    const viewModelComparators = inspectParsed ? comparatorSubtrees(inspectParsed) : [];
-    const topLevelKeys = inspectParsed && typeof inspectParsed === "object" && !Array.isArray(inspectParsed)
-      ? Object.keys(inspectParsed).sort()
-      : [];
+    assert.equal(
+      inspectResult.code,
+      0,
+      `rive inspect failed for official sample ${sampleName}: ${inspectResult.stderr || inspectResult.stdout}`
+    );
+    const inspect = JSON.parse(inspectResult.stdout);
 
-    if (rmlHints.length || inspectHints.length || inspect.code !== 0 || structure.length || rmlConditionExcerpts.length) {
-      entries.push({
-        sample: sampleName,
-        inspectExitCode: inspect.code,
-        inspectError: inspect.code === 0 ? undefined : (inspect.stderr.trim() || inspect.stdout.trim()).slice(0, 1000),
-        topLevelKeys,
-        rmlHints: compactHints(rmlHints),
-        rmlConditionExcerpts,
-        inspectHints: compactHints(inspectHints),
-        viewModelComparators,
-        structure,
-      });
+    const hints = [];
+    let viewModelConditions = 0;
+    let numberComparators = 0;
+    let booleanComparators = 0;
+    for (const file of filesWithExtension(projectDir, ".rml")) {
+      const rml = readFileSync(file, "utf8");
+      const source = relative(projectDir, file);
+      hints.push(...extractRiveRmlNumericBoundaryHints(rml, inspect, { source }));
+      viewModelConditions += count(rml, /<TransitionViewModelCondition\b/g);
+      numberComparators += count(rml, /<TransitionValueNumberComparator\b/g);
+      booleanComparators += count(rml, /<TransitionValueBooleanComparator\b/g);
     }
+
+    entries.push({
+      sample: sampleName,
+      hints: dedupeHints(hints),
+      conditionEvidence: { viewModelConditions, numberComparators, booleanComparators },
+    });
   }
 
   return {
-    samplesScanned: sampleNames.length,
-    samplesWithCandidateHints: entries.filter((entry) => entry.rmlHints.length || entry.inspectHints.length).length,
-    schemas,
+    samplesScanned: entries.length,
+    samplesWithNumericBoundaryHints: entries.filter((entry) => entry.hints.length > 0).length,
+    totalNumericBoundaryHints: entries.reduce((sum, entry) => sum + entry.hints.length, 0),
+    totalViewModelConditions: entries.reduce((sum, entry) => sum + entry.conditionEvidence.viewModelConditions, 0),
+    totalNumberComparators: entries.reduce((sum, entry) => sum + entry.conditionEvidence.numberComparators, 0),
+    totalBooleanComparators: entries.reduce((sum, entry) => sum + entry.conditionEvidence.booleanComparators, 0),
     entries,
   };
 }
 
-const staticProbe = await staticHintProbe();
+const schemaContract = await verifyBoundarySchemaContract();
+const staticBoundaries = await scanStaticBoundaries();
+const staticBySample = new Map(staticBoundaries.entries.map((entry) => [entry.sample, entry]));
+
 const results = [];
 let nondeterministicSequences = 0;
 let responsiveSamples = 0;
@@ -232,7 +174,6 @@ for (const sample of corpus.samples) {
     maxSequences: corpus.maxSequences,
   };
 
-  // Same runner, same project, same action corpus: compare the algorithmic change directly.
   const uncached = await exploreBoundedBfs(
     new RiveCliBackend({ ...backendOptions, cachePrefixes: false }),
     exploreOptions
@@ -244,6 +185,20 @@ for (const sample of corpus.samples) {
   assert.deepEqual(stateSet(cached), stateSet(uncached), `${sample.name}: prefix cache changed observed states`);
   assert.deepEqual(transitionSet(cached), transitionSet(uncached), `${sample.name}: prefix cache changed observed transitions`);
   assert.equal(cached.failures.length, uncached.failures.length, `${sample.name}: prefix cache changed failure count`);
+
+  const provenHints = staticBySample.get(sample.name)?.hints ?? [];
+  const guidedActions = prioritizeBoundaryActions(sample.actions, provenHints);
+  const actionCorpusChanged =
+    guidedActions.map(actionSignature).join("\n") !== sample.actions.map(actionSignature).join("\n");
+  let guided = cached;
+  let guidedRunExecuted = false;
+  if (actionCorpusChanged) {
+    guidedRunExecuted = true;
+    guided = await exploreBoundedBfs(
+      new RiveCliBackend({ ...backendOptions, cachePrefixes: true }),
+      { ...exploreOptions, actions: guidedActions }
+    );
+  }
 
   const makeFreshBackend = () => new RiveCliBackend({ ...backendOptions, cachePrefixes: true });
   const determinism = await checkSequenceDeterminism(
@@ -271,6 +226,17 @@ for (const sample of corpus.samples) {
           ? 0
           : (uncached.metrics.backendCost - cached.metrics.backendCost) / uncached.metrics.backendCost,
     },
+    boundaryExperiment: {
+      provenHints,
+      actionCorpusChanged,
+      guidedRunExecuted,
+      baselineStateSignatures: cached.coverage.observedStateSignatures.length,
+      guidedStateSignatures: guided.coverage.observedStateSignatures.length,
+      baselineTransitions: cached.coverage.observedTransitions.length,
+      guidedTransitions: guided.coverage.observedTransitions.length,
+      baselineFailures: cached.failures.length,
+      guidedFailures: guided.failures.length,
+    },
     determinism: {
       attempts: determinism.attempts,
       deterministic: determinism.deterministic,
@@ -282,17 +248,19 @@ for (const sample of corpus.samples) {
 }
 
 const report = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   generatedAt: new Date().toISOString(),
   corpus: "official-rive-cli-bundled-samples-v1",
   source: "official-rive-cli-samples",
-  staticProbe,
+  schemaContract,
+  staticBoundaries,
   samples: results,
   totals: {
     samples: results.length,
     responsiveSamples,
     nondeterministicSequences,
     explorerFailures: results.reduce((sum, result) => sum + result.explorerFailures, 0),
+    boundaryGuidedFailures: results.reduce((sum, result) => sum + result.boundaryExperiment.guidedFailures, 0),
     uncachedBackendCost: results.reduce((sum, result) => sum + result.costComparison.uncachedBackendCost, 0),
     cachedBackendCost: results.reduce((sum, result) => sum + result.costComparison.cachedBackendCost, 0),
     savedBackendCommands: results.reduce((sum, result) => sum + result.costComparison.savedBackendCommands, 0),
