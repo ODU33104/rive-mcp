@@ -110,6 +110,7 @@ const visualManifestB = createEvidenceManifest({
 });
 const visualEvidence = store.put(visualManifestA);
 store.put(visualManifestB);
+const visualElapsedMs = Date.now() - visualStarted;
 
 const badDataScenario = {
   name: "data-binding-silent-drop-detection",
