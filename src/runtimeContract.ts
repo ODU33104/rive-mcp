@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { decodeDataBinding, type DataBindingResult } from "./dataBinding.js";
 import { loadDefs, readRiv, type RivDump, type RivObject } from "./rivBinary.js";
 import type { InspectResult } from "./riveHost.js";
@@ -129,6 +130,11 @@ export interface RuntimeContractDiff {
     nonBreaking: number;
     total: number;
   };
+}
+
+export interface RuntimeContractFingerprints {
+  api: string;
+  behavior: string;
 }
 
 const byName = <T extends { name: string }>(a: T, b: T) =>
@@ -452,6 +458,67 @@ function sameValue(a: unknown, b: unknown): boolean {
 function bindingBehavior(binding: RuntimeContractBinding): Omit<RuntimeContractBinding, "sourcePathIds"> {
   const { sourcePathIds: _opaqueSourcePathIds, ...behavior } = binding;
   return behavior;
+}
+
+function sha256Json(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function apiContractProjection(contract: RuntimeContract): unknown {
+  return {
+    schemaVersion: contract.schemaVersion,
+    artboards: contract.artboards.map((artboard) => ({
+      name: artboard.name,
+      animations: artboard.animations.map((animation) => ({ name: animation.name })),
+      stateMachines: artboard.stateMachines.map((machine) => ({
+        name: machine.name,
+        inputs: machine.inputs.map((input) => ({ name: input.name, type: input.type })),
+      })),
+      events: artboard.events.map((event) => ({ name: event.name, kind: event.kind })),
+    })),
+    viewModels: contract.viewModels.map((viewModel) => ({
+      name: viewModel.name,
+      viewModelType: viewModel.viewModelType,
+      properties: viewModel.properties.map((property) => ({
+        name: property.name,
+        kind: property.kind,
+        typeName: property.typeName,
+        enumValues: property.enumValues,
+        referencedViewModel: property.referencedViewModel,
+      })),
+      instances: viewModel.instances.map((instance) => ({ name: instance.name })),
+    })),
+  };
+}
+
+function behaviorContractProjection(contract: RuntimeContract): unknown {
+  return {
+    api: apiContractProjection(contract),
+    artboards: contract.artboards.map((artboard) => ({
+      name: artboard.name,
+      width: artboard.width,
+      height: artboard.height,
+      animations: artboard.animations,
+      stateMachines: artboard.stateMachines.map((machine) => ({
+        name: machine.name,
+        inputs: machine.inputs,
+      })),
+    })),
+    viewModels: contract.viewModels.map((viewModel) => ({
+      name: viewModel.name,
+      instances: viewModel.instances,
+    })),
+    bindings: contract.bindings.map(bindingBehavior),
+  };
+}
+
+export function fingerprintRuntimeContract(
+  contract: RuntimeContract
+): RuntimeContractFingerprints {
+  return {
+    api: sha256Json(apiContractProjection(contract)),
+    behavior: sha256Json(behaviorContractProjection(contract)),
+  };
 }
 
 export function diffRuntimeContracts(
