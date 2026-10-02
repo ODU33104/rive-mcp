@@ -81,6 +81,31 @@ function structuralPreview(value, path = "$", out = [], limit = 12) {
 
 async function staticHintProbe() {
   const entries = [];
+  const schemaTypes = [
+    "TransitionViewModelCondition",
+    "TransitionPropertyViewModelComparator",
+    "TransitionValueNumberComparator",
+    "ViewModelPropertyNumber",
+  ];
+  const schemas = {};
+  for (const type of schemaTypes) {
+    const schema = await runCommand(riveCli, ["schema", type, "--json"], {
+      cwd: samplesRoot,
+      timeoutMs: 30_000,
+      env: { ...process.env, RIVE_NO_TUI: "1", TERM: "dumb", RIVE_ANALYTICS: "off" },
+    });
+    let parsed;
+    try {
+      parsed = schema.code === 0 ? JSON.parse(schema.stdout) : undefined;
+    } catch {
+      parsed = undefined;
+    }
+    schemas[type] = {
+      exitCode: schema.code,
+      data: parsed,
+      error: schema.code === 0 ? undefined : (schema.stderr.trim() || schema.stdout.trim()).slice(0, 1000),
+    };
+  }
   const sampleNames = readdirSync(samplesRoot)
     .filter((name) => {
       const full = join(samplesRoot, name);
@@ -139,6 +164,7 @@ async function staticHintProbe() {
   return {
     samplesScanned: sampleNames.length,
     samplesWithCandidateHints: entries.filter((entry) => entry.rmlHints.length || entry.inspectHints.length).length,
+    schemas,
     entries,
   };
 }
