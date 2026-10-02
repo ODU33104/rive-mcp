@@ -8,11 +8,12 @@ The existing `RiveHost.playStateMachine` report exposes, per step:
 
 - State Machine state-change names reported by the official runtime;
 - current State Machine input snapshots;
-- elapsed/advanced time for authored steps.
+- elapsed/advanced time for authored steps;
+- optional explicitly watched Node/Transform/Text property snapshots.
 
 `observedTraceFromPlayResult()` normalizes those facts into deterministic trace events.
 
-It also derives `inputValueChanged` from adjacent input snapshots. That derived event means only that two observations differed; it does not claim which actor wrote the input.
+It derives `inputValueChanged` and `propertyValueChanged` only from adjacent snapshots. Those derived events mean that two observations differed; they do not by themselves identify the writer.
 
 ## Static + observed correlation
 
@@ -24,15 +25,19 @@ observed state change
 static State → Animation → Property potential-writer path
 ```
 
-The relation is named:
+If only the state is observed, the relation is:
 
 `observed-state-supports-potential-writer`
 
-This is intentionally weaker than:
+If the matching property is also directly observed to change at the same checkpoint, the stronger relation is:
 
-> this state caused this property value
+`observed-state-and-property-change-support-writer`
 
-because the current runtime report does not observe the property value itself.
+The stronger relation still does not mean:
+
+> this state was the only cause of this property value
+
+because another writer could have contributed in the same checkpoint interval.
 
 ## Why this boundary matters
 
@@ -67,11 +72,13 @@ Matches observed state changes against the Static Provenance graph and returns:
 
 ## Next evidence upgrade
 
-The next step is not more inference. It is better observation:
+Scene property checkpoint observation is now available for the verified Node/Transform/Text surface.
 
-1. capture selected property values at scenario checkpoints;
-2. record ViewModel property snapshots where the runtime exposes them;
-3. preserve exact scenario step/time identity;
-4. only then promote structural support into stronger observed causal evidence.
+The next step is still better observation rather than more inference:
+
+1. record ViewModel property snapshots through documented runtime APIs;
+2. preserve exact scenario step/time identity across backends;
+3. add narrower sub-frame checkpoints only when a failure requires them;
+4. identify competing observed/static writers before making stronger causal claims.
 
 No claim should become stronger merely because the heuristic became more complicated.
