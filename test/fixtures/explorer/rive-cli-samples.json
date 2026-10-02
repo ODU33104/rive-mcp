@@ -23,7 +23,7 @@
       ],
       "determinismSequence": [
         { "kind": "key", "key": "right" },
-        { "kind: "key", "key": "down" }
+        { "kind": "key", "key": "down" }
       ]
     }
   ]
