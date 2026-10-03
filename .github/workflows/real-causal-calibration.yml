@@ -11,6 +11,7 @@ on:
       - "src/causalAmbiguity.ts"
       - "test/causal/**"
       - "test/fixtures/real-world/**"
+      - "test/fixtures/causal/real-calibration-v1.json"
       - "scripts/fetch-real-world-fixtures.mjs"
       - "docs/REAL_CAUSAL_CALIBRATION.md"
       - ".github/workflows/real-causal-calibration.yml"
@@ -27,6 +28,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Public MCP tool count remains 32
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const source = readFileSync("src/index.ts", "utf8");
+          const toolCount = source.split("server.registerTool(").length - 1;
+          console.log(JSON.stringify({ toolCount }, null, 2));
+          assert.equal(toolCount, 32);
+          NODE
       - name: Existing causal stack
         run: |
           node test/staticProvenance.mjs
