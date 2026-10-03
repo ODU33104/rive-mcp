@@ -1,0 +1,291 @@
+{
+  "schemaVersion": "rive-mcp.real-world-corpus/v1",
+  "policy": {
+    "size": "3-6 qualified fixtures",
+    "vendoring": "Binary .riv assets are not vendored. Acquisition is pinned to immutable upstream commits and verified against upstream Git LFS SHA-256 object IDs.",
+    "oracleRule": "Source-defined expectations and locally observed baselines are separate fields. Observed output is never promoted to expected without upstream evidence."
+  },
+  "fixtures": [
+    {
+      "id": "official-flutter-controller-basic",
+      "name": "Rive Flutter controller basic",
+      "origin": "Rive official runtime repository test asset",
+      "source": {
+        "repository": "rive-app/rive-flutter",
+        "url": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rive_file_controller_test.riv",
+        "retrievalRef": "58fcac2171f655757907356a4bead2ebd008e4f7",
+        "path": "test/assets/rive_file_controller_test.riv",
+        "gitLfsPointerBlobSha1": "c4d26b64d6f7297ba5aec0f1a485b96695869639",
+        "acquisitionUrl": "https://media.githubusercontent.com/media/rive-app/rive-flutter/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rive_file_controller_test.riv"
+      },
+      "license": {
+        "spdx": "MIT",
+        "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/LICENSE",
+        "evidenceBlobSha1": "aec1d1737466b866004918c57baf671f491d29e7",
+        "evidencePath": "test/fixtures/real-world/licenses/rive-flutter-MIT.txt",
+        "note": "Repository-level MIT license at the pinned commit; no fixture-specific override was found."
+      },
+      "artifact": {
+        "sha256": "adf0dd0ab7dff250ba939403cba5b0bf6004a09c735b183fbc623213eb28249a",
+        "bytes": 693
+      },
+      "featureTags": [
+        "simple-animation",
+        "state-machine"
+      ],
+      "expectedSupportedActions": [
+        "advance"
+      ],
+      "knownUnsupportedFeatures": [
+        "No cross-runtime visual oracle is defined by the upstream test."
+      ],
+      "scenarioRefs": [
+        "test/fixtures/real-world/scenarios/controller-basic-advance.json"
+      ],
+      "expectedBehaviorStatus": "source-defined-expected",
+      "expectedAssertions": [
+        {
+          "id": "default-artboard",
+          "statement": "The default controller artboard is named Artboard1.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rive_widget_controller_test.dart"
+        },
+        {
+          "id": "default-state-machine",
+          "statement": "The default controller state machine is named State Machine 1.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rive_widget_controller_test.dart"
+        },
+        {
+          "id": "advance-active",
+          "statement": "Advancing an active controller by 1/60 second reports that it should continue.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rive_widget_controller_test.dart"
+        }
+      ],
+      "observedBaseline": {
+        "status": "captured-by-corpus-validation",
+        "oracle": false
+      }
+    },
+    {
+      "id": "official-flutter-rapid-pointer",
+      "name": "Rive Flutter rapid pointer events",
+      "origin": "Rive official runtime repository regression test asset",
+      "source": {
+        "repository": "rive-app/rive-flutter",
+        "url": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rapid_pointer_events.riv",
+        "retrievalRef": "58fcac2171f655757907356a4bead2ebd008e4f7",
+        "path": "test/assets/rapid_pointer_events.riv",
+        "gitLfsPointerBlobSha1": "faaee92929a0f35e9811072f5a987c67b07340c0",
+        "acquisitionUrl": "https://media.githubusercontent.com/media/rive-app/rive-flutter/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rapid_pointer_events.riv"
+      },
+      "license": {
+        "spdx": "MIT",
+        "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/LICENSE",
+        "evidenceBlobSha1": "aec1d1737466b866004918c57baf671f491d29e7",
+        "evidencePath": "test/fixtures/real-world/licenses/rive-flutter-MIT.txt",
+        "note": "Repository-level MIT license at the pinned commit; no fixture-specific override was found."
+      },
+      "artifact": {
+        "sha256": "e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079",
+        "bytes": 528
+      },
+      "featureTags": [
+        "pointer-interaction",
+        "state-machine-transition",
+        "view-model"
+      ],
+      "expectedSupportedActions": [
+        "pointer",
+        "advance"
+      ],
+      "knownUnsupportedFeatures": [
+        "Current PR #22-#24 observed causal trace path does not accept pointer actions.",
+        "A ViewModel data snapshot is required to assert hasReached directly."
+      ],
+      "scenarioRefs": [
+        "test/fixtures/real-world/scenarios/rapid-pointer-down-up.json"
+      ],
+      "expectedBehaviorStatus": "source-defined-expected",
+      "expectedAssertions": [
+        {
+          "id": "has-reached-property",
+          "statement": "The bound ViewModel exposes a boolean property named hasReached.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rapid_pointer_events_test.dart"
+        },
+        {
+          "id": "rapid-down-up-transition",
+          "statement": "Pointer down then pointer up at (250,250), followed by a 16 ms advance, drives hasReached from false to true.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rapid_pointer_events_test.dart"
+        }
+      ],
+      "observedBaseline": {
+        "status": "captured-by-corpus-validation",
+        "oracle": false
+      }
+    },
+    {
+      "id": "official-flutter-keyboard-focus",
+      "name": "Rive Flutter keyboard focus traversal",
+      "origin": "Rive official runtime repository widget test asset",
+      "source": {
+        "repository": "rive-app/rive-flutter",
+        "url": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/focus.riv",
+        "retrievalRef": "58fcac2171f655757907356a4bead2ebd008e4f7",
+        "path": "test/assets/focus.riv",
+        "gitLfsPointerBlobSha1": "16976dfed1c2374b5d3d6c70bcc8e4a3553a7bda",
+        "acquisitionUrl": "https://media.githubusercontent.com/media/rive-app/rive-flutter/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/focus.riv"
+      },
+      "license": {
+        "spdx": "MIT",
+        "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/LICENSE",
+        "evidenceBlobSha1": "aec1d1737466b866004918c57baf671f491d29e7",
+        "evidencePath": "test/fixtures/real-world/licenses/rive-flutter-MIT.txt",
+        "note": "Repository-level MIT license at the pinned commit; no fixture-specific override was found."
+      },
+      "artifact": {
+        "sha256": "bad28c4d10a44d83f8fdd3dd8754bbb4849897a2e2a45a7e397a70c9366ce89f",
+        "bytes": 468820
+      },
+      "featureTags": [
+        "keyboard-interaction",
+        "focus",
+        "state-machine"
+      ],
+      "expectedSupportedActions": [
+        "key"
+      ],
+      "knownUnsupportedFeatures": [
+        "The upstream expectation depends on host-widget focus traversal before and after the Rive graphic; the current four-step backend-neutral Scenario has no focus-request or external-widget step.",
+        "The reusable key scenario therefore exercises input shape but does not by itself prove the upstream traversal assertion."
+      ],
+      "scenarioRefs": [
+        "test/fixtures/real-world/scenarios/keyboard-focus-tabs.json"
+      ],
+      "expectedBehaviorStatus": "source-defined-expected-partially-executable",
+      "expectedAssertions": [
+        {
+          "id": "buttons-artboard",
+          "statement": "The Buttons artboard contains four focusable buttons in a row.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rive_widget_keyboard_focus_test.dart"
+        },
+        {
+          "id": "tab-traversal",
+          "statement": "With the preceding host widget focused, one Tab transfers focus into the Rive graphic; four more Tabs transfer focus to the following host widget.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rive_widget_keyboard_focus_test.dart"
+        }
+      ],
+      "observedBaseline": {
+        "status": "captured-by-corpus-validation",
+        "oracle": false
+      }
+    },
+    {
+      "id": "official-flutter-rewards-data-binding",
+      "name": "Rive Flutter rewards data binding example",
+      "origin": "Rive official runtime repository example asset",
+      "source": {
+        "repository": "rive-app/rive-flutter",
+        "url": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rewards.riv",
+        "retrievalRef": "58fcac2171f655757907356a4bead2ebd008e4f7",
+        "path": "test/assets/rewards.riv",
+        "gitLfsPointerBlobSha1": "691aa350256862e7a9afe5ce84e1255433854212",
+        "acquisitionUrl": "https://media.githubusercontent.com/media/rive-app/rive-flutter/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rewards.riv"
+      },
+      "license": {
+        "spdx": "MIT",
+        "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/LICENSE",
+        "evidenceBlobSha1": "aec1d1737466b866004918c57baf671f491d29e7",
+        "evidencePath": "test/fixtures/real-world/licenses/rive-flutter-MIT.txt",
+        "note": "Repository-level MIT license at the pinned commit; no fixture-specific override was found."
+      },
+      "artifact": {
+        "sha256": "9f2fe2408433754350c808c82772fc58fc67228cae02fc0b1d5123a6b80745e3",
+        "bytes": 216976
+      },
+      "featureTags": [
+        "view-model",
+        "data-binding",
+        "state-machine",
+        "animation"
+      ],
+      "expectedSupportedActions": [
+        "data",
+        "advance"
+      ],
+      "knownUnsupportedFeatures": [
+        "PR #23 runtime-property observation does not currently checkpoint ViewModel runtime values.",
+        "The upstream example defines writable ViewModel properties but does not define a cross-runtime pixel oracle for their visual effect."
+      ],
+      "scenarioRefs": [
+        "test/fixtures/real-world/scenarios/rewards-data-binding.json"
+      ],
+      "expectedBehaviorStatus": "source-defined-expected",
+      "expectedAssertions": [
+        {
+          "id": "data-binding-runtime-example",
+          "statement": "The example binds the default ViewModel instance and accesses nested number, color, string, enum, and trigger properties.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/example/lib/examples/databinding.dart"
+        },
+        {
+          "id": "energy-and-title-properties",
+          "statement": "Energy_Bar/Energy_Bar is a writable number property and Button/State_1 is a writable string property in the example.",
+          "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/example/lib/examples/databinding.dart"
+        }
+      ],
+      "observedBaseline": {
+        "status": "captured-by-corpus-validation",
+        "oracle": false
+      }
+    },
+    {
+      "id": "official-android-text-compat",
+      "name": "Rive Android text compatibility",
+      "origin": "Rive official runtime repository compatibility test asset",
+      "source": {
+        "repository": "rive-app/rive-android",
+        "url": "https://github.com/rive-app/rive-android/blob/78760ecc134f4c38ff397173970acfe127fe20d4/compatibilitytest/src/main/res/raw/text.riv",
+        "retrievalRef": "78760ecc134f4c38ff397173970acfe127fe20d4",
+        "path": "compatibilitytest/src/main/res/raw/text.riv",
+        "gitLfsPointerBlobSha1": "8a90db565737f483d801ff6440afe838f54b1439",
+        "acquisitionUrl": "https://media.githubusercontent.com/media/rive-app/rive-android/78760ecc134f4c38ff397173970acfe127fe20d4/compatibilitytest/src/main/res/raw/text.riv"
+      },
+      "license": {
+        "spdx": "MIT",
+        "evidenceUrl": "https://github.com/rive-app/rive-android/blob/78760ecc134f4c38ff397173970acfe127fe20d4/LICENSE",
+        "evidenceBlobSha1": "73f835ecbcd0c4b798e259d7ef17213b46b9fb6d",
+        "evidencePath": "test/fixtures/real-world/licenses/rive-android-MIT.txt",
+        "note": "Repository-level MIT license at the pinned commit; no fixture-specific override was found."
+      },
+      "artifact": {
+        "sha256": "9390a1448be9dd6b0eff0fd79093ad6270d9c2ebbb69e6b97e9b2fc4ccaad01f",
+        "bytes": 259725
+      },
+      "featureTags": [
+        "text",
+        "layout",
+        "renderer-compatibility"
+      ],
+      "expectedSupportedActions": [
+        "advance"
+      ],
+      "knownUnsupportedFeatures": [
+        "The upstream compatibility activity identifies this as its text fixture and renders it with two Android renderer types, but it does not define a pixel-perfect expected image in the cited source.",
+        "The corpus must therefore treat rendered output as observed-baseline only."
+      ],
+      "scenarioRefs": [
+        "test/fixtures/real-world/scenarios/text-static-render.json"
+      ],
+      "expectedBehaviorStatus": "observed-baseline-only",
+      "expectedAssertions": [
+        {
+          "id": "text-compatibility-purpose",
+          "statement": "The upstream compatibility app labels this resource as its text test and draws it at 860x540 with autoplay disabled under both canvas and Rive renderer setups.",
+          "evidenceUrl": "https://github.com/rive-app/rive-android/blob/78760ecc134f4c38ff397173970acfe127fe20d4/compatibilitytest/src/main/kotlin/app/rive/runtime/compatibilitytest/MainActivity.kt"
+        }
+      ],
+      "observedBaseline": {
+        "status": "captured-by-corpus-validation",
+        "oracle": false
+      }
+    }
+  ]
+}
