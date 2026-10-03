@@ -10,11 +10,12 @@ import { decodeDataBinding } from "../../dist/dataBinding.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const manifestPath = join(root, "test/fixtures/real-world/manifest.json");
+const baselinePath = join(root, "test/fixtures/real-world/observed-baseline.json");
 const assetDir = resolve(process.env.RIVE_REAL_WORLD_CORPUS || join(root, "test/tmp/real-world-corpus/assets"));
 const outPath = join(root, "test/tmp/real-world-corpus/validation.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+const observedBaseline = JSON.parse(readFileSync(baselinePath, "utf8"));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const stable = (value) => JSON.stringify(value, Object.keys(value ?? {}).sort());
 
 assert.equal(manifest.schemaVersion, "rive-mcp.real-world-corpus/v1");
 assert.ok(manifest.fixtures.length >= 3 && manifest.fixtures.length <= 6, "corpus must stay deliberately small");
@@ -100,8 +101,17 @@ function summarizeDataBinding(db) {
 const runtimePackage = JSON.parse(
   readFileSync(join(root, "node_modules/@rive-app/canvas-advanced/package.json"), "utf8")
 );
+assert.equal(observedBaseline.schemaVersion, "rive-mcp.real-world-corpus-observed-baseline/v1");
+assert.equal(observedBaseline.oracle, false, "observed baseline must never be promoted to a correctness oracle");
+assert.equal(
+  runtimePackage.version,
+  observedBaseline.riveRuntime.version,
+  "runtime version changed: refresh observed-only baseline deliberately after reviewing drift"
+);
+
 const host = new RiveHost(PAGE_SCRIPT);
 const observations = [];
+const observedProjection = [];
 try {
   for (const fixture of manifest.fixtures) {
     const path = join(assetDir, `${fixture.id}.riv`);
@@ -143,10 +153,45 @@ try {
       },
       expectedAssertionsWereUsedAsOracle: false,
     });
+
+    const names = (items) => [...new Set(items)].sort((a, b) => a.localeCompare(b));
+    const counts = parseA.objectTypeCounts;
+    observedProjection.push({
+      id: fixture.id,
+      artifactSha256: fixture.artifact.sha256,
+      artifactBytes: bytes.length,
+      artboardCount: inspectA.artboardCount,
+      artboardNames: names(inspectA.artboards.map((artboard) => artboard.name)),
+      animationNames: names(inspectA.artboards.flatMap((artboard) => artboard.animations.map((animation) => animation.name))),
+      stateMachineNames: names(inspectA.artboards.flatMap((artboard) => artboard.stateMachines.map((machine) => machine.name))),
+      keyObjectTypeCounts: {
+        Artboard: counts.Artboard ?? 0,
+        LinearAnimation: counts.LinearAnimation ?? 0,
+        StateMachine: counts.StateMachine ?? 0,
+        StateTransition: counts.StateTransition ?? 0,
+        Text: counts.Text ?? 0,
+        TextValueRun: counts.TextValueRun ?? 0,
+        ViewModel: counts.ViewModel ?? 0,
+        DataBindContext: counts.DataBindContext ?? 0,
+        ListenerViewModelChange: counts.ListenerViewModelChange ?? 0,
+      },
+      dataBinding: parseA.dataBinding
+        ? {
+            viewModels: parseA.dataBinding.viewModels,
+            dataBindCount: parseA.dataBinding.dataBindCount,
+          }
+        : null,
+    });
   }
 } finally {
   await host.close();
 }
+
+assert.deepEqual(
+  observedProjection,
+  observedBaseline.fixtures,
+  "observed-only baseline drifted; inspect the change and refresh the baseline only if the new observation is intentional"
+);
 
 mkdirSync(dirname(outPath), { recursive: true });
 const result = {
@@ -157,6 +202,11 @@ const result = {
     version: runtimePackage.version,
   },
   fixtureCount: observations.length,
+  observedBaseline: {
+    path: "test/fixtures/real-world/observed-baseline.json",
+    oracle: false,
+    matched: true,
+  },
   observations,
 };
 writeFileSync(outPath, JSON.stringify(result, null, 2) + "\n");
