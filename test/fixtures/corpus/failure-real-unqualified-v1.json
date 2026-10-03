@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "failureId": "fail_410eb847eb0a3a31b2d14ac8",
+  "origin": "real",
+  "artifactHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "tool": {
+    "name": "rive-mcp-explorer",
+    "version": "0.6.1"
+  },
+  "runtime": {
+    "name": "rive-cli",
+    "version": "1.3.0"
+  },
+  "scenario": {
+    "strategy": "bounded-bfs",
+    "maxDepth": 3,
+    "maxSequences": 32
+  },
+  "inputSequence": [
+    {
+      "kind": "pointer",
+      "phase": "click",
+      "x": 12,
+      "y": 12
+    }
+  ],
+  "minimalReproduction": {
+    "sequence": [
+      {
+        "kind": "pointer",
+        "phase": "click",
+        "x": 12,
+        "y": 12
+      }
+    ],
+    "minimality": "locally-minimized",
+    "reproductionAttempts": 5,
+    "reproductionSuccesses": 5,
+    "reproductionSuccessRate": 1
+  },
+  "expectedInvariant": {
+    "id": "fixture-does-not-error",
+    "kind": "predicate"
+  },
+  "observedResult": {
+    "stepIndex": 0,
+    "message": "fixture failure requiring provenance qualification"
+  },
+  "discoveredAt": "2026-10-03T00:01:00.000Z"
+}
