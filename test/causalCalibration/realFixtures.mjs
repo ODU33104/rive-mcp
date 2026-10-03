@@ -86,6 +86,16 @@ function staticSummary(graph) {
   );
   return {
     propertyNodes: propertyNodes.length,
+    propertyDetails: propertyNodes.map((node) => ({
+      id: node.id,
+      artboard: node.artboard ?? null,
+      label: node.label,
+      targetType: node.metadata.targetType ?? null,
+      targetName: node.metadata.targetName ?? null,
+      propertyName: node.metadata.propertyName ?? null,
+      propertyKey: node.metadata.propertyKey ?? null,
+      writerPaths: explainPotentialWriters(graph, node.id),
+    })),
     writerPaths: writerPaths.length,
     writerKinds: {
       animation: graph.nodes.filter((node) => node.kind === "animation").length,
