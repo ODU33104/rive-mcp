@@ -82,6 +82,12 @@ const visualA = await backend.execute(project, visualScenario);
 const visualB = await backend.execute(project, visualScenario);
 assert.equal(visualA.ok, true, JSON.stringify(visualA.diagnostics));
 assert.equal(visualB.ok, true, JSON.stringify(visualB.diagnostics));
+const visualAssertions = [{
+  name: "repeat screenshot hash is stable",
+  pass: visualA.artifacts[0]?.sha256 === visualB.artifacts[0]?.sha256,
+  expected: visualA.artifacts[0]?.sha256,
+  actual: visualB.artifacts[0]?.sha256,
+}];
 const visualManifestA = createEvidenceManifest({
   project,
   backend: identity,
@@ -89,12 +95,7 @@ const visualManifestA = createEvidenceManifest({
   verify: verifyVisual,
   inspect: inspectVisual,
   execution: visualA,
-  assertions: [{
-    name: "repeat screenshot hash is stable",
-    pass: visualA.artifacts[0]?.sha256 === visualB.artifacts[0]?.sha256,
-    expected: visualA.artifacts[0]?.sha256,
-    actual: visualB.artifacts[0]?.sha256,
-  }],
+  assertions: visualAssertions,
 });
 const visualManifestB = createEvidenceManifest({
   project,
@@ -103,10 +104,7 @@ const visualManifestB = createEvidenceManifest({
   verify: verifyVisual,
   inspect: inspectVisual,
   execution: visualB,
-  assertions: [{
-    name: "repeat screenshot hash is stable",
-    pass: visualA.artifacts[0]?.sha256 === visualB.artifacts[0]?.sha256,
-  }],
+  assertions: visualAssertions,
 });
 const visualEvidence = store.put(visualManifestA);
 store.put(visualManifestB);
