@@ -34,9 +34,10 @@ jobs:
           import assert from "node:assert/strict";
           import { readFileSync } from "node:fs";
           const source = readFileSync("src/index.ts", "utf8");
-          const names = [...source.matchAll(/server\\.registerTool\\(\\s*\\n?\\s*"([^"]+)"/g)].map((match) => match[1]);
-          console.log(JSON.stringify({ toolCount: names.length, names }, null, 2));
-          assert.equal(names.length, 32, "clean verification stack must preserve current main public MCP tool count");
+          const marker = "server.registerTool(";
+          const toolCount = source.split(marker).length - 1;
+          console.log(JSON.stringify({ toolCount }, null, 2));
+          assert.equal(toolCount, 32, "clean verification stack must preserve current main public MCP tool count");
           NODE
 
       - name: Install current official Rive CLI
