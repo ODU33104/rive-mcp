@@ -1,0 +1,42 @@
+name: real-causal-calibration
+
+on:
+  pull_request:
+    paths:
+      - "test/causalCalibration/**"
+      - "test/fixtures/causal-calibration/**"
+      - "docs/REAL_WORLD_CAUSAL_CALIBRATION.md"
+      - ".github/workflows/real-causal-calibration.yml"
+  push:
+    branches:
+      - calibration/real-world-causal-debugger
+
+jobs:
+  calibration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Acquire exact qualified real fixtures
+        run: node scripts/fetch-real-world-fixtures.mjs
+
+      - name: Measure existing causal stack on real fixtures
+        run: node test/causalCalibration/realFixtures.mjs
+
+      - name: Public MCP entrypoint unchanged
+        run: |
+          set -euo pipefail
+          git diff --exit-code origin/integration/rehearse-independent-verification-stack...HEAD -- src/index.ts
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-causal-calibration
+          path: test/tmp/causal-calibration
+          if-no-files-found: warn
