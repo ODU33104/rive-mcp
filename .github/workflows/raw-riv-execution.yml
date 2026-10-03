@@ -42,6 +42,19 @@ jobs:
           RIVE_CLI_BIN: /home/runner/.rive/bin/rive
         run: node test/execution/rawRivCliCapability.mjs
 
+      - name: Execute exact raw .riv through minimal runtime bridge
+        run: node test/execution/rawRivRuntimeBridge.mjs
+
+      - name: Public MCP entrypoint unchanged
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BASE_SHA" HEAD -- src/index.ts | grep -q .; then
+            echo "src/index.ts changed; execution compatibility work must not add public MCP tools."
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
