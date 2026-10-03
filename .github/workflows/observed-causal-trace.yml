@@ -1,0 +1,27 @@
+name: Observed Causal Trace
+
+on:
+  pull_request:
+    paths:
+      - "src/observedTrace.ts"
+      - "src/staticProvenance.ts"
+      - "test/observedTrace.mjs"
+      - "docs/observed-causal-trace.md"
+      - ".github/workflows/observed-causal-trace.yml"
+  push:
+    branches:
+      - "feat/observed-causal-trace"
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/staticProvenance.mjs
+      - run: node test/observedTrace.mjs

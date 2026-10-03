@@ -221,6 +221,83 @@ function makeScene(file, opts) {
   return { ab, sm, anim, width, height, canvas, step, seek, draw, capture, cleanup };
 }
 
+function snapshotWatchedProperties(ab, specs) {
+  const values = [];
+  const warnings = [];
+  for (const spec of specs || []) {
+    if (!spec || typeof spec.target !== "string" || typeof spec.property !== "string") {
+      warnings.push("Ignored malformed watchProperties entry");
+      continue;
+    }
+
+    const target = spec.target;
+    const property = spec.property;
+    try {
+      let value;
+      if (property === "x" || property === "y") {
+        const node = ab.node(target);
+        if (!node) {
+          warnings.push("Node '" + target + "' not found for property '" + property + "'");
+          continue;
+        }
+        value = node[property];
+      } else if (
+        property === "rotation" ||
+        property === "scaleX" ||
+        property === "scaleY"
+      ) {
+        const component = ab.transformComponent(target);
+        if (!component) {
+          warnings.push(
+            "TransformComponent '" + target + "' not found for property '" + property + "'"
+          );
+          continue;
+        }
+        value = component[property];
+      } else if (property === "text") {
+        const run = ab.textRun(target);
+        if (!run) {
+          warnings.push("TextValueRun '" + target + "' not found");
+          continue;
+        }
+        value = run.text;
+      } else {
+        warnings.push(
+          "Unsupported watched property '" + property +
+          "' for target '" + target +
+          "'; supported: x, y, rotation, scaleX, scaleY, text"
+        );
+        continue;
+      }
+
+      if (typeof value !== "number" && typeof value !== "string") {
+        warnings.push(
+          "Observed unsupported value type for '" + target + "." + property + "'"
+        );
+        continue;
+      }
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        warnings.push(
+          "Observed non-finite number for '" + target + "." + property + "'"
+        );
+        continue;
+      }
+
+      values.push({ target, property, value });
+    } catch (error) {
+      warnings.push(
+        "Failed to observe '" + target + "." + property + "': " +
+        (error && error.message ? error.message : String(error))
+      );
+    }
+  }
+
+  values.sort((a, b) =>
+    a.target.localeCompare(b.target) || a.property.localeCompare(b.property)
+  );
+  return { values, warnings: [...new Set(warnings)].sort() };
+}
+
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1856,7 +1933,14 @@ window.riveApi = {
         const frames = [];
         // 初期化: 0秒 advance で初期状態を確定
         const initial = scene.step(0);
-        report.push({ step: "init", statesChanged: initial, inputs: currentInputs(scene.sm) });
+        const initialObserved = snapshotWatchedProperties(scene.ab, opts.watchProperties);
+        report.push({
+          step: "init",
+          statesChanged: initial,
+          inputs: currentInputs(scene.sm),
+          properties: initialObserved.values,
+          propertyWarnings: initialObserved.warnings,
+        });
         for (let i = 0; i < (opts.steps || []).length; i++) {
           const s = opts.steps[i];
           const entry = { step: i };
@@ -1867,6 +1951,9 @@ window.riveApi = {
           entry.advancedSeconds = s.advance || 0;
           entry.statesChanged = changed;
           entry.inputs = currentInputs(scene.sm);
+          const observed = snapshotWatchedProperties(scene.ab, opts.watchProperties);
+          entry.properties = observed.values;
+          entry.propertyWarnings = observed.warnings;
           if (s.capture) {
             scene.draw();
             entry.frameIndex = frames.length;
