@@ -1,0 +1,50 @@
+name: backend-evidence-ci
+
+on:
+  pull_request:
+    paths:
+      - "src/backends/**"
+      - "src/execution/**"
+      - "src/evidence/**"
+      - "test/backends/**"
+      - "test/benchmark/**"
+      - "docs/benchmarks/**"
+      - ".github/workflows/backend-evidence-ci.yml"
+
+jobs:
+  backend-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Native backend real-fixture test
+        run: node test/backends/nativeBackend.mjs
+
+      - name: Install current official Rive CLI
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+
+      - name: Official CLI backend test
+        run: node test/backends/riveCliBackend.mjs
+
+      - name: Reality pilot
+        run: node test/benchmark/realityPilot.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-evidence-pilot
+          path: |
+            test/tmp/reality-pilot
+          if-no-files-found: warn
