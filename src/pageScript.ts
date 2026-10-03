@@ -1919,19 +1919,8 @@ window.riveApi = {
             } else if (s.action === "up") {
               scene.sm.pointerUp(s.x, s.y, 0);
               advancePointerBoundary();
-            } else if (s.action === "move") {
-              scene.sm.pointerMove(s.x, s.y, 0);
-              collect();
-            } else if (s.action === "exit") {
-              scene.sm.pointerExit(s.x, s.y, 0);
-              collect();
-            } else if (s.action === "click") {
-              scene.sm.pointerDown(s.x, s.y, 0);
-              advancePointerBoundary();
-              scene.sm.pointerUp(s.x, s.y, 0);
-              advancePointerBoundary();
             } else {
-              throw new Error("Unsupported pointer action: " + s.action);
+              throw new Error("Unsupported pointer action in minimal raw runtime bridge: " + s.action);
             }
             entry.statesChanged = changed;
           } else if (s.type === "advance") {

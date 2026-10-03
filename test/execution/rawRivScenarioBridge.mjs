@@ -117,19 +117,28 @@ const unsupportedKeyScenario = {
   steps: [{ type: "key", key: "tab" }],
   capture: { screenshot: false },
 };
+const unsupportedPointerMoveScenario = {
+  id: "raw-pointer-move-remains-unsupported",
+  steps: [{ type: "pointer", action: "move", x: 250, y: 250 }],
+  capture: { screenshot: false },
+};
 const unsupportedBackend = new NativeBackend({ outputDir: join(outDir, "unsupported") });
 let unsupportedData;
 let unsupportedKey;
+let unsupportedPointerMove;
 try {
   unsupportedData = await unsupportedBackend.execute({ kind: "riv", path: rivPath }, unsupportedDataScenario);
   unsupportedKey = await unsupportedBackend.execute({ kind: "riv", path: rivPath }, unsupportedKeyScenario);
+  unsupportedPointerMove = await unsupportedBackend.execute({ kind: "riv", path: rivPath }, unsupportedPointerMoveScenario);
 } finally {
   await unsupportedBackend.close();
 }
 assert.equal(unsupportedData.ok, false);
 assert.equal(unsupportedKey.ok, false);
+assert.equal(unsupportedPointerMove.ok, false);
 assert.ok(unsupportedData.diagnostics.some((d) => d.code === "UNSUPPORTED_SCENARIO_CAPABILITY"));
 assert.ok(unsupportedKey.diagnostics.some((d) => d.code === "UNSUPPORTED_SCENARIO_CAPABILITY"));
+assert.ok(unsupportedPointerMove.diagnostics.some((d) => d.code === "UNSUPPORTED_SCENARIO_CAPABILITY"));
 
 const result = {
   schemaVersion: "rive-mcp.raw-riv-scenario-bridge/v1",
@@ -182,11 +191,11 @@ const result = {
     },
   },
   supportedActions: {
-    nativeRawRiv: ["pointer:down", "pointer:up", "pointer:move", "pointer:exit", "pointer:click", "advance"],
+    nativeRawRiv: ["pointer:down", "pointer:up", "advance"],
     officialCliRawRiv: [],
   },
   unsupportedActions: {
-    nativeRawRiv: ["data", "key"],
+    nativeRawRiv: ["data", "key", "pointer:move", "pointer:exit", "pointer:click"],
     officialCliRawRiv: ["pointer", "data", "key", "advance"],
   },
   exactSameBytes: {

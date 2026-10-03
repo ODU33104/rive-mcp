@@ -167,7 +167,7 @@ export class NativeBackend implements RiveExecutionBackend {
         unsupported.push(message);
         eventSequence.push({ index, step, status: "unsupported", detail: message });
       } else if (step.type === "pointer") {
-        if (!["down", "up", "move", "exit", "click"].includes(step.action)) {
+        if (!["down", "up"].includes(step.action)) {
           const message = `pointer action "${step.action}" is not supported by the raw runtime bridge`;
           unsupported.push(message);
           eventSequence.push({ index, step, status: "unsupported", detail: message });
