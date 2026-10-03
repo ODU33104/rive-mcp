@@ -72,6 +72,36 @@ function watchSpecsFor(graph, artboard) {
   return specs;
 }
 
+function propertyObservationGaps(graph, artboard, watchProperties) {
+  const watched = new Set(
+    watchProperties.map((item) => item.target + "\u0000" + item.property)
+  );
+  return graph.nodes
+    .filter((node) => node.kind === "property" && node.artboard === artboard)
+    .filter((node) => {
+      const target = node.metadata.targetName;
+      const property = node.metadata.propertyName;
+      return !(
+        typeof target === "string" &&
+        typeof property === "string" &&
+        watched.has(target + "\u0000" + property)
+      );
+    })
+    .map((node) => ({
+      propertyNodeId: node.id,
+      label: node.label,
+      targetType: node.metadata.targetType ?? null,
+      targetName: node.metadata.targetName ?? null,
+      propertyName: node.metadata.propertyName ?? null,
+      reason:
+        node.metadata.targetName == null
+          ? "runtime watcher requires a stable named target; static provenance currently has only index-fallback identity"
+          : !WATCHABLE_PROPERTIES.has(node.metadata.propertyName)
+            ? "runtime watcher does not support this property kind"
+            : "runtime watcher could not establish a supported target/property identity",
+    }));
+}
+
 function staticSummary(graph) {
   const propertyNodes = graph.nodes.filter((node) => node.kind === "property");
   const writerPaths = propertyNodes.flatMap((node) =>
@@ -263,6 +293,20 @@ async function measureFixture(fixture) {
     }
 
     const watchProperties = watchSpecsFor(graph, artboard.name);
+    const observationGaps = propertyObservationGaps(
+      graph,
+      artboard.name,
+      watchProperties
+    );
+    const observationGapMessages = observationGaps.map(
+      (gap) =>
+        "property observation unsupported for " +
+        gap.label +
+        " (" +
+        gap.propertyNodeId +
+        "): " +
+        gap.reason
+    );
     const play = await host.playStateMachine(bytes, {
       artboard: artboard.name,
       stateMachine: stateMachine.name,
@@ -281,11 +325,16 @@ async function measureFixture(fixture) {
 
     return {
       ...base,
+      unsupportedObservationMechanisms: sortedUnique([
+        ...base.unsupportedObservationMechanisms,
+        ...observationGapMessages,
+      ]),
       executionStatus: "executed",
       runtime: {
         artboard: artboard.name,
         stateMachine: stateMachine.name,
         watchProperties,
+        propertyObservationGaps: observationGaps,
         report: play.report,
       },
       observation: {
@@ -337,6 +386,36 @@ for (const id of fixtureIds) {
 
 assert.deepEqual(second, first, "real causal calibration is not deterministic");
 
+function calibrationProjection(result) {
+  return {
+    schemaVersion: "rive-mcp.real-causal-calibration-expectation/v1",
+    fixtures: result.fixtures.map((item) => ({
+      fixture: item.fixture,
+      artifactSha256: item.artifactSha256,
+      scenarioId: item.scenarioId,
+      static: {
+        propertyNodes: item.static.propertyNodes,
+        writerPaths: item.static.writerPaths,
+        warningCount: item.static.warnings.length,
+      },
+      executionStatus: item.executionStatus,
+      unsupportedObservationMechanisms: item.unsupportedObservationMechanisms,
+      runtime:
+        item.executionStatus === "executed"
+          ? {
+              artboard: item.runtime.artboard,
+              stateMachine: item.runtime.stateMachine,
+              watchProperties: item.runtime.watchProperties,
+              propertyObservationGaps: item.runtime.propertyObservationGaps,
+            }
+          : null,
+      observedStates:
+        item.observation?.observedStates.map((event) => event.stateName) ?? [],
+      metrics: item.metrics,
+    })),
+  };
+}
+
 const result = {
   schemaVersion: "rive-mcp.real-causal-calibration/v1",
   base: {
@@ -351,9 +430,27 @@ const result = {
   fixtures: first,
 };
 
+const projection = calibrationProjection(result);
+const expectationPath = join(
+  root,
+  "test/fixtures/causal-calibration/real-fixtures-v1.json"
+);
+if (process.env.CAUSAL_CALIBRATION_ACCEPT !== "1") {
+  const expected = JSON.parse(readFileSync(expectationPath, "utf8"));
+  assert.deepEqual(
+    projection,
+    expected,
+    "real causal calibration drifted from the permanent real-fixture expectation"
+  );
+}
+
 writeFileSync(
   join(outDir, "baseline.json"),
   JSON.stringify(result, null, 2) + "\n"
+);
+writeFileSync(
+  join(outDir, "projection.json"),
+  JSON.stringify(projection, null, 2) + "\n"
 );
 
 console.log(JSON.stringify(result, null, 2));
