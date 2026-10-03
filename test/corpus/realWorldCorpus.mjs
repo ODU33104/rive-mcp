@@ -154,7 +154,7 @@ try {
       expectedAssertionsWereUsedAsOracle: false,
     });
 
-    const names = (items) => [...new Set(items)].sort((a, b) => a.localeCompare(b));
+    const names = (items) => [...new Set(items)].sort();
     const counts = parseA.objectTypeCounts;
     observedProjection.push({
       id: fixture.id,
