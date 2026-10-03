@@ -188,3 +188,42 @@ It is:
 Only after that exists can the same real execution establish whether a runtime ViewModel change is structurally attributable, competing, or genuinely unattributed.
 
 Until then, adding script/listener/BlendState writers or stronger causal wording would increase apparent coverage without evidence.
+
+## Issue #48 — clean-restacked real ViewModel observation
+
+The baseline sections above intentionally describe the original #35/#41 calibration surface, where the rapid-pointer dynamic observation path remained unsupported. The clean release train now already contains the raw `.riv` execution semantics through #46 and the causal calibration semantics through #47. Issue #48 adds only the independent ViewModel observation layer from #45; it does not import #38/#40 rehearsal ancestry.
+
+For the exact `official-flutter-rapid-pointer` artifact:
+
+- artifact size: 528 bytes;
+- artifact SHA-256: `e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079`;
+- Scenario: `rapid-pointer-down-up`;
+- Scenario SHA-256: `sha256:020b7ca8ea60ed285d503271263671b8e96100f291e4a396d68ffe0655d35e56`.
+
+The source-defined expectation remains an initial/final statement for the complete fixed Scenario:
+
+- initial `hasReached=false`;
+- after the full Scenario, final `hasReached=true`.
+
+The runtime-observed checkpoints are retained separately:
+
+- initial: `false`;
+- pointer down: `true`;
+- pointer up: `true`;
+- advance 16 ms: `true`;
+- final: `true`.
+
+The pointer-down timing is observed runtime evidence. It does not rewrite the upstream expectation into a claim that the transition should occur at pointer down.
+
+The observation adapter in `src/causal/viewModelObservation.ts` only normalizes scalar ViewModel snapshots already present in `NativeBackend.execute` results. Runtime observation is not causal attribution.
+
+For observed `hasReached`, Static Provenance still exposes the relevant Data Binding sources only as opaque numeric `sourcePathIds`. No numeric ID sequence is promoted to a semantic ViewModel path without explicit metadata. Therefore:
+
+- actual runtime change observed: yes;
+- semantically resolved static paths for `hasReached`: 0;
+- observed-supported static paths: 0;
+- competing matched paths: 0;
+- classification: **unresolved**.
+
+The permanent projection `test/fixtures/causal/rapid-pointer-viewmodel-v1.json` is marked `oracle:false`. Expected and observed values remain distinct, unsupported/unmeasured values are never rewritten as zero, static possibility is not observed support, and opaque identities remain unresolved.
+
