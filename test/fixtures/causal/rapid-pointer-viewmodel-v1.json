@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "rive-mcp.real-viewmodel-causal-observation-expectation/v1",
+  "oracle": false,
+  "fixture": {
+    "id": "official-flutter-rapid-pointer",
+    "artifactSha256": "e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079",
+    "bytes": 528,
+    "scenarioId": "rapid-pointer-down-up",
+    "scenarioHash": "sha256:020b7ca8ea60ed285d503271263671b8e96100f291e4a396d68ffe0655d35e56"
+  },
+  "backend": {
+    "id": "rive-mcp-native",
+    "version": "0.6.1",
+    "runtimeVersion": "2.38.5"
+  },
+  "sourceDefinedExpected": {
+    "propertyPath": "hasReached",
+    "initial": false,
+    "final": true
+  },
+  "runtimeObserved": {
+    "propertyPath": "hasReached",
+    "initial": false,
+    "final": true,
+    "checkpoints": [
+      {
+        "id": "initial",
+        "phase": "initial",
+        "stepIndex": null,
+        "stepType": null,
+        "value": false
+      },
+      {
+        "id": "step:0",
+        "phase": "step",
+        "stepIndex": 0,
+        "stepType": "pointer",
+        "value": true
+      },
+      {
+        "id": "step:1",
+        "phase": "step",
+        "stepIndex": 1,
+        "stepType": "pointer",
+        "value": true
+      },
+      {
+        "id": "step:2",
+        "phase": "step",
+        "stepIndex": 2,
+        "stepType": "advance",
+        "value": true
+      },
+      {
+        "id": "final",
+        "phase": "final",
+        "stepIndex": null,
+        "stepType": null,
+        "value": true
+      }
+    ],
+    "changes": [
+      {
+        "path": "hasReached",
+        "before": false,
+        "after": true,
+        "fromCheckpoint": "initial",
+        "toCheckpoint": "step:0"
+      }
+    ]
+  },
+  "connection": {
+    "classification": "unresolved",
+    "staticPossiblePathCount": 0,
+    "observedSupportedPathCount": 0,
+    "competingPathCount": 0,
+    "semanticallyResolvedBindingSourceCount": 0,
+    "opaqueBindingSources": [
+      {
+        "id": "binding-source:o30",
+        "sourcePathIds": [0, 1]
+      },
+      {
+        "id": "binding-source:o38",
+        "sourcePathIds": [0, 0]
+      },
+      {
+        "id": "binding-source:o42",
+        "sourcePathIds": [0, 1]
+      },
+      {
+        "id": "binding-source:o46",
+        "sourcePathIds": [0, 1]
+      }
+    ],
+    "otherStaticScenePropertyWriterPathCount": 3
+  },
+  "deterministic": {
+    "observation": true,
+    "screenshot": true,
+    "dataSnapshot": true
+  },
+  "evidence": {
+    "screenshotSha256": "sha256:2c27fad945da1299da7dfb53d45fcb53030f367e51e322dac1a69d1aa15e8b44",
+    "dataSnapshotSha256": "sha256:ac48a255a442baaf25072fa3371f6a4b9a9f3dbd68dcefaed36cd66611cd1a43"
+  }
+}
