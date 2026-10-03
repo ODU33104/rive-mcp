@@ -12,7 +12,7 @@ on:
       - "src/causal/**"
       - "test/causal/**"
       - "test/fixtures/real-world/**"
-      - "test/fixtures/causal/real-calibration-v1.json"
+      - "test/fixtures/causal/**"
       - "scripts/fetch-real-world-fixtures.mjs"
       - "docs/REAL_CAUSAL_CALIBRATION.md"
       - ".github/workflows/real-causal-calibration.yml"
