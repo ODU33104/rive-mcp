@@ -1836,6 +1836,113 @@ window.riveApi = {
     );
   },
 
+  // backend-neutral Scenario のうち、raw .riv の official runtime が
+  // 直接・明示的に扱える最小 surface を実行する。
+  // 現在は pointer + advance と、既定 ViewModel の scalar snapshot のみ。
+  // data/key は backend 側で unsupported として残す。
+  async executeScenario(b64, opts) {
+    return withFile(b64, (file) => {
+      const scene = makeScene(file, {
+        artboard: opts.artboard,
+        stateMachine: opts.stateMachine,
+        width: opts.width,
+        height: opts.height,
+        background: opts.background,
+      });
+      if (!scene.sm) {
+        scene.cleanup();
+        throw new Error("No state machine available on this artboard");
+      }
+
+      let viewModel = null;
+      let viewModelInstance = null;
+
+      const snapshotViewModel = () => {
+        if (!viewModelInstance || typeof viewModelInstance.getProperties !== "function") return null;
+        const out = {};
+        for (const property of viewModelInstance.getProperties()) {
+          try {
+            let handle = null;
+            if (property.type === "boolean") handle = viewModelInstance.boolean(property.name);
+            else if (property.type === "number" || property.type === "integer") handle = viewModelInstance.number(property.name);
+            else if (property.type === "string") handle = viewModelInstance.string(property.name);
+            else if (property.type === "enumType") handle = viewModelInstance.enum(property.name);
+            if (handle) out[property.name] = handle.value;
+          } catch {
+            // Unsupported/non-scalar property types remain absent rather than guessed.
+          }
+        }
+        return out;
+      };
+
+      try {
+        if (typeof file.defaultArtboardViewModel === "function") {
+          viewModel = file.defaultArtboardViewModel(scene.ab);
+          if (viewModel && typeof viewModel.defaultInstance === "function") {
+            viewModelInstance = viewModel.defaultInstance();
+            if (viewModelInstance) {
+              if (typeof scene.sm.setViewModelInstance === "function" && typeof scene.sm.bind === "function") {
+                scene.sm.setViewModelInstance(viewModelInstance);
+                scene.sm.bind();
+              } else if (typeof scene.sm.bindViewModelInstance === "function") {
+                scene.sm.bindViewModelInstance(viewModelInstance);
+              }
+            }
+          }
+        }
+
+        const initialStates = scene.step(0);
+        const initialData = snapshotViewModel();
+        const report = [];
+        const steps = opts.steps || [];
+
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          const entry = { index: i, type: s.type, statesChanged: [] };
+          if (s.type === "pointer") {
+            if (s.action === "down") scene.sm.pointerDown(s.x, s.y, 0);
+            else if (s.action === "up") scene.sm.pointerUp(s.x, s.y, 0);
+            else if (s.action === "move") scene.sm.pointerMove(s.x, s.y, 0);
+            else if (s.action === "exit") scene.sm.pointerExit(s.x, s.y, 0);
+            else if (s.action === "click") {
+              scene.sm.pointerDown(s.x, s.y, 0);
+              scene.sm.pointerUp(s.x, s.y, 0);
+            } else {
+              throw new Error("Unsupported pointer action: " + s.action);
+            }
+            entry.statesChanged = collectStateChanges(scene.sm);
+          } else if (s.type === "advance") {
+            entry.statesChanged = scene.seek(s.ms / 1000);
+          } else {
+            throw new Error("Unsupported raw runtime Scenario step: " + s.type);
+          }
+          entry.data = snapshotViewModel();
+          report.push(entry);
+        }
+
+        let screenshot = null;
+        if (opts.captureScreenshot !== false) {
+          scene.draw();
+          screenshot = scene.capture("png");
+        }
+
+        return {
+          width: scene.width,
+          height: scene.height,
+          initial: { statesChanged: initialStates, data: initialData },
+          steps: report,
+          data: snapshotViewModel(),
+          screenshot,
+        };
+      } finally {
+        if (viewModelInstance && typeof viewModelInstance.delete === "function") {
+          viewModelInstance.delete();
+        }
+        scene.cleanup();
+      }
+    });
+  },
+
   // State Machine を対話的に実行する。
   // steps: [{input?, value?, advance?, capture?}]
   async playStateMachine(b64, opts) {
