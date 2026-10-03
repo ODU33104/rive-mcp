@@ -19,6 +19,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run build
       - name: Install current Official Rive CLI
         run: |
           set -euo pipefail
@@ -29,9 +30,13 @@ jobs:
           "$HOME/.rive/bin/rive" --version
       - name: Probe raw .riv execution capabilities
         run: node test/execution/rawRivCliCapability.mjs
+      - name: Run exact raw .riv Scenario bridge
+        run: node test/execution/rawRivScenarioBridge.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: raw-riv-cli-capability
-          path: test/tmp/raw-riv-cli-capability
+          name: raw-riv-execution-compat
+          path: |
+            test/tmp/raw-riv-cli-capability
+            test/tmp/raw-riv-execution-compat
           if-no-files-found: warn
