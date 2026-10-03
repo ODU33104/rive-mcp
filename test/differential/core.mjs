@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { compareObservations } from "../../dist/differential/compare.js";
 import { normalizeObservation } from "../../dist/differential/normalize.js";
+import { encodePng } from "../../dist/critique.js";
+
+const workspace = mkdtempSync(join(tmpdir(), "rive-differential-core-"));
+const samePixels = new Uint8Array([
+  255, 0, 0, 255,
+  0, 255, 0, 255,
+  0, 0, 255, 255,
+  255, 255, 255, 255,
+]);
+const differentPixels = samePixels.slice();
+differentPixels[0] = 254;
+const screenshotA = join(workspace, "same-a.png");
+const screenshotB = join(workspace, "same-b.png");
+const screenshotDifferent = join(workspace, "different.png");
+const encodedSame = Buffer.from(encodePng(samePixels, 2, 2));
+writeFileSync(screenshotA, encodedSame);
+writeFileSync(screenshotB, Buffer.concat([encodedSame, Buffer.from("evidence-only-trailer")]));
+writeFileSync(screenshotDifferent, Buffer.from(encodePng(differentPixels, 2, 2)));
 
 const scenario = {
   id: "core-fixture",
@@ -11,7 +32,7 @@ const scenario = {
 function input({
   backendId,
   screenshotHash = "sha256:same",
-  screenshotPath = "/tmp/a.png",
+  screenshotPath = screenshotA,
   elapsedMs = 1,
   stepStatus = "applied",
   unsupported = [],
@@ -75,19 +96,30 @@ function input({
 
 const left = normalizeObservation(input({
   backendId: "left",
-  screenshotPath: "/tmp/run-1.png",
+  screenshotPath: screenshotA,
+  screenshotHash: "sha256:encoded-a",
   elapsedMs: 4,
 }));
 const leftRepeat = normalizeObservation(input({
   backendId: "left",
-  screenshotPath: "/another/path/run-2.png",
+  screenshotPath: screenshotB,
+  screenshotHash: "sha256:encoded-b",
   elapsedMs: 999,
 }));
 assert.equal(left.deterministicKey, leftRepeat.deterministicKey, "paths/timing must not affect observation identity");
 
-const right = normalizeObservation(input({ backendId: "right" }));
+const right = normalizeObservation(input({
+  backendId: "right",
+  screenshotPath: screenshotB,
+  screenshotHash: "sha256:encoded-b",
+}));
 const equivalent = compareObservations(left, right);
 assert.equal(equivalent.classification, "equivalent");
+assert.equal(
+  left.checkpoints.find((item) => item.id === "capture:screenshot")?.valueHash,
+  right.checkpoints.find((item) => item.id === "capture:screenshot")?.valueHash,
+  "PNG byte differences must collapse to the same decoded pixel identity"
+);
 
 const inspectShapeMismatch = normalizeObservation(input({
   backendId: "right",
@@ -108,6 +140,7 @@ assert.equal(
 const visual = normalizeObservation(input({
   backendId: "right",
   screenshotHash: "sha256:different",
+  screenshotPath: screenshotDifferent,
 }));
 const visualDiff = compareObservations(left, visual);
 assert.equal(visualDiff.classification, "divergent");
