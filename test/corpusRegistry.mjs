@@ -8,6 +8,7 @@ import {
   adaptContractFingerprintObservation,
   adaptDifferentialCorpus,
   adaptFailureRecord,
+  evidenceManifestReference,
 } from "../dist/corpus/adapters.js";
 import { JsonCorpusRegistry } from "../dist/corpus/registry.js";
 
@@ -19,6 +20,7 @@ const load = (name) =>
 const syntheticFailure = load("failure-synthetic-v1.json");
 const realFailure = load("failure-real-unqualified-v1.json");
 const differential = load("differential-v1.json");
+const evidenceManifest = load("evidence-manifest-v1.json");
 const contract = load("contract-observation-v1.json");
 const causal = load("causal-observation-v1.json");
 
@@ -43,9 +45,14 @@ function snapshot(label) {
 }
 
 // Iteration 1: fixed corpus shapes from #20/#25/#18 plus a #24-style causal observation.
-const synthetic = registry.register(adaptFailureRecord(syntheticFailure, {
+const syntheticRegistration = adaptFailureRecord(syntheticFailure, {
   evidenceLocator: { path: "/tmp/run-a/failure.json" },
-}));
+});
+syntheticRegistration.evidence.push(evidenceManifestReference(
+  evidenceManifest,
+  { path: "/tmp/run-a/evidence-manifest.json" }
+));
+const synthetic = registry.register(syntheticRegistration);
 const unqualifiedReal = registry.register(adaptFailureRecord(realFailure));
 const diff = registry.register(adaptDifferentialCorpus(differential, {
   fixtureOrigin: "synthetic-mechanism-proof",
@@ -63,7 +70,7 @@ const causalResult = registry.register(adaptCausalObservation(causal, {
 let metrics = snapshot("1-baseline-index");
 assert.deepEqual(metrics, {
   logicalCases: 5,
-  physicalEvidenceRecords: 5,
+  physicalEvidenceRecords: 6,
   duplicateLogicalCases: 0,
   historyEntries: 5,
   ambiguousOrigins: 1,
@@ -93,7 +100,7 @@ assert.equal(qualifiedReal.historyCreated, false);
 
 metrics = snapshot("2-origin-qualified");
 assert.equal(metrics.logicalCases, 5);
-assert.equal(metrics.physicalEvidenceRecords, 5);
+assert.equal(metrics.physicalEvidenceRecords, 6);
 assert.equal(metrics.historyEntries, 5);
 assert.equal(metrics.ambiguousOrigins, 0);
 assert.equal(
@@ -122,7 +129,7 @@ assert.equal(diffNext.historyCreated, true);
 
 metrics = snapshot("3-version-history");
 assert.equal(metrics.logicalCases, 5);
-assert.equal(metrics.physicalEvidenceRecords, 6);
+assert.equal(metrics.physicalEvidenceRecords, 7);
 assert.equal(metrics.historyEntries, 6);
 assert.equal(metrics.duplicateLogicalCases, 0);
 assert.equal(registry.getHistory(diff.caseId).length, 2);
@@ -134,9 +141,14 @@ const syntheticLater = structuredClone(syntheticFailure);
 syntheticLater.discoveredAt = "2026-10-03T00:20:00.000Z";
 syntheticLater.artifact.path = "/different/machine/tmp/fixture.json";
 syntheticLater.evidence.screenshots = ["/different/machine/tmp/frame.png"];
-const duplicate = registry.register(adaptFailureRecord(syntheticLater, {
+const duplicateRegistration = adaptFailureRecord(syntheticLater, {
   evidenceLocator: { path: "/different/machine/evidence.json" },
-}));
+});
+duplicateRegistration.evidence.push(evidenceManifestReference(
+  evidenceManifest,
+  { path: "/different/machine/evidence-manifest.json" }
+));
+const duplicate = registry.register(duplicateRegistration);
 assert.equal(duplicate.caseId, synthetic.caseId);
 assert.deepEqual(duplicate.evidenceIds, synthetic.evidenceIds);
 assert.equal(duplicate.historyId, synthetic.historyId);
@@ -165,7 +177,7 @@ assert.ok(
 metrics = snapshot("4-dedup-and-linkage");
 assert.deepEqual(metrics, {
   logicalCases: 5,
-  physicalEvidenceRecords: 6,
+  physicalEvidenceRecords: 7,
   duplicateLogicalCases: 0,
   historyEntries: 6,
   ambiguousOrigins: 0,
