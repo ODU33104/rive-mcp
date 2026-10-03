@@ -1,0 +1,47 @@
+name: Real Causal Calibration
+
+on:
+  push:
+    branches:
+      - feat/real-causal-calibration
+  pull_request:
+    paths:
+      - "src/staticProvenance.ts"
+      - "src/observedTrace.ts"
+      - "src/causalAmbiguity.ts"
+      - "test/causal/**"
+      - "test/fixtures/real-world/**"
+      - "scripts/fetch-real-world-fixtures.mjs"
+      - "docs/REAL_CAUSAL_CALIBRATION.md"
+      - ".github/workflows/real-causal-calibration.yml"
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Existing causal stack
+        run: |
+          node test/staticProvenance.mjs
+          node test/observedTrace.mjs
+          node test/runtimePropertyObservation.mjs
+          node test/causalAmbiguity.mjs
+      - name: Acquire qualified real fixtures
+        run: node scripts/fetch-real-world-fixtures.mjs
+      - name: Measure real causal calibration
+        run: node test/causal/realFixtures.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-causal-calibration
+          path: |
+            test/tmp/real-causal-calibration
+            test/tmp/real-world-corpus/acquisition.json
+          if-no-files-found: warn
