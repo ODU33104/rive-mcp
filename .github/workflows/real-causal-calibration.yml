@@ -25,6 +25,13 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      - name: Existing causal stack regression
+        run: |
+          node test/staticProvenance.mjs
+          node test/observedTrace.mjs
+          node test/runtimePropertyObservation.mjs
+          node test/causalAmbiguity.mjs
+
       - name: Acquire exact qualified real fixtures
         run: node scripts/fetch-real-world-fixtures.mjs
 
