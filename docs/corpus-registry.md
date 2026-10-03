@@ -175,6 +175,7 @@ Rules:
 `test/corpusRegistry.mjs` exercises:
 
 - a #20 FailureRecord-shaped synthetic regression
+- a #19 Evidence Manifest reference attached to that Failure case
 - a #20 `origin: real` record that starts ambiguous and is explicitly qualified
 - a #25 Differential Corpus-shaped record
 - a #18 Runtime Contract fingerprint observation
@@ -186,3 +187,121 @@ Rules:
 - synthetic-to-real relabel rejection
 
 No public MCP tool is added.
+
+
+## Self-improvement loop
+
+The fixed corpus is held constant across the four measured iterations: one #20 synthetic FailureRecord, one #19 Evidence Manifest linked to it, one #20 `origin: real` FailureRecord, one #25 Differential Corpus record, one #18 contract fingerprint observation, and one #24-style causal observation.
+
+### Iteration 1
+
+Hypothesis:  
+A common registry can index all engine families without merging their payloads.
+
+Corpus:  
+The fixed corpus above.
+
+Baseline:  
+No shared registry existed.
+
+Change:  
+Added separate case/evidence/history/link records and structural adapters.
+
+Result:  
+- Logical cases: **5**
+- Physical evidence records: **6**
+- Duplicate logical cases: **0**
+- History entries: **5**
+- Ambiguous origins: **1**
+- Unresolved references: **0**
+
+The one ambiguity is deliberate: #20 `origin: real` cannot prove whether the fixture is an official sample, user-provided artifact, or separately qualified real defect.
+
+Decision: **KEEP**
+
+Lesson:  
+Engine-native "real" execution provenance is not enough to grant a real-defect classification.
+
+### Iteration 2
+
+Hypothesis:  
+Explicit provenance refinement can remove the ambiguity without creating a second case or rewriting evidence.
+
+Corpus:  
+Unchanged.
+
+Baseline:  
+5 logical / 6 physical / 0 duplicates / 5 history / 1 ambiguous / 0 unresolved.
+
+Change:  
+Re-register the same #20 logical failure with explicit `qualified-real-fixture / qualified-real-defect`. Unknown origin may refine monotonically; synthetic/real crossings are rejected.
+
+Result:  
+- Logical cases: **5**
+- Physical evidence records: **6**
+- Duplicate logical cases: **0**
+- History entries: **5**
+- Ambiguous origins: **0**
+- Unresolved references: **0**
+
+Decision: **KEEP**
+
+Lesson:  
+Origin qualification belongs to registry metadata and can be tightened without changing the engine evidence identity.
+
+### Iteration 3
+
+Hypothesis:  
+A runtime/backend version change must append compatibility history rather than create another logical Differential case.
+
+Corpus:  
+Unchanged; the same Differential case is observed again with the CLI/backend version changed from 1.3.0 to 1.4.0 and status changed to `not-reproduced`.
+
+Baseline:  
+5 logical / 6 physical / 0 duplicates / 5 history / 0 ambiguous / 0 unresolved.
+
+Change:  
+Keep backend/runtime versions out of logical case identity and include them in immutable history identity.
+
+Result:  
+- Logical cases: **5**
+- Physical evidence records: **7**
+- Duplicate logical cases: **0**
+- History entries: **6**
+- Ambiguous origins: **0**
+- Unresolved references: **0**
+- Differential `fixedVersion`: **1.4.0**
+
+Decision: **KEEP**
+
+Lesson:  
+Compatibility history is versioned evidence attached to one logical case, not a new case per runtime release.
+
+### Iteration 4
+
+Hypothesis:  
+Re-registering identical evidence from another machine/time must deduplicate, while cross-engine relationships remain explicit.
+
+Corpus:  
+Unchanged.
+
+Baseline:  
+5 logical / 7 physical / 0 duplicates / 6 history / 0 ambiguous / 0 unresolved.
+
+Change:  
+Re-register the synthetic failure with different temp paths and timestamp, then add an explicit `failure-has-differential-evidence` link. Add positive guards for dangling links and unsupported registry major versions.
+
+Result:  
+- Logical cases: **5**
+- Physical evidence records: **7**
+- Duplicate logical cases: **0**
+- History entries: **6**
+- Ambiguous origins: **0**
+- Unresolved references: **0**
+
+The main registry remains clean. A separate negative-control registry proves dangling links increment `unresolvedReferences`, and a v2 registry header is rejected by the v1 reader.
+
+Decision: **KEEP**
+
+Lesson:  
+Paths/timestamps belong to observation metadata, not reproducibility identity; linkage and schema migration must fail visibly instead of silently guessing.
