@@ -126,7 +126,7 @@ await addProbe(
 );
 await addProbe(
   "raw-key",
-  [rivPath, `--screenshot=${join(artifactDir, "key.png")}`, "--key=Tab", "--advance=0ms"],
+  [rivPath, `--screenshot=${join(artifactDir, "key.png")}`, "--key=tab", "--advance=0ms"],
   [{ kind: "screenshot", path: join(artifactDir, "key.png") }]
 );
 
