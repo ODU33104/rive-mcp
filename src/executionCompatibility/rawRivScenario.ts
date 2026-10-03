@@ -43,7 +43,7 @@ export interface RawRivDataObservation {
 
 export interface RawRivScenarioResult {
   schemaVersion: "rive-mcp.raw-riv-scenario/v1";
-  ok: boolean;
+  status: "executed" | "unsupported" | "failed";
   artifact: {
     sha256: string;
     bytes: number;
@@ -60,7 +60,7 @@ export interface RawRivScenarioResult {
   capabilities: {
     exactRawRiv: true;
     supportedActions: ["pointer:down", "pointer:up", "advance"];
-    unsupportedActions: ["data", "key"];
+    unsupportedActions: ["data", "key", "pointer:move", "pointer:exit", "pointer:click"];
     stateObservation: "state-changes";
     dataObservation: "top-level-boolean-view-model";
     visualObservation: "png";
@@ -310,7 +310,7 @@ export class RawRivScenarioBridge {
     const unsupported = unsupportedFor(scenario);
     const version = versions();
 
-    const base: Omit<RawRivScenarioResult, "ok"> = {
+    const base: Omit<RawRivScenarioResult, "status"> = {
       schemaVersion: "rive-mcp.raw-riv-scenario/v1",
       artifact: {
         sha256: beforeHash,
@@ -328,7 +328,7 @@ export class RawRivScenarioBridge {
       capabilities: {
         exactRawRiv: true,
         supportedActions: ["pointer:down", "pointer:up", "advance"],
-        unsupportedActions: ["data", "key"],
+        unsupportedActions: ["data", "key", "pointer:move", "pointer:exit", "pointer:click"],
         stateObservation: "state-changes",
         dataObservation: "top-level-boolean-view-model",
         visualObservation: "png",
@@ -338,7 +338,7 @@ export class RawRivScenarioBridge {
     };
 
     if (unsupported.length > 0) {
-      return { ...base, ok: false };
+      return { ...base, status: "unsupported" };
     }
 
     const host = new RiveHost(bridgePageScript());
@@ -383,7 +383,7 @@ export class RawRivScenarioBridge {
 
       return {
         ...base,
-        ok: artifactUnchanged,
+        status: artifactUnchanged ? "executed" : "failed",
         artifact: {
           ...base.artifact,
           unchangedAfterExecution: artifactUnchanged,
@@ -396,7 +396,7 @@ export class RawRivScenarioBridge {
     } catch (error) {
       return {
         ...base,
-        ok: false,
+        status: "failed",
         artifact: {
           ...base.artifact,
           unchangedAfterExecution:
