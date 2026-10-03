@@ -283,7 +283,7 @@ function unsupportedFor(scenario: RawRivScenario): string[] {
       if (!["down", "up"].includes(step.action)) {
         unsupported.push(
           "step " + index + ': pointer action "' + step.action +
-          '" is outside this bridge\\'s proven down/up subset'
+          '" is outside the proven pointer down/up subset'
         );
       }
       if (!Number.isFinite(step.x) || !Number.isFinite(step.y)) {
