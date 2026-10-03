@@ -95,9 +95,9 @@ Validation checks:
 4. interactive feature tags have a matching Scenario action;
 5. downloaded bytes match the upstream Git LFS SHA-256 and size;
 6. two runtime inspect passes are identical;
-7. two static parser/Data Binding summaries are identical.
+7. two static parser/Data Binding summaries are identical;\n8. the selected observed structure matches the checked-in observed-only drift baseline.
 
-The validator writes `test/tmp/real-world-corpus/validation.json`. That file is observation evidence, not an expected oracle.
+The validator writes `test/tmp/real-world-corpus/validation.json`. That file is observation evidence, not an expected oracle. A concise structural drift baseline is checked in at `test/fixtures/real-world/observed-baseline.json`; it carries `oracle: false`, is pinned to the measured runtime version, and fails CI on unreviewed observation drift.
 
 ## Self-improvement loop
 
@@ -159,7 +159,7 @@ Ambiguity: any runtime output from this pass remains observed-only.
 
 Decision: pending CI result; update this section with measured outcome rather than assuming success.
 
-## Known blind spots
+## CI evidence\n\nInitial qualification measurement:\n\n- workflow: `real-world-corpus-ci`\n- run: `37093194742`\n- job: `111117707346`\n- result: **PASS**\n- head: `9f52e5287c7b2607da85466af1b9c1496253fa94`\n- runtime: `@rive-app/canvas-advanced 2.38.5`\n- artifact: `real-world-corpus-validation` / id `11263477403`\n- artifact ZIP digest: `sha256:b656269afc79c6d668f915598bb5b80f80ce43576e9ddaa6fe5bedf92c67c054`\n\nThe artifact contains the exact five acquired `.riv` files, acquisition identities, and the full validation observation. It is evidence for reproducibility, not a correctness oracle.\n\n## Known blind spots
 
 - Raw `.riv` files do not currently flow through PR #20's project-directory Rive CLI explorer adapter.
 - PR #25 cannot make a true CLI-vs-native pair from these raw files because its CLI backend remains directory-only.
