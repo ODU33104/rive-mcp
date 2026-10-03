@@ -84,6 +84,14 @@ jobs:
           samples_path="$("$HOME/.rive/bin/rive" samples --path | tail -n 1)"
           test -d "$samples_path"
           echo "samples_path=$samples_path" >> "$GITHUB_OUTPUT"
+      - name: Raw .riv Official CLI capability boundary
+        env:
+          RIVE_CLI_BIN: /home/runner/.rive/bin/rive
+        run: node test/execution/rawRivCliCapability.mjs
+      - name: Exact raw .riv NativeBackend Scenario oracle
+        env:
+          RIVE_CLI_BIN: /home/runner/.rive/bin/rive
+        run: node test/execution/rawRivScenarioBridge.mjs
       - name: Official CLI evidence backend
         env:
           RIVE_CLI_BIN: /home/runner/.rive/bin/rive
