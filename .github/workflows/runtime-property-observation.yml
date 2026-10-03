@@ -1,0 +1,31 @@
+name: Runtime Property Observation
+
+on:
+  pull_request:
+    paths:
+      - "src/pageScript.ts"
+      - "src/observedTrace.ts"
+      - "src/staticProvenance.ts"
+      - "test/runtimePropertyObservation.mjs"
+      - "test/observedTrace.mjs"
+      - "test/staticProvenance.mjs"
+      - "docs/runtime-property-observation.md"
+      - ".github/workflows/runtime-property-observation.yml"
+  push:
+    branches:
+      - "feat/runtime-property-observation"
+
+jobs:
+  observation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/staticProvenance.mjs
+      - run: node test/observedTrace.mjs
+      - run: node test/runtimePropertyObservation.mjs

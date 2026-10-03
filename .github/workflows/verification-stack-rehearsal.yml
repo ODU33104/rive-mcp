@@ -1,0 +1,124 @@
+name: Verification Stack Rehearsal
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "test/**"
+      - "scripts/**"
+      - "docs/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+jobs:
+  combined-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build complete candidate stack
+        run: npm run build
+      - name: Public MCP tool count remains main
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const source = readFileSync("src/index.ts", "utf8");
+          const toolCount = source.split("server.registerTool(").length - 1;
+          console.log(JSON.stringify({ toolCount }, null, 2));
+          assert.equal(toolCount, 32);
+          NODE
+      - name: Runtime Contract
+        run: node test/runtimeContract.mjs
+      - name: Static Provenance
+        run: node test/staticProvenance.mjs
+      - name: Observed Trace
+        run: node test/observedTrace.mjs
+      - name: Runtime Property Observation
+        run: node test/runtimePropertyObservation.mjs
+      - name: Causal Ambiguity
+        run: node test/causalAmbiguity.mjs
+      - name: Explorer core
+        run: node test/explorer/explorer.mjs
+      - name: Explorer CLI adapter unit
+        run: node test/explorer/riveCliBackend.mjs
+      - name: Explorer RML boundary extractor
+        run: node test/explorer/riveRmlBoundaries.mjs
+      - name: Native evidence backend
+        run: node test/backends/nativeBackend.mjs
+      - name: Differential core
+        run: node test/differential/core.mjs
+      - name: Corpus Registry
+        run: node test/corpusRegistry.mjs
+
+  combined-external:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Rive CLI runtime libraries
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+      - name: Install current official Rive CLI
+        id: rive
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+          samples_path="$("$HOME/.rive/bin/rive" samples --path | tail -n 1)"
+          test -d "$samples_path"
+          echo "samples_path=$samples_path" >> "$GITHUB_OUTPUT"
+      - name: Official CLI evidence backend
+        env:
+          RIVE_CLI_BIN: /home/runner/.rive/bin/rive
+        run: node test/backends/riveCliBackend.mjs
+      - name: Reality pilot
+        env:
+          RIVE_CLI_BIN: /home/runner/.rive/bin/rive
+        run: node test/benchmark/realityPilot.mjs
+      - name: Explorer official bundled corpus
+        env:
+          RIVE_CLI: /home/runner/.rive/bin/rive
+          RIVE_CLI_SAMPLES_PATH: ${{ steps.rive.outputs.samples_path }}
+          EXPLORER_CLI_REPORT: test/tmp/rehearsal-explorer-rive-cli-report.json
+        run: node test/explorer/riveCliOfficial.mjs
+      - name: Explorer numeric boundary
+        env:
+          RIVE_CLI: /home/runner/.rive/bin/rive
+          EXPLORER_NUMERIC_BOUNDARY_REPORT: test/tmp/rehearsal-explorer-numeric-boundary-report.json
+        run: node test/explorer/riveNumericBoundaryOfficial.mjs
+      - name: Cross-runtime differential fixed fixture
+        env:
+          RIVE_CLI_BIN: /home/runner/.rive/bin/rive
+        run: node test/differential/crossRuntime.mjs
+      - name: Acquire qualified real-world fixtures
+        run: node scripts/fetch-real-world-fixtures.mjs
+      - name: Validate qualified real-world corpus
+        run: node test/corpus/realWorldCorpus.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-stack-rehearsal-evidence
+          path: |
+            test/tmp/reality-pilot
+            test/tmp/cross-runtime-differential
+            test/tmp/real-world-corpus
+            test/tmp/rehearsal-explorer-rive-cli-report.json
+            test/tmp/rehearsal-explorer-numeric-boundary-report.json
+          if-no-files-found: warn

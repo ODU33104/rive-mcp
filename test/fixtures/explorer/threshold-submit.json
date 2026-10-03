@@ -1,0 +1,61 @@
+{
+  "id": "threshold-submit-v1",
+  "description": "Synthetic explorer regression: exact threshold state plus pointer action violates loading/submit invariant.",
+  "origin": "synthetic-regression",
+  "artifactHash": "sha256:synthetic-threshold-submit-v1",
+  "initial": {
+    "activeStates": ["idle"],
+    "viewModel": { "score": 0, "loading": false, "submitEnabled": false }
+  },
+  "expectedStateLabels": ["idle", "ready", "boundary", "submitted", "dead"],
+  "baseActions": [
+    { "kind": "data-write", "path": "score", "value": 0 },
+    { "kind": "data-write", "path": "score", "value": 100 },
+    { "kind": "pointer", "phase": "click", "x": 120, "y": 60 },
+    { "kind": "advance-time", "seconds": 0.0166666667 }
+  ],
+  "boundaryExpressions": ["score > 50"],
+  "rules": [
+    {
+      "match": { "kind": "data-write", "path": "score", "valueOp": "lt", "threshold": 50 },
+      "patch": { "activeStates": ["idle"], "viewModel": { "score": "$action.value", "loading": false, "submitEnabled": false } }
+    },
+    {
+      "match": { "kind": "data-write", "path": "score", "valueOp": "eq", "threshold": 50 },
+      "patch": { "activeStates": ["boundary"], "viewModel": { "score": "$action.value", "loading": false, "submitEnabled": true } }
+    },
+    {
+      "match": { "kind": "data-write", "path": "score", "valueOp": "gt", "threshold": 50 },
+      "patch": { "activeStates": ["ready"], "viewModel": { "score": "$action.value", "loading": false, "submitEnabled": true } }
+    },
+    {
+      "match": { "kind": "pointer", "phase": "click", "state": "ready" },
+      "patch": { "activeStates": ["submitted"], "viewModel": { "loading": true, "submitEnabled": false } }
+    },
+    {
+      "match": { "kind": "pointer", "phase": "click", "state": "boundary" },
+      "patch": { "activeStates": ["boundary"], "viewModel": { "loading": true, "submitEnabled": true } }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "loading-disables-submit",
+      "description": "A loading UI must not leave submit enabled.",
+      "kind": "implies",
+      "when": { "source": "viewModel", "path": "loading", "op": "eq", "value": true },
+      "then": { "source": "viewModel", "path": "submitEnabled", "op": "eq", "value": false }
+    }
+  ],
+  "staticGraph": {
+    "complete": true,
+    "states": ["idle", "ready", "boundary", "submitted", "dead"],
+    "entryStates": ["idle"],
+    "transitions": [
+      { "from": "idle", "to": "idle" },
+      { "from": "idle", "to": "ready" },
+      { "from": "idle", "to": "boundary" },
+      { "from": "ready", "to": "submitted" },
+      { "from": "boundary", "to": "boundary" }
+    ]
+  }
+}

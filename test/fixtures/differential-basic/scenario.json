@@ -1,0 +1,21 @@
+{
+  "id": "differential-basic-advance",
+  "name": "same-source-same-time",
+  "target": {
+    "artboard": "Artboard",
+    "stateMachine": "State Machine 1"
+  },
+  "viewport": {
+    "width": 320,
+    "height": 320
+  },
+  "steps": [
+    {
+      "type": "advance",
+      "ms": 250
+    }
+  ],
+  "capture": {
+    "screenshot": true
+  }
+}

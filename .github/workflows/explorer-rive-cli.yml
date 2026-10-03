@@ -1,0 +1,87 @@
+name: Explorer official Rive CLI
+
+on:
+  pull_request:
+    paths:
+      - "src/explorer/**"
+      - "src/fuzz/**"
+      - "src/minimize/**"
+      - "src/stateSpace/**"
+      - "test/explorer/**"
+      - "test/fixtures/explorer/**"
+      - ".github/workflows/explorer-rive-cli.yml"
+  workflow_dispatch:
+
+jobs:
+  official-rive-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile TypeScript
+        run: npx --no-install tsc -p tsconfig.json
+
+      - name: Run explorer core tests
+        run: node test/explorer/explorer.mjs
+
+      - name: Run CLI adapter unit tests
+        run: node test/explorer/riveCliBackend.mjs
+
+      - name: Run RML boundary extractor tests
+        run: node test/explorer/riveRmlBoundaries.mjs
+
+      - name: Install Rive CLI runtime libraries
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+
+      - name: Install official Rive CLI
+        shell: bash
+        run: |
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+
+      - name: Inspect official CLI
+        id: rive
+        shell: bash
+        run: |
+          set -euo pipefail
+          rive --version
+          samples_path="$(rive samples --path | tail -n 1)"
+          test -d "$samples_path"
+          echo "samples_path=$samples_path" >> "$GITHUB_OUTPUT"
+
+      - name: Explore official bundled sample corpus
+        shell: bash
+        env:
+          RIVE_CLI: /home/runner/.rive/bin/rive
+          RIVE_CLI_SAMPLES_PATH: ${{ steps.rive.outputs.samples_path }}
+          EXPLORER_CLI_REPORT: test/tmp/explorer-rive-cli-report.json
+        run: node test/explorer/riveCliOfficial.mjs
+
+      - name: A/B numeric boundary fixture with official CLI
+        shell: bash
+        env:
+          RIVE_CLI: /home/runner/.rive/bin/rive
+          EXPLORER_NUMERIC_BOUNDARY_REPORT: test/tmp/explorer-numeric-boundary-report.json
+        run: node test/explorer/riveNumericBoundaryOfficial.mjs
+
+      - name: Upload exploration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explorer-rive-cli-report
+          path: |
+            test/tmp/explorer-rive-cli-report.json
+            test/tmp/explorer-numeric-boundary-report.json
+          if-no-files-found: warn

@@ -1,0 +1,30 @@
+{
+  "viewport": { "width": 320, "height": 240 },
+  "maxDepth": 2,
+  "maxSequences": 8,
+  "determinismAttempts": 3,
+  "samples": [
+    {
+      "name": "pointer_reactive",
+      "actions": [
+        { "kind": "pointer", "phase": "move", "x": 64, "y": 60 },
+        { "kind": "pointer", "phase": "move", "x": 256, "y": 180 }
+      ],
+      "determinismSequence": [
+        { "kind": "pointer", "phase": "move", "x": 64, "y": 60 },
+        { "kind": "pointer", "phase": "move", "x": 256, "y": 180 }
+      ]
+    },
+    {
+      "name": "keyboard_menu",
+      "actions": [
+        { "kind": "key", "key": "right" },
+        { "kind": "key", "key": "down" }
+      ],
+      "determinismSequence": [
+        { "kind": "key", "key": "right" },
+        { "kind": "key", "key": "down" }
+      ]
+    }
+  ]
+}
