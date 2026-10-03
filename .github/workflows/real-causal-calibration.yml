@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -30,9 +32,11 @@ jobs:
         run: node test/causalCalibration/realFixtures.mjs
 
       - name: Public MCP entrypoint unchanged
+        env:
+          BASE_SHA: 69ea152db6cd1192fab36a4437ac266bc755b0ef
         run: |
           set -euo pipefail
-          git diff --exit-code origin/integration/rehearse-independent-verification-stack...HEAD -- src/index.ts
+          git diff --exit-code "$BASE_SHA"...HEAD -- src/index.ts
 
       - uses: actions/upload-artifact@v4
         if: always()
