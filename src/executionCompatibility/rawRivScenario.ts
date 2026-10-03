@@ -147,8 +147,9 @@ window.riveApi.runRawRivScenario = async function(b64, opts) {
       if (vm) {
         vmi = vm.defaultInstance();
         if (vmi) {
-          scene.sm.setViewModelInstance(vmi);
-          scene.sm.bind();
+          // canvas-advanced 2.38.5 high-level autoBind delegates to the
+          // StateMachineInstance bindViewModelInstance API directly.
+          scene.sm.bindViewModelInstance(vmi);
         }
       }
 
