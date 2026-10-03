@@ -32,6 +32,12 @@ jobs:
         run: node test/execution/rawRivCliCapability.mjs
       - name: Run exact raw .riv Scenario bridge
         run: node test/execution/rawRivScenarioBridge.mjs
+      - name: Native backend regression
+        run: node test/backends/nativeBackend.mjs
+      - name: Differential core regression
+        run: node test/differential/core.mjs
+      - name: Cross-runtime differential regression
+        run: node test/differential/crossRuntime.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
