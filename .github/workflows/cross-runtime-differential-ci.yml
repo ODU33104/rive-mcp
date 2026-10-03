@@ -1,0 +1,50 @@
+name: cross-runtime-differential-ci
+
+on:
+  pull_request:
+    paths:
+      - "src/differential/**"
+      - "src/backends/**"
+      - "src/execution/**"
+      - "src/evidence/**"
+      - "test/differential/**"
+      - "test/fixtures/differential-basic/**"
+      - "docs/benchmarks/CROSS_RUNTIME_DIFFERENTIAL_LAB.md"
+      - ".github/workflows/cross-runtime-differential-ci.yml"
+
+jobs:
+  differential:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Differential core classification
+        run: node test/differential/core.mjs
+
+      - name: Public MCP surface guard
+        run: npm run test:tool-surface
+
+      - name: Install current official Rive CLI
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+
+      - name: Cross-runtime fixed fixture
+        run: node test/differential/crossRuntime.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-runtime-differential-corpus
+          path: test/tmp/cross-runtime-differential
+          if-no-files-found: warn

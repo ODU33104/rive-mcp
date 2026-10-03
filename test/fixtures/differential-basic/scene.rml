@@ -1,0 +1,34 @@
+<Rive version="1" kind="fragment">
+  <Artboard defaultStateMachineId="0:7" width="500" height="500" name="Artboard" id="0:2">
+    <Fill name="Background">
+      <SolidColor colorValue="FF1D1D1D" name="Color"/>
+    </Fill>
+
+    <Shape x="250" y="250" name="Triangle" id="0:14">
+      <Triangle originX="0.5" originY="0.5" width="220" height="200" name="Path"/>
+      <Fill name="Fill">
+        <SolidColor colorValue="FF57A5E0" name="Color"/>
+      </Fill>
+    </Shape>
+
+    <StateMachine name="State Machine 1" id="0:7">
+      <StateMachineLayer name="Layer 1" id="0:8">
+        <AnyState x="200" y="-120"/>
+        <ExitState x="400" y="-120"/>
+        <EntryState>
+          <StateTransition stateToId="0:12"/>
+        </EntryState>
+        <AnimationState x="200" animationId="0:6" id="0:12"/>
+      </StateMachineLayer>
+    </StateMachine>
+
+    <LinearAnimation loopValue="loop" duration="120" name="Spin" id="0:6">
+      <KeyedObject objectId="0:14">
+        <KeyedProperty propertyKey="15">
+          <KeyFrameDouble value="0" interpolationType="linear"/>
+          <KeyFrameDouble value="6.2831855" interpolationType="linear" frame="120"/>
+        </KeyedProperty>
+      </KeyedObject>
+    </LinearAnimation>
+  </Artboard>
+</Rive>
