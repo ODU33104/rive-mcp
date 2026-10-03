@@ -1,0 +1,31 @@
+name: Causal Ambiguity
+
+on:
+  pull_request:
+    paths:
+      - "src/causalAmbiguity.ts"
+      - "src/observedTrace.ts"
+      - "src/staticProvenance.ts"
+      - "test/causalAmbiguity.mjs"
+      - "test/observedTrace.mjs"
+      - "test/staticProvenance.mjs"
+      - "docs/causal-ambiguity.md"
+      - ".github/workflows/causal-ambiguity.yml"
+  push:
+    branches:
+      - "feat/causal-ambiguity-analysis"
+
+jobs:
+  ambiguity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/staticProvenance.mjs
+      - run: node test/observedTrace.mjs
+      - run: node test/causalAmbiguity.mjs
