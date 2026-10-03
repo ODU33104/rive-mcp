@@ -205,8 +205,13 @@ export function normalizeObservation(input: NormalizeObservationInput): BackendO
     unsupported: [...input.execution.unsupported].sort(),
   };
 
+  const deterministicProjection = {
+    ...withoutKey,
+    checkpoints: checkpoints.map(({ summary: _summary, ...checkpoint }) => checkpoint),
+  };
+
   return {
     ...withoutKey,
-    deterministicKey: revisionHash(withoutKey),
+    deterministicKey: revisionHash(deterministicProjection),
   };
 }
