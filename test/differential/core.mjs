@@ -15,6 +15,8 @@ function input({
   elapsedMs = 1,
   stepStatus = "applied",
   unsupported = [],
+  inspectCounts = { animationCount: 1, stateMachineCount: 1 },
+  inspectDiagnostics = [],
 }) {
   const backend = {
     id: backendId,
@@ -39,9 +41,9 @@ function input({
       ok: true,
       summary: {
         artboardCount: 1,
-        artboards: [{ name: "Artboard", animationCount: 1, stateMachineCount: 1 }],
+        artboards: [{ name: "Artboard", ...inspectCounts }],
       },
-      diagnostics: [],
+      diagnostics: inspectDiagnostics,
       elapsedMs,
     },
     execution: {
@@ -86,6 +88,22 @@ assert.equal(left.deterministicKey, leftRepeat.deterministicKey, "paths/timing m
 const right = normalizeObservation(input({ backendId: "right" }));
 const equivalent = compareObservations(left, right);
 assert.equal(equivalent.classification, "equivalent");
+
+const inspectShapeMismatch = normalizeObservation(input({
+  backendId: "right",
+  inspectCounts: { animationCount: undefined, stateMachineCount: undefined },
+  inspectDiagnostics: [{
+    severity: "warning",
+    code: "backend-specific-warning",
+    message: "warning only exposed by one backend",
+  }],
+}));
+const inspectComparable = compareObservations(left, inspectShapeMismatch);
+assert.equal(
+  inspectComparable.classification,
+  "equivalent",
+  "backend-specific inspect detail must not mask runtime behavior"
+);
 
 const visual = normalizeObservation(input({
   backendId: "right",
