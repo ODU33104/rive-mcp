@@ -41,7 +41,7 @@ const upstreamOracle = {
 const runs = [];
 for (let i = 0; i < 3; i++) {
   const result = await new RawRivScenarioBridge().execute(bytes, scenario);
-  assert.equal(result.ok, true, result.error ?? result.unsupported.join("; "));
+  assert.equal(result.status, "executed", result.error ?? result.unsupported.join("; "));
   assert.equal(result.artifact.sha256, artifactHash);
   assert.equal(result.artifact.unchangedAfterExecution, true);
   assert.deepEqual(result.capabilities.supportedActions, [
@@ -49,7 +49,13 @@ for (let i = 0; i < 3; i++) {
     "pointer:up",
     "advance",
   ]);
-  assert.deepEqual(result.capabilities.unsupportedActions, ["data", "key"]);
+  assert.deepEqual(result.capabilities.unsupportedActions, [
+    "data",
+    "key",
+    "pointer:move",
+    "pointer:exit",
+    "pointer:click",
+  ]);
   assert.deepEqual(result.unsupported, []);
 
   assert.equal(
@@ -104,9 +110,25 @@ const unsupportedResult = await new RawRivScenarioBridge().execute(
   bytes,
   unsupportedScenario
 );
-assert.equal(unsupportedResult.ok, false);
+assert.equal(unsupportedResult.status, "unsupported");
 assert.match(unsupportedResult.unsupported[0], /key is not implemented/);
 assert.equal(unsupportedResult.error, undefined);
+
+const unsupportedDataResult = await new RawRivScenarioBridge().execute(bytes, {
+  ...scenario,
+  steps: [{ type: "data", path: "hasReached", value: true }],
+});
+assert.equal(unsupportedDataResult.status, "unsupported");
+assert.match(unsupportedDataResult.unsupported[0], /data is not implemented/);
+assert.equal(unsupportedDataResult.error, undefined);
+
+const unsupportedMoveResult = await new RawRivScenarioBridge().execute(bytes, {
+  ...scenario,
+  steps: [{ type: "pointer", action: "move", x: 250, y: 250 }],
+});
+assert.equal(unsupportedMoveResult.status, "unsupported");
+assert.match(unsupportedMoveResult.unsupported[0], /proven pointer down\/up subset/);
+assert.equal(unsupportedMoveResult.error, undefined);
 
 const cliCapabilityPath = join(outDir, "cli-capability.json");
 const cliCapability = JSON.parse(readFileSync(cliCapabilityPath, "utf8"));
