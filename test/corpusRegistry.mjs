@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,6 +53,7 @@ syntheticRegistration.evidence.push(evidenceManifestReference(
   { path: "/tmp/run-a/evidence-manifest.json" }
 ));
 const synthetic = registry.register(syntheticRegistration);
+assert.equal(synthetic.evidenceIds.length, 2, "Failure case must retain #20 record + #19 manifest evidence");
 const unqualifiedReal = registry.register(adaptFailureRecord(realFailure));
 const diff = registry.register(adaptDifferentialCorpus(differential, {
   fixtureOrigin: "synthetic-mechanism-proof",
@@ -186,6 +187,41 @@ assert.deepEqual(metrics, {
 
 assert.ok(contractResult.caseId.startsWith("case_contract_"));
 assert.ok(causalResult.caseId.startsWith("case_causal_"));
+
+// Positive guard: dangling related-case references are surfaced instead of ignored.
+const danglingRoot = mkdtempSync(join(tmpdir(), "rive-corpus-dangling-"));
+const danglingRegistry = new JsonCorpusRegistry(
+  danglingRoot,
+  "2026-10-03T01:00:00.000Z"
+);
+const danglingCase = danglingRegistry.register(adaptContractFingerprintObservation(contract, {
+  fixtureOrigin: "official-sample",
+}));
+danglingRegistry.linkCases(
+  danglingCase.caseId,
+  "case_missing_000000000000000000000000",
+  "test-dangling-reference",
+  "2026-10-03T01:01:00.000Z"
+);
+assert.ok(
+  danglingRegistry.metrics().unresolvedReferences > 0,
+  "Dangling case references must be visible in registry metrics"
+);
+
+// Version policy guard: a newer major registry is not read as v1 by accident.
+const incompatibleRoot = mkdtempSync(join(tmpdir(), "rive-corpus-v2-"));
+writeFileSync(
+  join(incompatibleRoot, "registry.json"),
+  JSON.stringify({
+    schemaVersion: "rive-mcp.corpus-registry/v2",
+    createdAt: "2026-10-03T01:02:00.000Z",
+  }),
+  "utf8"
+);
+assert.throws(
+  () => new JsonCorpusRegistry(incompatibleRoot, "2026-10-03T01:02:00.000Z"),
+  /Unsupported corpus registry schema/
+);
 
 console.log(JSON.stringify({
   ok: true,
