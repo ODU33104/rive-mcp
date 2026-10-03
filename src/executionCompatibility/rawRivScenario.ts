@@ -97,7 +97,7 @@ interface BrowserRawScenarioResult {
 
 const READY_MARKER = "window.__riveReady = true;";
 
-const RAW_RIV_EXTENSION = String.raw\`
+const RAW_RIV_EXTENSION = String.raw`
 function rawRivBooleanSnapshot(file, artboard, vmi) {
   if (!vmi) {
     return {
@@ -218,7 +218,7 @@ window.riveApi.runRawRivScenario = async function(b64, opts) {
     }
   });
 };
-\`;
+`;
 
 function bridgePageScript(): string {
   if (!PAGE_SCRIPT.includes(READY_MARKER)) {
