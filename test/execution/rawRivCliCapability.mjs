@@ -46,7 +46,7 @@ const screenshotArg = "--screenshot=" + join(outDir, "cli-direct.png");
 const actionProbes = {
   pointer: run([asset, screenshotArg, "--pointer=down@250,250"]),
   data: run([asset, screenshotArg, "--data=hasReached=true"]),
-  key: run([asset, screenshotArg, "--key=Enter"]),
+  key: run([asset, screenshotArg, "--key=enter"]),
   advance: run([asset, screenshotArg, "--advance=16ms"]),
 };
 
