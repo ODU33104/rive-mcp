@@ -127,3 +127,30 @@ Decision: KEEP the conservative extractor and schema guard. Coverage gain on the
 Lesson: absence is useful evidence. The verifier should prefer an explicit no-op over interpreting unrelated numeric fields as transition boundaries. A future real numeric-condition artifact is needed to measure coverage gain against the official backend.
 
 Evidence: GitHub Actions run `37079495739`, Rive CLI `1.3.0`, artifact `explorer-rive-cli-report`, artifact digest `sha256:7536880a7fac1760602ea9e2b631bbaee5e14fc8fb0d17af4ab2d7fc87055a48`.
+
+
+## Follow-up experiment — real official-CLI numeric boundary A/B
+
+Question: does a schema-proven numeric ViewModel transition increase observable runtime coverage when executed by the official Rive CLI, rather than only passing a parser regression test?
+
+Fixture: `test/fixtures/explorer/rive-numeric-boundary/`, a minimal RML project compiled and executed by official Rive CLI 1.3.0. It contains one ViewModel number property `score`, a low visual state, a high visual state, and a `TransitionViewModelCondition` whose explicit condition is `score > 50`. The two states render different colors so the transition is observable through the same screenshot hash used by the CLI backend.
+
+Validation gate: `rive <project> --verify` passed and `rive inspect <project> --json` returned `problems: []`. The schema-proven extractor resolved `sourcePathIds=0:40-0:41` through inspect and emitted exactly one hint: `score > 50`, epsilon `0.001`.
+
+Baseline action corpus: `score=0`, `score=25`, and `advance 0.016s`. Guided corpus: the same actions plus `49.999`, `50`, and `50.001` generated from the proven boundary.
+
+Baseline coverage: 3 observable state signatures, 6 transitions, 1 unique frame hash, 0 failures, backend cost 13.
+
+Guided coverage: 7 observable state signatures, 31 transitions, 2 unique frame hashes, 0 failures, backend cost 43.
+
+Boundary semantic check: `score=49.999` and `score=50` produced the same final frame hash; `score=50.001` produced a different final frame hash. This directly confirms the authored strict-greater-than boundary in the official runtime. The added visual coverage is therefore not inferred solely from distinct data-dump values.
+
+Determinism: the sequence `score=50.001` followed by `advance 0.016s` produced one unique observable trace signature across 5/5 fresh-backend attempts.
+
+False positives: 0 failures emitted. The first CI attempt failed only because inspect reported two fixture-authoring warnings (missing `LayoutComponentStyle`, overlapping editor graph positions). The fixture was corrected; those warnings were not classified as Rive failures.
+
+Decision: KEEP. This is the first real official-CLI execution in this branch showing that schema-proven boundary guidance can add a distinct rendered runtime state that a deliberately coarse baseline corpus does not reach.
+
+Caveat: the fixture is synthetic and intentionally constructed to exercise one numeric boundary. It proves the mechanism against the official runtime, not prevalence or effectiveness on arbitrary production Rive files. No real Rive product defect was found and no failure-corpus record was added.
+
+Evidence: GitHub Actions run `37085192332`, Rive CLI `1.3.0`, artifact `explorer-rive-cli-report`, artifact digest `sha256:45bcf526eca6190360777120af2d40e161e7bcd00d95b934a2122746b62ae998`.
