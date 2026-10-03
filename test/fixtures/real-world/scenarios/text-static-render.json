@@ -1,0 +1,17 @@
+{
+  "id": "text-static-render",
+  "name": "render pinned text compatibility fixture",
+  "viewport": {
+    "width": 860,
+    "height": 540
+  },
+  "steps": [
+    {
+      "type": "advance",
+      "ms": 0
+    }
+  ],
+  "capture": {
+    "screenshot": true
+  }
+}

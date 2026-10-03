@@ -1,0 +1,24 @@
+{
+  "id": "rewards-data-binding",
+  "name": "write documented rewards ViewModel properties",
+  "steps": [
+    {
+      "type": "data",
+      "path": "Energy_Bar/Energy_Bar",
+      "value": 50
+    },
+    {
+      "type": "data",
+      "path": "Button/State_1",
+      "value": "Corpus"
+    },
+    {
+      "type": "advance",
+      "ms": 16
+    }
+  ],
+  "capture": {
+    "screenshot": true,
+    "dataSnapshot": true
+  }
+}
