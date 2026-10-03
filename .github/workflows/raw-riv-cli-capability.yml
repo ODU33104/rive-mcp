@@ -1,0 +1,37 @@
+name: raw-riv-cli-capability
+
+on:
+  push:
+    branches:
+      - feat/raw-riv-execution-compat
+  pull_request:
+    paths:
+      - "test/execution/rawRivCliCapability.mjs"
+      - ".github/workflows/raw-riv-cli-capability.yml"
+
+jobs:
+  capability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install current Official Rive CLI
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+      - name: Probe raw .riv execution capabilities
+        run: node test/execution/rawRivCliCapability.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-riv-cli-capability
+          path: test/tmp/raw-riv-cli-capability
+          if-no-files-found: warn
