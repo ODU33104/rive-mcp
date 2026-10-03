@@ -35,7 +35,14 @@ function resultStatus(ok: boolean, diagnostics: Diagnostic[]): ObservationCheckp
   return ok ? "pass" : "fail";
 }
 
-function inspectSummary(summary: InspectResult["summary"]): unknown {
+function comparableInspectSummary(summary: InspectResult["summary"]): unknown {
+  return {
+    artboardCount: summary.artboardCount ?? null,
+    artboardNames: (summary.artboards ?? []).map((artboard) => artboard.name ?? null),
+  };
+}
+
+function inspectEvidenceSummary(summary: InspectResult["summary"]): unknown {
   return {
     artboardCount: summary.artboardCount ?? null,
     artboards: (summary.artboards ?? []).map((artboard) => ({
@@ -69,18 +76,23 @@ export function normalizeObservation(input: NormalizeObservationInput): BackendO
     },
   }));
 
-  const normalizedInspect = inspectSummary(input.inspect.summary);
-  checkpoints.push(stableCheckpoint({
+  const inspectStatus = resultStatus(input.inspect.ok, input.inspect.diagnostics);
+  const inspectComparable = {
+    ok: input.inspect.ok,
+    summary: comparableInspectSummary(input.inspect.summary),
+  };
+  checkpoints.push({
     id: "inspect",
     kind: "inspect",
-    status: resultStatus(input.inspect.ok, input.inspect.diagnostics),
+    status: inspectStatus,
     diagnosticCodes: diagnosticCodes(input.inspect.diagnostics),
-    value: {
-      ok: input.inspect.ok,
-      summary: normalizedInspect,
+    valueHash: revisionHash(inspectComparable),
+    summary: {
+      comparable: inspectComparable,
+      evidence: inspectEvidenceSummary(input.inspect.summary),
       diagnosticCodes: diagnosticCodes(input.inspect.diagnostics),
     },
-  }));
+  });
 
   for (let index = 0; index < input.scenario.steps.length; index++) {
     const outcome = input.execution.eventSequence.find((item) => item.index === index);
