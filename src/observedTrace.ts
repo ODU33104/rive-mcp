@@ -9,6 +9,12 @@ export interface ObservedInputValue {
   value: boolean | number | null;
 }
 
+export interface ObservedPropertyValue {
+  target: string;
+  property: string;
+  value: number | string;
+}
+
 export interface ObservedTraceContext {
   artboard?: string;
   stateMachine?: string;
@@ -46,10 +52,33 @@ export interface ObservedInputValueChangeEvent {
   advancedSeconds?: number;
 }
 
+export interface ObservedPropertySnapshotEvent {
+  id: string;
+  type: "propertySnapshot";
+  sequence: number;
+  step: string | number;
+  properties: ObservedPropertyValue[];
+  advancedSeconds?: number;
+}
+
+export interface ObservedPropertyValueChangeEvent {
+  id: string;
+  type: "propertyValueChanged";
+  sequence: number;
+  step: string | number;
+  target: string;
+  property: string;
+  before: number | string;
+  after: number | string;
+  advancedSeconds?: number;
+}
+
 export type ObservedTraceEvent =
   | ObservedStateChangeEvent
   | ObservedInputSnapshotEvent
-  | ObservedInputValueChangeEvent;
+  | ObservedInputValueChangeEvent
+  | ObservedPropertySnapshotEvent
+  | ObservedPropertyValueChangeEvent;
 
 export interface ObservedTrace {
   schemaVersion: 1;
@@ -69,7 +98,12 @@ export interface StaticSupportPath {
   staticStateNodeId: string;
   animationNodeId: string;
   propertyNodeId: string;
-  relation: "observed-state-supports-potential-writer";
+  relation:
+    | "observed-state-supports-potential-writer"
+    | "observed-state-and-property-change-support-writer";
+  propertyObservationId?: string;
+  propertyBefore?: number | string;
+  propertyAfter?: number | string;
 }
 
 export interface TraceCorrelation {
@@ -135,11 +169,57 @@ function normalizeInputs(
   return out.sort((a, b) => a.name.localeCompare(b.name) || a.type.localeCompare(b.type));
 }
 
+function normalizeProperties(
+  value: unknown,
+  warnings: string[],
+  step: string | number
+): ObservedPropertyValue[] {
+  if (!Array.isArray(value)) return [];
+  const out: ObservedPropertyValue[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      warnings.push(`step ${String(step)}: ignored malformed property snapshot entry`);
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    if (
+      typeof record.target !== "string" ||
+      typeof record.property !== "string" ||
+      (typeof record.value !== "number" && typeof record.value !== "string")
+    ) {
+      warnings.push(
+        `step ${String(step)}: ignored property snapshot entry without target/property/value`
+      );
+      continue;
+    }
+    if (typeof record.value === "number" && !Number.isFinite(record.value)) {
+      warnings.push(
+        `step ${String(step)} property "${record.target}.${record.property}": non-finite number omitted`
+      );
+      continue;
+    }
+    out.push({
+      target: record.target,
+      property: record.property,
+      value: record.value,
+    });
+  }
+  return out.sort(
+    (a, b) =>
+      a.target.localeCompare(b.target) ||
+      a.property.localeCompare(b.property)
+  );
+}
+
 function sameObservedValue(
-  a: boolean | number | null | undefined,
-  b: boolean | number | null
+  a: boolean | number | string | null | undefined,
+  b: boolean | number | string | null
 ): boolean {
   return Object.is(a, b);
+}
+
+function propertyKey(value: ObservedPropertyValue): string {
+  return `${value.target}\u0000${value.property}`;
 }
 
 export function observedTraceFromPlayResult(
@@ -150,6 +230,7 @@ export function observedTraceFromPlayResult(
   const warnings: string[] = [];
   let sequence = 0;
   let previousInputs = new Map<string, ObservedInputValue>();
+  let previousProperties = new Map<string, ObservedPropertyValue>();
 
   for (let index = 0; index < result.report.length; index++) {
     const entry = result.report[index] ?? {};
@@ -157,6 +238,14 @@ export function observedTraceFromPlayResult(
     const advancedSeconds = normalizeAdvancedSeconds(entry.advancedSeconds);
     const states = normalizeStates(entry.statesChanged);
     const inputs = normalizeInputs(entry.inputs, warnings, step);
+    const properties = normalizeProperties(entry.properties, warnings, step);
+    if (Array.isArray(entry.propertyWarnings)) {
+      for (const warning of entry.propertyWarnings) {
+        if (typeof warning === "string") {
+          warnings.push(`step ${String(step)} property observation: ${warning}`);
+        }
+      }
+    }
 
     events.push({
       id: `obs:${sequence}`,
@@ -189,6 +278,36 @@ export function observedTraceFromPlayResult(
       }
     }
 
+    events.push({
+      id: `obs:${sequence}`,
+      type: "propertySnapshot",
+      sequence: sequence++,
+      step,
+      properties,
+      advancedSeconds,
+    });
+
+    const currentProperties = new Map(
+      properties.map((property) => [propertyKey(property), property])
+    );
+    for (const property of properties) {
+      const previous = previousProperties.get(propertyKey(property));
+      if (!previous) continue;
+      if (!sameObservedValue(previous.value, property.value)) {
+        events.push({
+          id: `obs:${sequence}`,
+          type: "propertyValueChanged",
+          sequence: sequence++,
+          step,
+          target: property.target,
+          property: property.property,
+          before: previous.value,
+          after: property.value,
+          advancedSeconds,
+        });
+      }
+    }
+
     for (const stateName of states) {
       events.push({
         id: `obs:${sequence}`,
@@ -201,6 +320,7 @@ export function observedTraceFromPlayResult(
     }
 
     previousInputs = currentInputs;
+    previousProperties = currentProperties;
   }
 
   return {
@@ -254,6 +374,14 @@ export function correlateObservedTrace(
   const unmatchedObservations: string[] = [];
   const ambiguousObservations: TraceCorrelation["ambiguousObservations"] = [];
   const warnings: string[] = [];
+  const propertyChangesByStep = new Map<string, ObservedPropertyValueChangeEvent[]>();
+  for (const event of trace.events) {
+    if (event.type !== "propertyValueChanged") continue;
+    const key = typeof event.step === "number" ? `n:${event.step}` : `s:${event.step}`;
+    const list = propertyChangesByStep.get(key) ?? [];
+    list.push(event);
+    propertyChangesByStep.set(key, list);
+  }
 
   for (const event of trace.events) {
     if (event.type !== "stateChange") continue;
@@ -300,6 +428,14 @@ export function correlateObservedTrace(
       for (const propertyEdge of propertyEdges) {
         const property = nodeById.get(propertyEdge.to);
         if (!property || property.kind !== "property") continue;
+        const stepKey =
+          typeof event.step === "number" ? `n:${event.step}` : `s:${event.step}`;
+        const matchingPropertyChange = (propertyChangesByStep.get(stepKey) ?? []).find(
+          (change) =>
+            property.metadata.targetName === change.target &&
+            property.metadata.propertyName === change.property
+        );
+
         support.push({
           observationId: event.id,
           observationType: "stateChange",
@@ -307,7 +443,12 @@ export function correlateObservedTrace(
           staticStateNodeId: state.id,
           animationNodeId: animation.id,
           propertyNodeId: property.id,
-          relation: "observed-state-supports-potential-writer",
+          relation: matchingPropertyChange
+            ? "observed-state-and-property-change-support-writer"
+            : "observed-state-supports-potential-writer",
+          propertyObservationId: matchingPropertyChange?.id,
+          propertyBefore: matchingPropertyChange?.before,
+          propertyAfter: matchingPropertyChange?.after,
         });
       }
     }
@@ -323,9 +464,20 @@ export function correlateObservedTrace(
     a.observationId.localeCompare(b.observationId)
   );
 
-  if (support.length > 0) {
+  const strongerSupport = support.filter(
+    (item) => item.relation === "observed-state-and-property-change-support-writer"
+  );
+  const weakerSupport = support.filter(
+    (item) => item.relation === "observed-state-supports-potential-writer"
+  );
+  if (strongerSupport.length > 0) {
     warnings.push(
-      "Correlation proves an observed state-change is structurally compatible with a potential static writer path; it does not prove that the downstream property value actually changed"
+      "Observed state and property changes at the same checkpoint strengthen the static writer path, but temporal co-observation alone is not proof that no other writer contributed"
+    );
+  }
+  if (weakerSupport.length > 0) {
+    warnings.push(
+      "Some correlations only prove an observed state-change is structurally compatible with a potential static writer path; the downstream property change was not observed at that checkpoint"
     );
   }
 
