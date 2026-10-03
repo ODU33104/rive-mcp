@@ -61,11 +61,11 @@ export class NativeBackend implements RiveExecutionBackend {
       runtimeVersion: packageVersion(join(root, "node_modules", "@rive-app", "canvas-advanced", "package.json")),
       capabilities: {
         projectKinds: ["riv"],
-        scenarioSteps: { data: false, pointer: false, key: false, advance: true },
+        scenarioSteps: { data: false, pointer: true, key: false, advance: true },
         verify: true,
         inspect: true,
         screenshot: true,
-        dataSnapshot: false,
+        dataSnapshot: true,
       },
     };
     return this.identity;
@@ -162,10 +162,22 @@ export class NativeBackend implements RiveExecutionBackend {
 
     for (let index = 0; index < scenario.steps.length; index++) {
       const step = scenario.steps[index]!;
-      if (step.type !== "advance") {
+      if (step.type === "data" || step.type === "key") {
         const message = `native backend does not implement Scenario step "${step.type}"`;
         unsupported.push(message);
         eventSequence.push({ index, step, status: "unsupported", detail: message });
+      } else if (step.type === "pointer") {
+        if (!["down", "up"].includes(step.action)) {
+          const message = `pointer action "${step.action}" is not supported by the raw runtime bridge`;
+          unsupported.push(message);
+          eventSequence.push({ index, step, status: "unsupported", detail: message });
+        } else if (!Number.isFinite(step.x) || !Number.isFinite(step.y)) {
+          const message = "pointer coordinates must be finite numbers";
+          unsupported.push(message);
+          eventSequence.push({ index, step, status: "unsupported", detail: message });
+        } else {
+          eventSequence.push({ index, step, status: "applied" });
+        }
       } else if (!Number.isFinite(step.ms) || step.ms < 0) {
         const message = "advance.ms must be a finite non-negative number";
         unsupported.push(message);
@@ -174,9 +186,7 @@ export class NativeBackend implements RiveExecutionBackend {
         eventSequence.push({ index, step, status: "applied" });
       }
     }
-    if (scenario.capture?.dataSnapshot) {
-      unsupported.push("native backend does not expose data snapshots through this Scenario adapter");
-    }
+
     if (unsupported.length > 0) {
       return {
         ok: false,
@@ -196,34 +206,25 @@ export class NativeBackend implements RiveExecutionBackend {
 
     try {
       const bytes = readFileSync(project.path);
-      const elapsedSeconds = scenario.steps.reduce(
-        (sum, step) => sum + (step.type === "advance" ? step.ms / 1000 : 0),
-        0
-      );
       const shouldCapture = scenario.capture?.screenshot !== false;
+      const result = await this.host.executeScenario(bytes, {
+        artboard: scenario.target?.artboard,
+        stateMachine: scenario.target?.stateMachine,
+        width: scenario.viewport?.width,
+        height: scenario.viewport?.height,
+        steps: scenario.steps,
+        captureScreenshot: shouldCapture,
+      });
+
+      mkdirSync(this.outputDir, { recursive: true });
+      const scenarioId = revisionHash(scenario).slice("sha256:".length, "sha256:".length + 16);
       const artifacts: ExecutionResult["artifacts"] = [];
-      let raw: unknown;
+      const dataSnapshots: ExecutionResult["dataSnapshots"] = [];
+
       if (shouldCapture) {
-        const result = await this.host.renderFrames(bytes, {
-          artboard: scenario.target?.artboard,
-          animation: scenario.target?.animation,
-          stateMachine: scenario.target?.stateMachine,
-          startTime: elapsedSeconds,
-          frameCount: 1,
-          format: "png",
-          width: scenario.viewport?.width,
-          height: scenario.viewport?.height,
-        });
-        raw = {
-          width: result.width,
-          height: result.height,
-          states: result.states,
-        };
-        if (!result.frames[0]) throw new Error("Native runtime returned no screenshot frame.");
-        mkdirSync(this.outputDir, { recursive: true });
-        const scenarioId = revisionHash(scenario).slice("sha256:".length, "sha256:".length + 16);
+        if (!result.screenshot) throw new Error("Native runtime returned no screenshot frame.");
         const outPath = join(this.outputDir, `native-${scenarioId}.png`);
-        const png = Buffer.from(result.frames[0], "base64");
+        const png = Buffer.from(result.screenshot, "base64");
         writeFileSync(outPath, png);
         artifacts.push({
           kind: "screenshot",
@@ -233,6 +234,29 @@ export class NativeBackend implements RiveExecutionBackend {
           mediaType: "image/png",
         });
       }
+
+      if (scenario.capture?.dataSnapshot) {
+        if (result.data === null) {
+          throw new Error("Native runtime returned no bound ViewModel data snapshot.");
+        }
+        const dataPath = join(this.outputDir, `native-${scenarioId}.data.json`);
+        const dataBytes = Buffer.from(JSON.stringify(result.data, null, 2) + "\n", "utf8");
+        writeFileSync(dataPath, dataBytes);
+        const dataHash = sha256Bytes(dataBytes);
+        artifacts.push({
+          kind: "data-snapshot",
+          path: dataPath,
+          sha256: dataHash,
+          bytes: dataBytes.length,
+          mediaType: "application/json",
+        });
+        dataSnapshots.push({
+          path: dataPath,
+          sha256: dataHash,
+          value: result.data,
+        });
+      }
+
       return {
         ok: true,
         backend: identity,
@@ -240,9 +264,14 @@ export class NativeBackend implements RiveExecutionBackend {
         unsupported,
         diagnostics: [],
         artifacts,
-        dataSnapshots: [],
+        dataSnapshots,
         performance: { elapsedMs: Date.now() - started },
-        raw,
+        raw: {
+          width: result.width,
+          height: result.height,
+          initial: result.initial,
+          steps: result.steps,
+        },
       };
     } catch (error) {
       return {
