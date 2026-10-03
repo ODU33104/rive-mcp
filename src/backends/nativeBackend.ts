@@ -206,6 +206,63 @@ export class NativeBackend implements RiveExecutionBackend {
 
     try {
       const bytes = readFileSync(project.path);
+      const useInteractiveRuntimeBridge =
+        scenario.capture?.dataSnapshot === true ||
+        scenario.steps.some((step) => step.type === "pointer");
+
+      if (!useInteractiveRuntimeBridge) {
+        // Preserve the pre-#37 advance-only execution path exactly so existing
+        // Evidence/Differential screenshot identities do not change.
+        const elapsedSeconds = scenario.steps.reduce(
+          (sum, step) => sum + (step.type === "advance" ? step.ms / 1000 : 0),
+          0
+        );
+        const shouldCapture = scenario.capture?.screenshot !== false;
+        const artifacts: ExecutionResult["artifacts"] = [];
+        let raw: unknown;
+        if (shouldCapture) {
+          const result = await this.host.renderFrames(bytes, {
+            artboard: scenario.target?.artboard,
+            animation: scenario.target?.animation,
+            stateMachine: scenario.target?.stateMachine,
+            startTime: elapsedSeconds,
+            frameCount: 1,
+            format: "png",
+            width: scenario.viewport?.width,
+            height: scenario.viewport?.height,
+          });
+          raw = {
+            width: result.width,
+            height: result.height,
+            states: result.states,
+          };
+          if (!result.frames[0]) throw new Error("Native runtime returned no screenshot frame.");
+          mkdirSync(this.outputDir, { recursive: true });
+          const scenarioId = revisionHash(scenario).slice("sha256:".length, "sha256:".length + 16);
+          const outPath = join(this.outputDir, `native-${scenarioId}.png`);
+          const png = Buffer.from(result.frames[0], "base64");
+          writeFileSync(outPath, png);
+          artifacts.push({
+            kind: "screenshot",
+            path: outPath,
+            sha256: sha256Bytes(png),
+            bytes: png.length,
+            mediaType: "image/png",
+          });
+        }
+        return {
+          ok: true,
+          backend: identity,
+          eventSequence,
+          unsupported,
+          diagnostics: [],
+          artifacts,
+          dataSnapshots: [],
+          performance: { elapsedMs: Date.now() - started },
+          raw,
+        };
+      }
+
       const shouldCapture = scenario.capture?.screenshot !== false;
       const result = await this.host.executeScenario(bytes, {
         artboard: scenario.target?.artboard,
