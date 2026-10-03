@@ -5,15 +5,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { NativeBackend } from "../../dist/backends/nativeBackend.js";
 import { RiveCliBackend } from "../../dist/backends/riveCliBackend.js";
 import { identifyEvidenceSubject } from "../../dist/evidence/manifest.js";
 import { runDifferentialPair } from "../../dist/differential/lab.js";
+import { sha256Bytes } from "../../dist/revisions/hash.js";
 
 function run(binary, args) {
   return new Promise((resolve, reject) => {
@@ -35,6 +38,11 @@ function run(binary, args) {
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const fixtureRoot = join(root, "test", "fixtures", "differential-basic");
 const workspace = mkdtempSync(join(tmpdir(), "rive-cross-runtime-"));
+const corpusDir = join(root, "test", "tmp", "cross-runtime-differential");
+rmSync(corpusDir, { recursive: true, force: true });
+mkdirSync(corpusDir, { recursive: true });
+const cliArtifactDir = join(corpusDir, "artifacts", "cli");
+const nativeArtifactDir = join(corpusDir, "artifacts", "native");
 const projectDir = join(workspace, "differential-basic");
 cpSync(fixtureRoot, projectDir, { recursive: true });
 
@@ -49,10 +57,10 @@ const scenario = JSON.parse(readFileSync(join(projectDir, "scenario.json"), "utf
 
 const cli = new RiveCliBackend({
   binary,
-  outputDir: join(workspace, "cli-artifacts"),
+  outputDir: cliArtifactDir,
 });
 const native = new NativeBackend({
-  outputDir: join(workspace, "native-artifacts"),
+  outputDir: nativeArtifactDir,
 });
 
 try {
@@ -91,8 +99,23 @@ try {
   assert.ok(first.left.backend.backendVersion);
   assert.ok(first.right.backend.runtimeVersion);
 
-  const outDir = join(root, "test", "tmp", "cross-runtime-differential");
-  mkdirSync(outDir, { recursive: true });
+  const evidenceFiles = (dir) => readdirSync(dir)
+    .filter((name) => name.endsWith(".png"))
+    .sort()
+    .map((name) => {
+      const path = join(dir, name);
+      const bytes = readFileSync(path);
+      return {
+        path: relative(corpusDir, path).replaceAll("\\", "/"),
+        sha256: sha256Bytes(bytes),
+        bytes: bytes.length,
+      };
+    });
+  const leftEvidence = evidenceFiles(cliArtifactDir);
+  const rightEvidence = evidenceFiles(nativeArtifactDir);
+  assert.ok(leftEvidence.length > 0, "CLI differential evidence PNG must be retained");
+  assert.ok(rightEvidence.length > 0, "native differential evidence PNG must be retained");
+
   const record = {
     schemaVersion: "rive-mcp.differential-corpus/v1",
     observedAt: new Date().toISOString(),
@@ -103,9 +126,13 @@ try {
       left: first.left,
       right: first.right,
     },
+    evidenceFiles: {
+      left: leftEvidence,
+      right: rightEvidence,
+    },
     result: first.result,
   };
-  writeFileSync(join(outDir, "differential-basic.json"), JSON.stringify(record, null, 2));
+  writeFileSync(join(corpusDir, "differential-basic.json"), JSON.stringify(record, null, 2));
 
   console.log(JSON.stringify({
     ok: true,
