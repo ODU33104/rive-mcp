@@ -237,6 +237,58 @@ assert.equal(
 assert.equal(result.connection.observedSupportedPaths.length, 0);
 assert.equal(result.connection.competingPaths.length, 0);
 
+const permanentProjection = {
+  schemaVersion: "rive-mcp.real-viewmodel-causal-observation-expectation/v1",
+  oracle: false,
+  fixture: result.fixture,
+  backend: result.backend,
+  sourceDefinedExpected: {
+    propertyPath: result.expected.propertyPath,
+    initial: result.expected.initial,
+    final: result.expected.final,
+  },
+  runtimeObserved: {
+    propertyPath: result.observed.propertyPath,
+    initial: result.observed.initial,
+    final: result.observed.final,
+    checkpoints: result.observed.checkpoints,
+    changes: result.observed.changes,
+  },
+  connection: {
+    classification: result.connection.classification,
+    staticPossiblePathCount: result.connection.staticPossiblePaths.length,
+    observedSupportedPathCount: result.connection.observedSupportedPaths.length,
+    competingPathCount: result.connection.competingPaths.length,
+    semanticallyResolvedBindingSourceCount:
+      semanticallyResolvedBindingSources.length,
+    opaqueBindingSources: bindingSources.map((source) => ({
+      id: source.id,
+      sourcePathIds: source.sourcePathIds,
+    })),
+    otherStaticScenePropertyWriterPathCount:
+      result.connection.otherStaticScenePropertyWriterPaths.length,
+  },
+  deterministic: result.deterministic,
+  evidence: result.evidence,
+};
+
+const permanent = JSON.parse(
+  readFileSync(
+    join(root, "test/fixtures/causal/rapid-pointer-viewmodel-v1.json"),
+    "utf8"
+  )
+);
+assert.equal(
+  permanent.oracle,
+  false,
+  "runtime observation drift fixture must not be promoted to a correctness oracle"
+);
+assert.deepEqual(
+  permanentProjection,
+  permanent,
+  "qualified raw ViewModel causal observation drifted; review measurement before changing the non-oracle baseline"
+);
+
 const outDir = join(root, "test/tmp/real-causal-viewmodel");
 mkdirSync(outDir, { recursive: true });
 writeFileSync(
