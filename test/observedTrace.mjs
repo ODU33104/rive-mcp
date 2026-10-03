@@ -17,6 +17,7 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
             { name: "enabled", type: "Boolean", value: false },
             { name: "score", type: "Number", value: 0 },
           ],
+          properties: [{ target: "Button", property: "x", value: 0 }],
         },
         {
           step: 0,
@@ -26,6 +27,7 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
             { name: "enabled", type: "Boolean", value: true },
             { name: "score", type: "Number", value: 10 },
           ],
+          properties: [{ target: "Button", property: "x", value: 20 }],
         },
       ],
     },
@@ -34,6 +36,9 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
 
   const stateEvents = trace.events.filter((event) => event.type === "stateChange");
   const inputChanges = trace.events.filter((event) => event.type === "inputValueChanged");
+  const propertyChanges = trace.events.filter(
+    (event) => event.type === "propertyValueChanged"
+  );
 
   assert.equal(stateEvents.length, 1);
   assert.equal(stateEvents[0].stateName, "Fade");
@@ -44,6 +49,15 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
       ["enabled", false, true],
       ["score", 0, 10],
     ]
+  );
+  assert.deepEqual(
+    propertyChanges.map((event) => [
+      event.target,
+      event.property,
+      event.before,
+      event.after,
+    ]),
+    [["Button", "x", 0, 20]]
   );
 }
 
@@ -66,8 +80,15 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
       report: [
         {
           step: "init",
+          statesChanged: [],
+          inputs: [],
+          properties: [{ target: "Button", property: "x", value: 0 }],
+        },
+        {
+          step: 0,
           statesChanged: ["Fade"],
           inputs: [],
+          properties: [{ target: "Button", property: "x", value: 30 }],
         },
       ],
     },
@@ -80,8 +101,10 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
   assert.equal(correlation.ambiguousObservations.length, 0);
   assert.equal(
     correlation.support[0].relation,
-    "observed-state-supports-potential-writer"
+    "observed-state-and-property-change-support-writer"
   );
+  assert.equal(correlation.support[0].propertyBefore, 0);
+  assert.equal(correlation.support[0].propertyAfter, 30);
 
   const property = graph.nodes.find(
     (node) =>
@@ -92,8 +115,8 @@ import { staticProvenanceFromRiv } from "../dist/staticProvenance.js";
   assert.ok(property);
   assert.equal(correlation.support[0].propertyNodeId, property.id);
   assert.ok(
-    correlation.warnings.some((warning) => warning.includes("does not prove")),
-    "correlation must disclose that no property value change was observed"
+    correlation.warnings.some((warning) => warning.includes("not proof")),
+    "correlation must disclose that co-observation is stronger evidence but not exclusive causal proof"
   );
 
   assert.deepEqual(
