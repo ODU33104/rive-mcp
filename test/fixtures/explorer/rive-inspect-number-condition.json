@@ -1,0 +1,15 @@
+{
+  "roots": [
+    {
+      "type": "ViewModel",
+      "id": "0:40",
+      "name": "Root",
+      "children": [
+        { "type": "ViewModelPropertyNumber", "id": "0:41", "name": "score" },
+        { "type": "ViewModelPropertyViewModel", "id": "0:42", "name": "settings" },
+        { "type": "ViewModelPropertyNumber", "id": "0:43", "name": "speed" },
+        { "type": "ViewModelPropertyBoolean", "id": "0:44", "name": "enabled" }
+      ]
+    }
+  ]
+}
