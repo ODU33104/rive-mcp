@@ -1,0 +1,32 @@
+{
+  "id": "keyboard-focus-tabs",
+  "name": "five tab key presses through four Rive focus targets",
+  "target": {
+    "artboard": "Buttons"
+  },
+  "steps": [
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    },
+    {
+      "type": "key",
+      "key": "Tab"
+    }
+  ],
+  "capture": {
+    "screenshot": true
+  }
+}

@@ -47,6 +47,23 @@ export interface PlayResult {
   frames: string[]; // base64 png
 }
 
+export interface ScenarioExecutionResult {
+  width: number;
+  height: number;
+  initial: {
+    statesChanged: string[];
+    data: Record<string, unknown> | null;
+  };
+  steps: Array<{
+    index: number;
+    type: string;
+    statesChanged: string[];
+    data: Record<string, unknown> | null;
+  }>;
+  data: Record<string, unknown> | null;
+  screenshot: string | null;
+}
+
 export interface VideoResult {
   base64: string;
   mimeType: string;
@@ -202,6 +219,13 @@ export class RiveHost {
 
   playStateMachine(rivBytes: Buffer, opts: Record<string, unknown>): Promise<PlayResult> {
     return this.call<PlayResult>("playStateMachine", rivBytes.toString("base64"), opts);
+  }
+
+  executeScenario(
+    rivBytes: Buffer,
+    opts: Record<string, unknown>
+  ): Promise<ScenarioExecutionResult> {
+    return this.call<ScenarioExecutionResult>("executeScenario", rivBytes.toString("base64"), opts);
   }
 
   sliceImage(

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "rive-mcp.differential-corpus/v1",
+  "observedAt": "2026-10-03T00:02:00.000Z",
+  "sourceArtifactHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "compiledArtifactHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "scenarioHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "observations": {
+    "left": {
+      "executionArtifactHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "right": {
+      "executionArtifactHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "result": {
+    "schemaVersion": "rive-mcp.differential-result/v1",
+    "artifactHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "scenarioHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "leftBackend": {
+      "id": "rive-cli",
+      "name": "Official Rive CLI",
+      "backendVersion": "1.3.0",
+      "runtimeVersion": null
+    },
+    "rightBackend": {
+      "id": "rive-mcp-native",
+      "name": "rive-mcp native runtime backend",
+      "backendVersion": "0.6.1",
+      "runtimeVersion": "2.38.5"
+    },
+    "classification": "divergent",
+    "firstDivergentCheckpoint": {
+      "checkpointId": "capture:screenshot",
+      "kind": "value",
+      "leftStatus": "pass",
+      "rightStatus": "pass",
+      "leftValueHash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "rightValueHash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "detail": "normalized checkpoint value differs"
+    },
+    "differences": [],
+    "deterministicKey": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+  }
+}

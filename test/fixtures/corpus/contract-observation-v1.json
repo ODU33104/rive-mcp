@@ -1,0 +1,13 @@
+{
+  "artifactHash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+  "sourceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scopeKey": "public-runtime-contract",
+  "apiFingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "behaviorFingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "observedAt": "2026-10-03T00:03:00.000Z",
+  "backendName": "runtime-contract-extractor",
+  "backendVersion": "0.6.1",
+  "runtimeName": "canvas-advanced",
+  "runtimeVersion": "2.38.5",
+  "sourceSchemaVersion": "RuntimeContract/v1"
+}
