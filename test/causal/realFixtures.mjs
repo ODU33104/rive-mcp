@@ -33,8 +33,6 @@ const supportedWatchProperties = new Set([
 ]);
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const clone = (value) => JSON.parse(JSON.stringify(value));
-
 function nodeMap(graph) {
   return new Map(graph.nodes.map((node) => [node.id, node]));
 }
@@ -79,6 +77,24 @@ function staticSummary(graph) {
     warnings: [...graph.warnings],
     properties,
   };
+}
+
+function warningCategories(warnings) {
+  const categories = {
+    scriptListener: 0,
+    opaqueSourcePath: 0,
+    indexFallback: 0,
+    blendStateUnexpanded: 0,
+    other: 0,
+  };
+  for (const warning of warnings) {
+    if (warning.includes("script/listener")) categories.scriptListener++;
+    else if (warning.includes("opaque numeric IDs")) categories.opaqueSourcePath++;
+    else if (warning.includes("index fallback")) categories.indexFallback++;
+    else if (warning.includes("BlendState")) categories.blendStateUnexpanded++;
+    else categories.other++;
+  }
+  return categories;
 }
 
 function watchCandidates(staticInfo, artboard) {
@@ -204,6 +220,12 @@ async function runController(bytes, graph, scenario, runtimeVersion) {
       artboard,
       stateMachine,
       watchCandidates: watches,
+      unsupportedObservationMechanisms:
+        watches.length === 0 && staticInfo.properties.length > 0
+          ? [
+              "The only modeled target properties in the fixed default artboard are unnamed SolidColor.colorValue bindings; current runtime property watcher does not expose them.",
+            ]
+          : [],
       play,
       trace,
       correlation,
@@ -299,6 +321,54 @@ for (const id of selectedIds) {
   });
 }
 
+function calibrationProjection(run) {
+  const projected = {
+    id: run.fixture.id,
+    artifactSha256: run.fixture.artifactSha256,
+    scenarioId: run.scenario.id,
+    static: {
+      nodeCounts: run.staticProvenance.nodeCounts,
+      edgeCounts: run.staticProvenance.edgeCounts,
+      propertyCount: run.staticProvenance.propertyCount,
+      modeledPropertyCount: run.staticProvenance.modeledPropertyCount,
+      multiWriterPropertyCount: run.staticProvenance.multiWriterPropertyCount,
+      warningCategories: warningCategories(run.staticProvenance.warnings),
+    },
+  };
+
+  if (run.dynamic.status === "executed") {
+    projected.dynamic = {
+      status: "executed",
+      watchCandidateCount: run.dynamic.watchCandidates.length,
+      observedPropertyChanges: run.dynamic.metrics.observedPropertyChanges.length,
+      modeledStaticWriterForObservedChange:
+        run.dynamic.metrics.modeledStaticWriterForObservedChange,
+      observedSupportedWriter: run.dynamic.metrics.observedSupportedWriter,
+      competingModeledWriter: run.dynamic.metrics.competingModeledWriter,
+      unattributedPropertyChange: run.dynamic.metrics.unattributedPropertyChange,
+      ambiguousPropertyIdentity: run.dynamic.metrics.ambiguousPropertyIdentity,
+      stateChanges: run.dynamic.metrics.stateChanges,
+      inputChanges: run.dynamic.metrics.inputChanges,
+      runtimePropertyWarnings: run.dynamic.metrics.runtimePropertyWarnings,
+      unsupportedObservationMechanisms:
+        run.dynamic.unsupportedObservationMechanisms,
+    };
+  } else {
+    projected.dynamic = {
+      status: "unsupported",
+      observedPropertyChanges: null,
+      modeledStaticWriterForObservedChange: null,
+      observedSupportedWriter: null,
+      competingModeledWriter: null,
+      unattributedPropertyChange: null,
+      ambiguousPropertyIdentity: null,
+      unsupportedObservationMechanisms:
+        run.dynamic.unsupportedObservationMechanisms,
+    };
+  }
+  return projected;
+}
+
 const result = {
   schemaVersion: "rive-mcp.real-causal-calibration/v1",
   basis: {
@@ -312,6 +382,35 @@ const result = {
   fixtures: runs,
 };
 writeFileSync(join(outDir, "baseline.json"), JSON.stringify(result, null, 2) + "\n");
+
+const permanent = JSON.parse(
+  readFileSync(
+    join(root, "test/fixtures/causal/real-calibration-v1.json"),
+    "utf8"
+  )
+);
+assert.equal(permanent.oracle, false, "calibration drift baseline must not become a correctness oracle");
+assert.equal(
+  permanent.basis.runtimeVersion,
+  runtimePackage.version,
+  "runtime version changed; review real-fixture calibration before refreshing the permanent baseline"
+);
+for (const expected of permanent.fixtures) {
+  const run = runs.find((item) => item.fixture.id === expected.id);
+  assert.ok(run, `missing measured permanent fixture ${expected.id}`);
+  const actual = calibrationProjection(run);
+  assert.deepEqual(
+    actual,
+    {
+      id: expected.id,
+      artifactSha256: expected.artifactSha256,
+      scenarioId: expected.scenarioId,
+      static: expected.static,
+      dynamic: expected.dynamic,
+    },
+    `${expected.id}: permanent real causal calibration drifted`
+  );
+}
 
 console.log(JSON.stringify({
   ok: true,
