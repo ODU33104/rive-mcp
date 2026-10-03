@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "rive-mcp.real-causal-calibration-expectation/v1",
+  "fixtures": [
+    {
+      "fixture": "official-flutter-controller-basic",
+      "artifactSha256": "adf0dd0ab7dff250ba939403cba5b0bf6004a09c735b183fbc623213eb28249a",
+      "scenarioId": "controller-basic-advance",
+      "static": {
+        "propertyNodes": 2,
+        "writerPaths": 2,
+        "warningCount": 3
+      },
+      "executionStatus": "executed",
+      "unsupportedObservationMechanisms": [
+        "property observation unsupported for SolidColor#3.colorValue (property:a0:o3:p37): runtime watcher requires a stable named target; static provenance currently has only index-fallback identity"
+      ],
+      "runtime": {
+        "artboard": "Artboard1",
+        "stateMachine": "State Machine 1",
+        "watchProperties": [],
+        "propertyObservationGaps": [
+          {
+            "propertyNodeId": "property:a0:o3:p37",
+            "label": "SolidColor#3.colorValue",
+            "targetType": "SolidColor",
+            "targetName": null,
+            "propertyName": "colorValue",
+            "reason": "runtime watcher requires a stable named target; static provenance currently has only index-fallback identity"
+          }
+        ]
+      },
+      "observedStates": [
+        "Timeline 1"
+      ],
+      "metrics": {
+        "observedPropertyChanges": 0,
+        "withModeledStaticWriter": 0,
+        "withObservedSupportedWriter": 0,
+        "withCompetingModeledWriter": 0,
+        "unattributedPropertyChanges": 0,
+        "ambiguousPropertyIdentity": 0,
+        "staticProvenanceWarnings": 3,
+        "observedTraceWarnings": 0,
+        "correlationWarnings": 0,
+        "causalWarnings": 0,
+        "unmatchedStateObservations": 0,
+        "ambiguousStateObservations": 0
+      }
+    },
+    {
+      "fixture": "official-flutter-rapid-pointer",
+      "artifactSha256": "e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079",
+      "scenarioId": "rapid-pointer-down-up",
+      "static": {
+        "propertyNodes": 5,
+        "writerPaths": 3,
+        "warningCount": 7
+      },
+      "executionStatus": "unsupported",
+      "unsupportedObservationMechanisms": [
+        "current #22-#24 playStateMachine observation path does not accept pointer Scenario actions"
+      ],
+      "runtime": null,
+      "observedStates": [],
+      "metrics": {
+        "observedPropertyChanges": 0,
+        "withModeledStaticWriter": 0,
+        "withObservedSupportedWriter": 0,
+        "withCompetingModeledWriter": 0,
+        "unattributedPropertyChanges": 0,
+        "ambiguousPropertyIdentity": 0,
+        "staticProvenanceWarnings": 7,
+        "observedTraceWarnings": 0,
+        "correlationWarnings": 0,
+        "causalWarnings": 0,
+        "unmatchedStateObservations": 0,
+        "ambiguousStateObservations": 0
+      }
+    },
+    {
+      "fixture": "official-flutter-rewards-data-binding",
+      "artifactSha256": "9f2fe2408433754350c808c82772fc58fc67228cae02fc0b1d5123a6b80745e3",
+      "scenarioId": "rewards-data-binding",
+      "static": {
+        "propertyNodes": 118,
+        "writerPaths": 199,
+        "warningCount": 96
+      },
+      "executionStatus": "unsupported",
+      "unsupportedObservationMechanisms": [
+        "current #22-#24 observation path does not apply/checkpoint ViewModel data writes"
+      ],
+      "runtime": null,
+      "observedStates": [],
+      "metrics": {
+        "observedPropertyChanges": 0,
+        "withModeledStaticWriter": 0,
+        "withObservedSupportedWriter": 0,
+        "withCompetingModeledWriter": 0,
+        "unattributedPropertyChanges": 0,
+        "ambiguousPropertyIdentity": 0,
+        "staticProvenanceWarnings": 96,
+        "observedTraceWarnings": 0,
+        "correlationWarnings": 0,
+        "causalWarnings": 0,
+        "unmatchedStateObservations": 0,
+        "ambiguousStateObservations": 0
+      }
+    }
+  ]
+}
