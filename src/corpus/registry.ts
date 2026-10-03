@@ -361,6 +361,11 @@ export class JsonCorpusRegistry {
     const caseIds = new Set(cases.map((item) => item.caseId));
     const evidenceIds = new Set(evidence.map((item) => item.evidenceId));
     let unresolvedReferences = 0;
+    for (const item of cases) {
+      for (const relatedCaseId of item.relatedCaseIds) {
+        if (!caseIds.has(relatedCaseId)) unresolvedReferences++;
+      }
+    }
     for (const item of history) {
       if (!caseIds.has(item.caseId)) unresolvedReferences++;
       for (const evidenceId of item.evidenceIds) {
