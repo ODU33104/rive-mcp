@@ -1900,17 +1900,40 @@ window.riveApi = {
           const s = steps[i];
           const entry = { index: i, type: s.type, statesChanged: [] };
           if (s.type === "pointer") {
-            if (s.action === "down") scene.sm.pointerDown(s.x, s.y, 0);
-            else if (s.action === "up") scene.sm.pointerUp(s.x, s.y, 0);
-            else if (s.action === "move") scene.sm.pointerMove(s.x, s.y, 0);
-            else if (s.action === "exit") scene.sm.pointerExit(s.x, s.y, 0);
-            else if (s.action === "click") {
+            const changed = [];
+            const collect = () => {
+              for (const name of collectStateChanges(scene.sm)) {
+                if (!changed.includes(name)) changed.push(name);
+              }
+            };
+            const advancePointerBoundary = () => {
+              collect();
+              for (const name of scene.step(0)) {
+                if (!changed.includes(name)) changed.push(name);
+              }
+            };
+
+            if (s.action === "down") {
               scene.sm.pointerDown(s.x, s.y, 0);
+              advancePointerBoundary();
+            } else if (s.action === "up") {
               scene.sm.pointerUp(s.x, s.y, 0);
+              advancePointerBoundary();
+            } else if (s.action === "move") {
+              scene.sm.pointerMove(s.x, s.y, 0);
+              collect();
+            } else if (s.action === "exit") {
+              scene.sm.pointerExit(s.x, s.y, 0);
+              collect();
+            } else if (s.action === "click") {
+              scene.sm.pointerDown(s.x, s.y, 0);
+              advancePointerBoundary();
+              scene.sm.pointerUp(s.x, s.y, 0);
+              advancePointerBoundary();
             } else {
               throw new Error("Unsupported pointer action: " + s.action);
             }
-            entry.statesChanged = collectStateChanges(scene.sm);
+            entry.statesChanged = changed;
           } else if (s.type === "advance") {
             entry.statesChanged = scene.seek(s.ms / 1000);
           } else {
