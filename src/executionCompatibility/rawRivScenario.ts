@@ -362,9 +362,15 @@ export class RawRivScenarioBridge {
       const artifactUnchanged =
         beforeHash === afterHash && beforeBytes === rivBytes.length;
 
-      let screenshot: RawRivScenarioResult["observations"] extends infer T
-        ? T extends { screenshot?: infer S } ? S : never
-        : never;
+      let screenshot:
+        | {
+            width: number;
+            height: number;
+            base64: string;
+            sha256: string;
+            bytes: number;
+          }
+        | undefined = undefined;
       if (result.screenshot) {
         const png = Buffer.from(result.screenshot.base64, "base64");
         screenshot = {
