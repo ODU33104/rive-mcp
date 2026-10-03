@@ -1,0 +1,24 @@
+{
+  "fixtureId": "official-flutter-rapid-pointer",
+  "origin": "rive-app/rive-flutter",
+  "retrievalRef": "58fcac2171f655757907356a4bead2ebd008e4f7",
+  "sourcePath": "test/assets/rapid_pointer_events.riv",
+  "acquisitionUrl": "https://media.githubusercontent.com/media/rive-app/rive-flutter/58fcac2171f655757907356a4bead2ebd008e4f7/test/assets/rapid_pointer_events.riv",
+  "artifact": {
+    "sha256": "e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079",
+    "bytes": 528
+  },
+  "upstreamExpected": {
+    "kind": "source-defined",
+    "evidenceUrl": "https://github.com/rive-app/rive-flutter/blob/58fcac2171f655757907356a4bead2ebd008e4f7/test/rapid_pointer_events_test.dart",
+    "assertions": [
+      "The bound ViewModel exposes boolean hasReached.",
+      "After initialization hasReached is false.",
+      "Pointer down then pointer up at (250,250), followed by a 16 ms advance, makes hasReached true."
+    ]
+  },
+  "observedBaseline": {
+    "oracle": false,
+    "note": "Runtime state/data/visual observations produced by this repo are evidence only. They are not promoted to the upstream expected oracle."
+  }
+}
