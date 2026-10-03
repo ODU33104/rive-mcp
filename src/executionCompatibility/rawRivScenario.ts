@@ -224,7 +224,7 @@ function bridgePageScript(): string {
   if (!PAGE_SCRIPT.includes(READY_MARKER)) {
     throw new Error("PAGE_SCRIPT ready marker changed; raw .riv bridge injection must be reviewed.");
   }
-  return PAGE_SCRIPT.replace(READY_MARKER, RAW_RIV_EXTENSION + "\\n" + READY_MARKER);
+  return PAGE_SCRIPT.replace(READY_MARKER, RAW_RIV_EXTENSION + "\n" + READY_MARKER);
 }
 
 function sha256(bytes: Buffer | string): string {
