@@ -69,10 +69,19 @@ jobs:
           EXPLORER_CLI_REPORT: test/tmp/explorer-rive-cli-report.json
         run: node test/explorer/riveCliOfficial.mjs
 
+      - name: A/B numeric boundary fixture with official CLI
+        shell: bash
+        env:
+          RIVE_CLI: /home/runner/.rive/bin/rive
+          EXPLORER_NUMERIC_BOUNDARY_REPORT: test/tmp/explorer-numeric-boundary-report.json
+        run: node test/explorer/riveNumericBoundaryOfficial.mjs
+
       - name: Upload exploration evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: explorer-rive-cli-report
-          path: test/tmp/explorer-rive-cli-report.json
+          path: |
+            test/tmp/explorer-rive-cli-report.json
+            test/tmp/explorer-numeric-boundary-report.json
           if-no-files-found: warn
