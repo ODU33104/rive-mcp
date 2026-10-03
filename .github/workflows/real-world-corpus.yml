@@ -1,0 +1,35 @@
+name: real-world-corpus-ci
+
+on:
+  push:
+    branches:
+      - feat/real-world-verification-corpus
+  pull_request:
+    paths:
+      - "test/fixtures/real-world/**"
+      - "test/corpus/**"
+      - "scripts/fetch-real-world-fixtures.mjs"
+      - "docs/REAL_WORLD_VERIFICATION_CORPUS.md"
+      - ".github/workflows/real-world-corpus.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Acquire pinned official fixtures
+        run: node scripts/fetch-real-world-fixtures.mjs
+      - name: Validate corpus deterministically
+        run: node test/corpus/realWorldCorpus.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-world-corpus-validation
+          path: test/tmp/real-world-corpus
+          if-no-files-found: warn
