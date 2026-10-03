@@ -42,9 +42,26 @@ function run(args) {
 const version = run(["--version"]);
 assert.equal(version.status, 0, version.stderr || version.stdout || version.error);
 
+const screenshotArg = "--screenshot=" + join(outDir, "cli-direct.png");
+const actionProbes = {
+  pointer: run([asset, screenshotArg, "--pointer=down@250,250"]),
+  data: run([asset, screenshotArg, "--data=hasReached=true"]),
+  key: run([asset, screenshotArg, "--key=Enter"]),
+  advance: run([asset, screenshotArg, "--advance=16ms"]),
+};
+
+for (const [action, probe] of Object.entries(actionProbes)) {
+  assert.equal(probe.status, 1, action + " raw .riv probe unexpectedly succeeded");
+  assert.match(
+    probe.stderr,
+    /is a built \.riv; rive previews projects, not \.riv files/,
+    action + " probe did not hit the expected raw .riv project boundary"
+  );
+}
+
 const directScenario = run([
   asset,
-  `--screenshot=${join(outDir, "cli-direct.png")}`,
+  screenshotArg,
   "--pointer=down@250,250",
   "--pointer=up@250,250",
   "--advance=16ms",
@@ -63,6 +80,7 @@ const result = {
   cliVersion: (version.stdout || version.stderr).trim(),
   exactSameBytesAttempted: true,
   conversionsPerformed: false,
+  actionProbes,
   commands: {
     directScenario,
     directInspect,
