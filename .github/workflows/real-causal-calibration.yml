@@ -9,6 +9,7 @@ on:
       - "src/staticProvenance.ts"
       - "src/observedTrace.ts"
       - "src/causalAmbiguity.ts"
+      - "src/causal/**"
       - "test/causal/**"
       - "test/fixtures/real-world/**"
       - "test/fixtures/causal/real-calibration-v1.json"
@@ -48,11 +49,14 @@ jobs:
         run: node scripts/fetch-real-world-fixtures.mjs
       - name: Measure real causal calibration
         run: node test/causal/realFixtures.mjs
+      - name: Observe rapid-pointer ViewModel change
+        run: node test/causal/rapidPointerViewModel.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: real-causal-calibration
           path: |
             test/tmp/real-causal-calibration
+            test/tmp/real-causal-viewmodel
             test/tmp/real-world-corpus/acquisition.json
           if-no-files-found: warn
