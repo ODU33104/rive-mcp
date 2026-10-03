@@ -1,0 +1,62 @@
+name: raw-riv-execution-ci
+
+on:
+  pull_request:
+    paths:
+      - "src/executionCompatibility/**"
+      - "test/execution/**"
+      - "test/fixtures/real-world/**"
+      - "scripts/fetch-real-world-fixtures.mjs"
+      - "docs/RAW_RIV_EXECUTION_COMPATIBILITY.md"
+      - ".github/workflows/raw-riv-execution.yml"
+
+jobs:
+  capability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Acquire exact pinned official fixtures
+        run: node scripts/fetch-real-world-fixtures.mjs
+
+      - name: Install current official Rive CLI
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+
+      - name: Probe direct raw .riv CLI execution
+        env:
+          RIVE_CLI_BIN: /home/runner/.rive/bin/rive
+        run: node test/execution/rawRivCliCapability.mjs
+
+      - name: Execute exact raw .riv through minimal runtime bridge
+        run: node test/execution/rawRivRuntimeBridge.mjs
+
+      - name: Public MCP entrypoint unchanged
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BASE_SHA" HEAD -- src/index.ts | grep -q .; then
+            echo "src/index.ts changed; execution compatibility work must not add public MCP tools."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-riv-execution-evidence
+          path: test/tmp/raw-riv-execution
+          if-no-files-found: warn
