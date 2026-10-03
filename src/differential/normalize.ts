@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { revisionHash } from "../revisions/hash.js";
 import type {
   Diagnostic,
@@ -11,6 +12,7 @@ import type {
   NormalizedCheckpoint,
   ObservationCheckpointStatus,
 } from "./types.js";
+import { normalizePngPixels } from "./png.js";
 import { normalizeBackendIdentity } from "./types.js";
 
 export interface NormalizeObservationInput {
@@ -116,23 +118,52 @@ export function normalizeObservation(input: NormalizeObservationInput): BackendO
 
   if (input.scenario.capture?.screenshot !== false) {
     const screenshot = input.execution.artifacts.find((artifact) => artifact.kind === "screenshot");
-    checkpoints.push(stableCheckpoint({
-      id: "capture:screenshot",
-      kind: "capture",
-      status: screenshot
-        ? "pass"
-        : input.execution.unsupported.some((item) => item.includes("screenshot"))
+    if (!screenshot) {
+      checkpoints.push({
+        id: "capture:screenshot",
+        kind: "capture",
+        status: input.execution.unsupported.some((item) => item.includes("screenshot"))
           ? "unsupported"
           : "missing",
-      diagnosticCodes: [],
-      value: screenshot
-        ? {
-            sha256: screenshot.sha256,
-            bytes: screenshot.bytes,
-            mediaType: screenshot.mediaType ?? null,
-          }
-        : undefined,
-    }));
+        diagnosticCodes: [],
+      });
+    } else {
+      const artifactEvidence = {
+        sha256: screenshot.sha256,
+        bytes: screenshot.bytes,
+        mediaType: screenshot.mediaType ?? null,
+      };
+      try {
+        if (screenshot.mediaType && screenshot.mediaType !== "image/png") {
+          throw new Error(`unsupported screenshot media type ${screenshot.mediaType}`);
+        }
+        const pixels = normalizePngPixels(readFileSync(screenshot.path));
+        checkpoints.push({
+          id: "capture:screenshot",
+          kind: "capture",
+          status: "pass",
+          diagnosticCodes: [],
+          valueHash: revisionHash(pixels),
+          summary: {
+            artifact: artifactEvidence,
+            compareBasis: "decoded-rgba",
+            pixels,
+          },
+        });
+      } catch (error) {
+        checkpoints.push({
+          id: "capture:screenshot",
+          kind: "capture",
+          status: "unsupported",
+          diagnosticCodes: ["DIFFERENTIAL_SCREENSHOT_NORMALIZATION_UNSUPPORTED"],
+          summary: {
+            artifact: artifactEvidence,
+            compareBasis: "unsupported",
+            reason: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+    }
   }
 
   if (input.scenario.capture?.dataSnapshot) {
