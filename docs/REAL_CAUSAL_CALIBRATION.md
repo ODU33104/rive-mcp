@@ -188,3 +188,28 @@ It is:
 Only after that exists can the same real execution establish whether a runtime ViewModel change is structurally attributable, competing, or genuinely unattributed.
 
 Until then, adding script/listener/BlendState writers or stronger causal wording would increase apparent coverage without evidence.
+
+
+## Issue #43 — qualified raw ViewModel observation
+
+The baseline above intentionally records the pre-#39 causal path: `playStateMachine` could not deliver the rapid-pointer Scenario, so that path remains documented as unsupported.
+
+Issue #43 adds a separate observation bridge over the already-qualified #40 `NativeBackend.execute` result. It does not rewrite `ObservedTrace` or `CausalAmbiguity` semantics.
+
+For the exact same `official-flutter-rapid-pointer` bytes and `rapid-pointer-down-up` Scenario, the runtime directly reports:
+
+- initial `hasReached=false`;
+- after pointer-down checkpoint, `hasReached=true`;
+- pointer-up and 16 ms advance remain `true`;
+- fresh-run observation, screenshot, and data snapshot are deterministic.
+
+The source-defined expected transition and the runtime-observed transition are stored separately. Matching values do not create a causal writer attribution.
+
+Static Provenance exposes four Data Binding source nodes for this artifact, but all retain opaque numeric `sourcePathIds` with `normalized:false`. No semantic ViewModel path can therefore be joined to `hasReached` without guessing. The connection is recorded as **unresolved**, with:
+
+- resolved static paths for `hasReached`: 0;
+- observed-supported paths: 0;
+- competing matched paths: 0;
+- opaque binding-source evidence retained explicitly.
+
+Permanent drift evidence is `test/fixtures/causal/rapid-pointer-viewmodel-v1.json`, marked `oracle:false`.
