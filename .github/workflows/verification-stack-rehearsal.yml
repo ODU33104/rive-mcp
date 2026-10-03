@@ -117,6 +117,8 @@ jobs:
         run: node test/differential/crossRuntime.mjs
       - name: Acquire qualified real-world fixtures
         run: node scripts/fetch-real-world-fixtures.mjs
+      - name: Observe rapid-pointer ViewModel change in causal QA
+        run: node test/causal/rapidPointerViewModel.mjs
       - name: Validate qualified real-world corpus
         run: node test/corpus/realWorldCorpus.mjs
       - uses: actions/upload-artifact@v4
@@ -127,6 +129,7 @@ jobs:
             test/tmp/reality-pilot
             test/tmp/cross-runtime-differential
             test/tmp/real-world-corpus
+            test/tmp/real-causal-viewmodel
             test/tmp/rehearsal-explorer-rive-cli-report.json
             test/tmp/rehearsal-explorer-numeric-boundary-report.json
           if-no-files-found: warn
