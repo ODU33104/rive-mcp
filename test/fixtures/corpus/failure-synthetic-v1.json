@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "failureId": "fail_9b9115b3cb7c81f0d04a6d7f",
+  "origin": "synthetic-regression",
+  "artifactHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "artifact": {
+    "path": "/tmp/explorer/threshold-submit.json"
+  },
+  "tool": {
+    "name": "rive-mcp-explorer",
+    "version": "0.6.1"
+  },
+  "runtime": {
+    "name": "fixture-runtime",
+    "version": "1.2.0"
+  },
+  "scenario": {
+    "seed": 7,
+    "strategy": "boundary-guided",
+    "maxDepth": 4,
+    "maxSequences": 64
+  },
+  "inputSequence": [
+    {
+      "kind": "data-write",
+      "path": "score",
+      "value": 50.001
+    },
+    {
+      "kind": "runtime",
+      "surface": "submit",
+      "operation": "fire"
+    }
+  ],
+  "minimalReproduction": {
+    "sequence": [
+      {
+        "kind": "data-write",
+        "path": "score",
+        "value": 50.001
+      },
+      {
+        "kind": "runtime",
+        "surface": "submit",
+        "operation": "fire"
+      }
+    ],
+    "minimality": "locally-minimized",
+    "reproductionAttempts": 5,
+    "reproductionSuccesses": 5,
+    "reproductionSuccessRate": 1
+  },
+  "expectedInvariant": {
+    "id": "submit-state-must-not-be-invalid",
+    "kind": "predicate",
+    "description": "synthetic explorer regression invariant"
+  },
+  "observedResult": {
+    "stepIndex": 1,
+    "observation": {
+      "activeStates": [
+        "invalid-submit"
+      ],
+      "frameHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "message": "synthetic invariant violated"
+  },
+  "evidence": {
+    "screenshots": [
+      "/tmp/run-123/frame.png"
+    ],
+    "data": {
+      "score": 50.001
+    }
+  },
+  "knownAffectedVersions": [
+    "1.2.0"
+  ],
+  "discoveredAt": "2026-10-03T00:00:00.000Z"
+}

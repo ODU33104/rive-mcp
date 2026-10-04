@@ -1,0 +1,53 @@
+{
+  "artifactHash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "scenarioHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "scopeKey": "Artboard/State Machine 1/Box.x",
+  "observedAt": "2026-10-03T00:04:00.000Z",
+  "evidenceKind": "causal-ambiguity",
+  "sourceSchemaVersion": "CausalAmbiguityReport/v1",
+  "backendName": "rive-mcp-native",
+  "backendVersion": "0.6.1",
+  "runtimeName": "canvas-advanced",
+  "runtimeVersion": "2.38.5",
+  "payloadIdentity": {
+    "schemaVersion": 1,
+    "properties": [
+      {
+        "observationId": "obs:4",
+        "step": 1,
+        "target": "Box",
+        "property": "x",
+        "before": 0,
+        "after": 10,
+        "propertyNodeIds": [
+          "property:a0:o2:p13"
+        ],
+        "writerPaths": [
+          {
+            "nodeIds": [
+              "state:a0:s1",
+              "animation:a0:o8",
+              "property:a0:o2:p13"
+            ],
+            "edgeKinds": [
+              "activates",
+              "writes"
+            ],
+            "supportedByObservation": true
+          }
+        ],
+        "supportedWriterPaths": [],
+        "competingWriterPaths": [],
+        "status": "observed-support-single-modeled-writer"
+      }
+    ],
+    "summary": {
+      "observedSupportSingleWriter": 1,
+      "observedSupportWithCompetitors": 0,
+      "unattributed": 0,
+      "ambiguousIdentity": 0,
+      "totalPropertyChanges": 1
+    },
+    "warnings": []
+  }
+}
