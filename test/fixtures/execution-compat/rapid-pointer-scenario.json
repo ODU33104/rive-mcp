@@ -1,0 +1,26 @@
+{
+  "id": "rapid-pointer-down-up",
+  "name": "down/up within one frame then advance",
+  "steps": [
+    {
+      "type": "pointer",
+      "action": "down",
+      "x": 250,
+      "y": 250
+    },
+    {
+      "type": "pointer",
+      "action": "up",
+      "x": 250,
+      "y": 250
+    },
+    {
+      "type": "advance",
+      "ms": 16
+    }
+  ],
+  "capture": {
+    "screenshot": true,
+    "dataSnapshot": true
+  }
+}
