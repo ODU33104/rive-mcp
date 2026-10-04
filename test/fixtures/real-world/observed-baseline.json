@@ -1,0 +1,735 @@
+{
+  "schemaVersion": "rive-mcp.real-world-corpus-observed-baseline/v1",
+  "oracle": false,
+  "note": "Observed-only drift baseline. It records what the current pinned runtime/decoder observed from immutable upstream bytes; it is not a source-defined correctness oracle.",
+  "measurement": {
+    "workflowRunId": 37093194742,
+    "workflowArtifactId": 11263477403,
+    "workflowArtifactZipDigest": "sha256:b656269afc79c6d668f915598bb5b80f80ce43576e9ddaa6fe5bedf92c67c054",
+    "headSha": "9f52e5287c7b2607da85466af1b9c1496253fa94"
+  },
+  "riveRuntime": {
+    "package": "@rive-app/canvas-advanced",
+    "version": "2.38.5"
+  },
+  "fixtures": [
+    {
+      "id": "official-flutter-controller-basic",
+      "artifactSha256": "adf0dd0ab7dff250ba939403cba5b0bf6004a09c735b183fbc623213eb28249a",
+      "artifactBytes": 693,
+      "artboardCount": 2,
+      "artboardNames": [
+        "Artboard1",
+        "Artboard2"
+      ],
+      "animationNames": [
+        "Timeline 1"
+      ],
+      "stateMachineNames": [
+        "State Machine 1",
+        "State Machine 2"
+      ],
+      "keyObjectTypeCounts": {
+        "Artboard": 2,
+        "LinearAnimation": 2,
+        "StateMachine": 3,
+        "StateTransition": 2,
+        "Text": 0,
+        "TextValueRun": 0,
+        "ViewModel": 2,
+        "DataBindContext": 2,
+        "ListenerViewModelChange": 0
+      },
+      "dataBinding": {
+        "viewModels": [
+          {
+            "name": "ViewModel1",
+            "properties": [
+              {
+                "name": "viewModel2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "color",
+                "kind": "color"
+              }
+            ]
+          },
+          {
+            "name": "ViewModel2",
+            "properties": [
+              {
+                "name": "color",
+                "kind": "color"
+              }
+            ]
+          }
+        ],
+        "dataBindCount": 2
+      }
+    },
+    {
+      "id": "official-flutter-rapid-pointer",
+      "artifactSha256": "e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079",
+      "artifactBytes": 528,
+      "artboardCount": 1,
+      "artboardNames": [
+        "Artboard"
+      ],
+      "animationNames": [
+        "isUp",
+        "toDown"
+      ],
+      "stateMachineNames": [
+        "State Machine 1"
+      ],
+      "keyObjectTypeCounts": {
+        "Artboard": 1,
+        "LinearAnimation": 2,
+        "StateMachine": 1,
+        "StateTransition": 2,
+        "Text": 0,
+        "TextValueRun": 0,
+        "ViewModel": 1,
+        "DataBindContext": 4,
+        "ListenerViewModelChange": 3
+      },
+      "dataBinding": {
+        "viewModels": [
+          {
+            "name": "ViewModel1",
+            "properties": [
+              {
+                "name": "hasReached",
+                "kind": "boolean"
+              },
+              {
+                "name": "isDown",
+                "kind": "boolean"
+              }
+            ]
+          }
+        ],
+        "dataBindCount": 4
+      }
+    },
+    {
+      "id": "official-flutter-keyboard-focus",
+      "artifactSha256": "bad28c4d10a44d83f8fdd3dd8754bbb4849897a2e2a45a7e397a70c9366ce89f",
+      "artifactBytes": 468820,
+      "artboardCount": 15,
+      "artboardNames": [
+        "Button",
+        "Buttons",
+        "ClaimsTab",
+        "EdgeClosedLoop",
+        "EdgeParentScope",
+        "EdgeStop",
+        "Grid",
+        "Nested",
+        "NoStops",
+        "NoTraverse",
+        "Pair",
+        "PointerFocus",
+        "ScrollList",
+        "TextInput",
+        "TouchButton"
+      ],
+      "animationNames": [
+        "Blur",
+        "Focus",
+        "Idle",
+        "Pressed"
+      ],
+      "stateMachineNames": [
+        "State Machine 1"
+      ],
+      "keyObjectTypeCounts": {
+        "Artboard": 15,
+        "LinearAnimation": 8,
+        "StateMachine": 15,
+        "StateTransition": 12,
+        "Text": 39,
+        "TextValueRun": 39,
+        "ViewModel": 14,
+        "DataBindContext": 37,
+        "ListenerViewModelChange": 16
+      },
+      "dataBinding": {
+        "viewModels": [
+          {
+            "name": "Button",
+            "properties": [
+              {
+                "name": "label",
+                "kind": "string"
+              },
+              {
+                "name": "pressed",
+                "kind": "trigger"
+              },
+              {
+                "name": "focused",
+                "kind": "boolean"
+              }
+            ]
+          },
+          {
+            "name": "Pair",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              }
+            ]
+          },
+          {
+            "name": "Buttons",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "lastPressed",
+                "kind": "string"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "PointerFocus",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "lastPressed",
+                "kind": "string"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "EdgeParentScope",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p5",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "EdgeClosedLoop",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p5",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "EdgeStop",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p5",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "NoTraverse",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "NoStops",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "ClaimsTab",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "lastPressed",
+                "kind": "string"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "Nested",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "Grid",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p5",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p6",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p7",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p8",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p9",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "TextInput",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "text",
+                "kind": "string"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          },
+          {
+            "name": "ScrollList",
+            "properties": [
+              {
+                "name": "p1",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p2",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p3",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p4",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p5",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p6",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p7",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p8",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p9",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p10",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p11",
+                "kind": "viewModel"
+              },
+              {
+                "name": "p12",
+                "kind": "viewModel"
+              },
+              {
+                "name": "steps",
+                "kind": "string"
+              }
+            ]
+          }
+        ],
+        "dataBindCount": 37
+      }
+    },
+    {
+      "id": "official-flutter-rewards-data-binding",
+      "artifactSha256": "9f2fe2408433754350c808c82772fc58fc67228cae02fc0b1d5123a6b80745e3",
+      "artifactBytes": 216976,
+      "artboardCount": 7,
+      "artboardNames": [
+        "Button",
+        "Chest",
+        "Heart",
+        "Item",
+        "Item Value",
+        "Lives 2",
+        "Main"
+      ],
+      "animationNames": [
+        "Button_Base",
+        "Coin",
+        "Down",
+        "Gem",
+        "HitboxCoins",
+        "HitboxGems",
+        "Horizontal",
+        "Idle",
+        "Items_Idle",
+        "Items_Move",
+        "Left",
+        "Open",
+        "Pressed",
+        "ReleaseCoins",
+        "ReleaseGems",
+        "Scale 0",
+        "Scale 100",
+        "State_1",
+        "State_2",
+        "Timeline 1",
+        "Top",
+        "Vertical",
+        "jump",
+        "right"
+      ],
+      "stateMachineNames": [
+        "State Machine 1"
+      ],
+      "keyObjectTypeCounts": {
+        "Artboard": 7,
+        "LinearAnimation": 35,
+        "StateMachine": 7,
+        "StateTransition": 28,
+        "Text": 5,
+        "TextValueRun": 8,
+        "ViewModel": 5,
+        "DataBindContext": 52,
+        "ListenerViewModelChange": 8
+      },
+      "dataBinding": {
+        "viewModels": [
+          {
+            "name": "Item_Icon_Value",
+            "properties": [
+              {
+                "name": "Icon_React",
+                "kind": "trigger"
+              },
+              {
+                "name": "Property_Of_Item",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Item_Value",
+                "kind": "number"
+              }
+            ]
+          },
+          {
+            "name": "Energy_Bar",
+            "properties": [
+              {
+                "name": "Bar_Color",
+                "kind": "color"
+              },
+              {
+                "name": "Lives",
+                "kind": "number"
+              },
+              {
+                "name": "Energy_Bar",
+                "kind": "number"
+              }
+            ]
+          },
+          {
+            "name": "Rewards",
+            "properties": [
+              {
+                "name": "Price_Value",
+                "kind": "number"
+              },
+              {
+                "name": "Color",
+                "kind": "color"
+              },
+              {
+                "name": "Height",
+                "kind": "number"
+              },
+              {
+                "name": "With",
+                "kind": "number"
+              },
+              {
+                "name": "Item_Selection",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Item_Value_Icon",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Button",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Coin",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Gem",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Energy_Bar",
+                "kind": "viewModel"
+              }
+            ]
+          },
+          {
+            "name": "Button",
+            "properties": [
+              {
+                "name": "State_1",
+                "kind": "string"
+              },
+              {
+                "name": "Item_Text",
+                "kind": "string"
+              },
+              {
+                "name": "Item",
+                "kind": "viewModel"
+              },
+              {
+                "name": "Pressed",
+                "kind": "trigger"
+              }
+            ]
+          },
+          {
+            "name": "Item",
+            "properties": [
+              {
+                "name": "Item_Selection",
+                "kind": "enumCustom"
+              }
+            ]
+          }
+        ],
+        "dataBindCount": 52
+      }
+    },
+    {
+      "id": "official-android-text-compat",
+      "artifactSha256": "9390a1448be9dd6b0eff0fd79093ad6270d9c2ebbb69e6b97e9b2fc4ccaad01f",
+      "artifactBytes": 259725,
+      "artboardCount": 1,
+      "artboardNames": [
+        "New Artboard"
+      ],
+      "animationNames": [
+        "Timeline 1"
+      ],
+      "stateMachineNames": [
+        "State Machine 1"
+      ],
+      "keyObjectTypeCounts": {
+        "Artboard": 1,
+        "LinearAnimation": 1,
+        "StateMachine": 1,
+        "StateTransition": 1,
+        "Text": 2,
+        "TextValueRun": 2,
+        "ViewModel": 0,
+        "DataBindContext": 0,
+        "ListenerViewModelChange": 0
+      },
+      "dataBinding": null
+    }
+  ]
+}

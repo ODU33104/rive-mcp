@@ -1,0 +1,13 @@
+{
+  "id": "controller-basic-advance",
+  "name": "default controller advances one frame",
+  "steps": [
+    {
+      "type": "advance",
+      "ms": 16.6666667
+    }
+  ],
+  "capture": {
+    "screenshot": true
+  }
+}
