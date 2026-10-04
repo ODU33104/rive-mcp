@@ -20,15 +20,18 @@ on:
 jobs:
   calibrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build
+        run: npm run build
       - name: Public MCP tool count remains 32
         run: |
           node --input-type=module <<'NODE'
@@ -39,18 +42,74 @@ jobs:
           console.log(JSON.stringify({ toolCount }, null, 2));
           assert.equal(toolCount, 32);
           NODE
-      - name: Existing causal stack
+
+      - name: Runtime Contract
+        run: node test/runtimeContract.mjs
+      - name: Explorer core
         run: |
-          node test/staticProvenance.mjs
-          node test/observedTrace.mjs
-          node test/runtimePropertyObservation.mjs
-          node test/causalAmbiguity.mjs
+          node test/explorer/explorer.mjs
+          node test/explorer/riveCliBackend.mjs
+          node test/explorer/riveRmlBoundaries.mjs
+      - name: Static Provenance
+        run: node test/staticProvenance.mjs
+      - name: Observed Trace
+        run: node test/observedTrace.mjs
+      - name: Runtime Property Observation
+        run: node test/runtimePropertyObservation.mjs
+      - name: Causal Ambiguity
+        run: node test/causalAmbiguity.mjs
+      - name: Corpus Registry
+        run: node test/corpusRegistry.mjs
+
       - name: Acquire qualified real fixtures
         run: node scripts/fetch-real-world-fixtures.mjs
-      - name: Measure real causal calibration
+      - name: Real-world Corpus
+        run: node test/corpus/realWorldCorpus.mjs
+
+      - name: Install current Official Rive CLI
+        id: rive
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libx11-6
+          curl -fsSL https://releases.rive.app/cli/install.sh | bash
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+          samples_path="$("$HOME/.rive/bin/rive" samples --path | tail -n 1)"
+          test -d "$samples_path"
+          echo "samples_path=$samples_path" >> "$GITHUB_OUTPUT"
+
+      - name: Explorer official CLI corpus
+        env:
+          RIVE_CLI: /home/runner/.rive/bin/rive
+          RIVE_CLI_SAMPLES_PATH: ${{ steps.rive.outputs.samples_path }}
+          EXPLORER_CLI_REPORT: test/tmp/explorer-rive-cli-report.json
+        run: |
+          node test/explorer/riveCliOfficial.mjs
+          RIVE_CLI=/home/runner/.rive/bin/rive \
+            EXPLORER_NUMERIC_BOUNDARY_REPORT=test/tmp/explorer-numeric-boundary-report.json \
+            node test/explorer/riveNumericBoundaryOfficial.mjs
+
+      - name: backend-evidence-ci
+        run: |
+          node test/backends/nativeBackend.mjs
+          node test/backends/riveCliBackend.mjs
+          node test/benchmark/realityPilot.mjs
+      - name: cross-runtime-differential-ci
+        run: |
+          node test/differential/core.mjs
+          node test/differential/crossRuntime.mjs
+      - name: raw .riv capability/oracle
+        run: |
+          node test/execution/rawRivCliCapability.mjs
+          node test/execution/rawRivScenarioBridge.mjs
+
+      - name: Real Causal Calibration
         run: node test/causal/realFixtures.mjs
-      - name: Observe rapid-pointer ViewModel change
+      - name: Rapid-pointer ViewModel observation
         run: node test/causal/rapidPointerViewModel.mjs
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -59,4 +118,10 @@ jobs:
             test/tmp/real-causal-calibration
             test/tmp/real-causal-viewmodel
             test/tmp/real-world-corpus/acquisition.json
+            test/tmp/reality-pilot
+            test/tmp/cross-runtime-differential
+            test/tmp/raw-riv-cli-capability
+            test/tmp/raw-riv-execution-compat
+            test/tmp/explorer-rive-cli-report.json
+            test/tmp/explorer-numeric-boundary-report.json
           if-no-files-found: warn
