@@ -1,0 +1,57 @@
+<Rive version="1" kind="fragment">
+    <Artboard defaultStateMachineId="0:7" viewModelId="0:40" viewModelInstanceId="0:42" width="240" height="160" styleId="0:4" name="Boundary" id="0:2">
+        <LayoutComponentStyle name="Boundary Style" id="0:4"/>
+        <Shape x="70" y="40" name="Indicator" id="0:5">
+            <Rectangle width="100" height="80" name="Path" id="0:6"/>
+            <Fill name="Fill" id="0:8">
+                <SolidColor colorValue="FF2D7FF9" name="Color" id="0:9"/>
+            </Fill>
+        </Shape>
+
+        <LinearAnimation duration="1" viewEnd="1" name="low" id="0:20">
+            <KeyedObject objectId="0:9" id="0:21">
+                <KeyedProperty propertyKey="37" id="0:22">
+                    <KeyFrameColor value="FF2D7FF9" interpolationType="0" id="0:23"/>
+                </KeyedProperty>
+            </KeyedObject>
+        </LinearAnimation>
+
+        <LinearAnimation duration="1" viewEnd="1" name="high" id="0:25">
+            <KeyedObject objectId="0:9" id="0:26">
+                <KeyedProperty propertyKey="37" id="0:27">
+                    <KeyFrameColor value="FFEA4D5F" interpolationType="0" id="0:28"/>
+                </KeyedProperty>
+            </KeyedObject>
+        </LinearAnimation>
+
+        <StateMachine name="State Machine 1" id="0:7">
+            <StateMachineLayer name="Layer 1" id="0:10">
+                <EntryState x="-120" y="0" id="0:11">
+                    <StateTransition stateToId="0:32" id="0:33"/>
+                </EntryState>
+
+                <AnimationState animationId="0:20" stateName="Low" x="40" y="0" id="0:32">
+                    <StateTransition stateToId="0:35" id="0:36">
+                        <TransitionViewModelCondition opValue="greaterThan">
+                            <TransitionPropertyViewModelComparator>
+                                <BindablePropertyNumber>
+                                    <DataBindContext sourcePathIds="0:40-0:41" propertyKey="636"/>
+                                </BindablePropertyNumber>
+                            </TransitionPropertyViewModelComparator>
+                            <TransitionValueNumberComparator value="50"/>
+                        </TransitionViewModelCondition>
+                    </StateTransition>
+                </AnimationState>
+
+                <AnimationState animationId="0:25" stateName="High" x="200" y="0" id="0:35"/>
+            </StateMachineLayer>
+        </StateMachine>
+    </Artboard>
+
+    <ViewModel defaultInstanceId="0:42" name="Root" id="0:40">
+        <ViewModelPropertyNumber name="score" id="0:41"/>
+        <ViewModelInstance exports="true" name="Default" id="0:42">
+            <ViewModelInstanceNumber propertyValue="0" viewModelPropertyId="0:41" name="score"/>
+        </ViewModelInstance>
+    </ViewModel>
+</Rive>
