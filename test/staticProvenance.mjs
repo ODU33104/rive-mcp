@@ -30,6 +30,13 @@ function nodeKinds(graph, path) {
     { type: "ViewModel", props: { name: "App" } },
     { type: "ViewModelPropertyNumber", props: { name: "score" } },
     { type: "DataConverterToNumber", props: { name: "toNumber" } },
+    {
+      type: "DataBindPath",
+      props: {
+        path: packVaruints([0]),
+        isRelative: 0,
+      },
+    },
 
     { type: "Artboard", props: { name: "Main", width: 400, height: 300 } },
     { type: "Node", props: { name: "Button" } },
@@ -109,6 +116,37 @@ function nodeKinds(graph, path) {
   assert.ok(
     graph.warnings.some((warning) => warning.includes("opaque numeric IDs")),
     "unresolved binding source semantics are disclosed"
+  );
+
+  const boundSource = graph.nodes.find(
+    (node) => node.id === "binding-source:o14"
+  );
+  assert.ok(boundSource);
+  assert.equal(boundSource.metadata.normalized, false);
+  assert.equal(boundSource.metadata.semanticPath, undefined);
+  assert.equal(
+    boundSource.metadata.sourcePathResolution.status,
+    "unresolved"
+  );
+  assert.equal(
+    boundSource.metadata.sourcePathResolution.reason,
+    "no-explicit-semantic-join"
+  );
+  assert.deepEqual(
+    boundSource.metadata.sourcePathResolution.matchingDataBindPathObjectIndices,
+    [3],
+    "numeric DataBindPath equality is retained as candidate evidence only"
+  );
+
+  const reverseSource = graph.nodes.find(
+    (node) => node.id === "binding-source:o16"
+  );
+  assert.ok(reverseSource);
+  assert.equal(reverseSource.metadata.normalized, false);
+  assert.equal(
+    reverseSource.metadata.sourcePathResolution.status,
+    "unresolved",
+    "same numeric IDs must not be promoted to semantic identity by repetition"
   );
 
   const repeated = staticProvenanceFromRiv(writeRiv(objects));

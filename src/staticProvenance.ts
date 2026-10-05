@@ -1,4 +1,5 @@
 import { decodeDataBinding } from "./dataBinding.js";
+import { analyzeDataBindSourcePath } from "./causal/sourcePathResolution.js";
 import {
   isLayerStateType,
   propInfo,
@@ -384,17 +385,25 @@ function buildBindingEdges(
       },
     });
 
+    const sourcePathResolution = analyzeDataBindSourcePath(binding, dataBinding);
     const sourceId = `binding-source:o${binding.objectIndex}`;
     addNode(nodes, {
       id: sourceId,
       kind: "bindingSource",
       label:
-        binding.sourcePathIds && binding.sourcePathIds.length
-          ? `ViewModel source [${binding.sourcePathIds.join(",")}]`
-          : "ViewModel source <unresolved>",
+        sourcePathResolution.status === "resolved"
+          ? `ViewModel source ${sourcePathResolution.semanticPath}`
+          : binding.sourcePathIds && binding.sourcePathIds.length
+            ? `ViewModel source [${binding.sourcePathIds.join(",")}]`
+            : "ViewModel source <unresolved>",
       metadata: {
         sourcePathIds: binding.sourcePathIds,
-        normalized: false,
+        normalized: sourcePathResolution.status === "resolved",
+        semanticPath:
+          sourcePathResolution.status === "resolved"
+            ? sourcePathResolution.semanticPath
+            : undefined,
+        sourcePathResolution,
         nameBased: binding.flags.nameBased,
       },
     });
