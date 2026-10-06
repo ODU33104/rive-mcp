@@ -242,6 +242,83 @@ function makeScene(file, opts) {
   return { ab, sm, anim, width, height, canvas, step, seek, draw, capture, cleanup };
 }
 
+function snapshotWatchedProperties(ab, specs) {
+  const values = [];
+  const warnings = [];
+  for (const spec of specs || []) {
+    if (!spec || typeof spec.target !== "string" || typeof spec.property !== "string") {
+      warnings.push("Ignored malformed watchProperties entry");
+      continue;
+    }
+
+    const target = spec.target;
+    const property = spec.property;
+    try {
+      let value;
+      if (property === "x" || property === "y") {
+        const node = ab.node(target);
+        if (!node) {
+          warnings.push("Node '" + target + "' not found for property '" + property + "'");
+          continue;
+        }
+        value = node[property];
+      } else if (
+        property === "rotation" ||
+        property === "scaleX" ||
+        property === "scaleY"
+      ) {
+        const component = ab.transformComponent(target);
+        if (!component) {
+          warnings.push(
+            "TransformComponent '" + target + "' not found for property '" + property + "'"
+          );
+          continue;
+        }
+        value = component[property];
+      } else if (property === "text") {
+        const run = ab.textRun(target);
+        if (!run) {
+          warnings.push("TextValueRun '" + target + "' not found");
+          continue;
+        }
+        value = run.text;
+      } else {
+        warnings.push(
+          "Unsupported watched property '" + property +
+          "' for target '" + target +
+          "'; supported: x, y, rotation, scaleX, scaleY, text"
+        );
+        continue;
+      }
+
+      if (typeof value !== "number" && typeof value !== "string") {
+        warnings.push(
+          "Observed unsupported value type for '" + target + "." + property + "'"
+        );
+        continue;
+      }
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        warnings.push(
+          "Observed non-finite number for '" + target + "." + property + "'"
+        );
+        continue;
+      }
+
+      values.push({ target, property, value });
+    } catch (error) {
+      warnings.push(
+        "Failed to observe '" + target + "." + property + "': " +
+        (error && error.message ? error.message : String(error))
+      );
+    }
+  }
+
+  values.sort((a, b) =>
+    a.target.localeCompare(b.target) || a.property.localeCompare(b.property)
+  );
+  return { values, warnings: [...new Set(warnings)].sort() };
+}
+
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1857,6 +1934,125 @@ window.riveApi = {
     );
   },
 
+  // backend-neutral Scenario のうち、raw .riv の official runtime が
+  // 直接・明示的に扱える最小 surface を実行する。
+  // 現在は pointer + advance と、既定 ViewModel の scalar snapshot のみ。
+  // data/key は backend 側で unsupported として残す。
+  async executeScenario(b64, opts) {
+    return withFile(b64, (file) => {
+      const scene = makeScene(file, {
+        artboard: opts.artboard,
+        stateMachine: opts.stateMachine,
+        width: opts.width,
+        height: opts.height,
+        background: opts.background,
+      });
+      if (!scene.sm) {
+        scene.cleanup();
+        throw new Error("No state machine available on this artboard");
+      }
+
+      let viewModel = null;
+      let viewModelInstance = null;
+
+      const snapshotViewModel = () => {
+        if (!viewModelInstance || typeof viewModelInstance.getProperties !== "function") return null;
+        const out = {};
+        for (const property of viewModelInstance.getProperties()) {
+          try {
+            let handle = null;
+            if (property.type === "boolean") handle = viewModelInstance.boolean(property.name);
+            else if (property.type === "number" || property.type === "integer") handle = viewModelInstance.number(property.name);
+            else if (property.type === "string") handle = viewModelInstance.string(property.name);
+            else if (property.type === "enumType") handle = viewModelInstance.enum(property.name);
+            if (handle) out[property.name] = handle.value;
+          } catch {
+            // Unsupported/non-scalar property types remain absent rather than guessed.
+          }
+        }
+        return out;
+      };
+
+      try {
+        if (typeof file.defaultArtboardViewModel === "function") {
+          viewModel = file.defaultArtboardViewModel(scene.ab);
+          if (viewModel && typeof viewModel.defaultInstance === "function") {
+            viewModelInstance = viewModel.defaultInstance();
+            if (viewModelInstance) {
+              if (typeof scene.sm.setViewModelInstance === "function" && typeof scene.sm.bind === "function") {
+                scene.sm.setViewModelInstance(viewModelInstance);
+                scene.sm.bind();
+              } else if (typeof scene.sm.bindViewModelInstance === "function") {
+                scene.sm.bindViewModelInstance(viewModelInstance);
+              }
+            }
+          }
+        }
+
+        const initialStates = scene.step(0);
+        const initialData = snapshotViewModel();
+        const report = [];
+        const steps = opts.steps || [];
+
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          const entry = { index: i, type: s.type, statesChanged: [] };
+          if (s.type === "pointer") {
+            const changed = [];
+            const collect = () => {
+              for (const name of collectStateChanges(scene.sm)) {
+                if (!changed.includes(name)) changed.push(name);
+              }
+            };
+            const advancePointerBoundary = () => {
+              collect();
+              for (const name of scene.step(0)) {
+                if (!changed.includes(name)) changed.push(name);
+              }
+            };
+
+            if (s.action === "down") {
+              scene.sm.pointerDown(s.x, s.y, 0);
+              advancePointerBoundary();
+            } else if (s.action === "up") {
+              scene.sm.pointerUp(s.x, s.y, 0);
+              advancePointerBoundary();
+            } else {
+              throw new Error("Unsupported pointer action in minimal raw runtime bridge: " + s.action);
+            }
+            entry.statesChanged = changed;
+          } else if (s.type === "advance") {
+            entry.statesChanged = scene.seek(s.ms / 1000);
+          } else {
+            throw new Error("Unsupported raw runtime Scenario step: " + s.type);
+          }
+          entry.data = snapshotViewModel();
+          report.push(entry);
+        }
+
+        let screenshot = null;
+        if (opts.captureScreenshot !== false) {
+          scene.draw();
+          screenshot = scene.capture("png");
+        }
+
+        return {
+          width: scene.width,
+          height: scene.height,
+          initial: { statesChanged: initialStates, data: initialData },
+          steps: report,
+          data: snapshotViewModel(),
+          screenshot,
+        };
+      } finally {
+        if (viewModelInstance && typeof viewModelInstance.delete === "function") {
+          viewModelInstance.delete();
+        }
+        scene.cleanup();
+      }
+    });
+  },
+
   // State Machine を対話的に実行する。
   // steps: [{input?, value?, advance?, capture?}]
   async playStateMachine(b64, opts) {
@@ -1877,7 +2073,14 @@ window.riveApi = {
         const frames = [];
         // 初期化: 0秒 advance で初期状態を確定
         const initial = scene.step(0);
-        report.push({ step: "init", statesChanged: initial, inputs: currentInputs(scene.sm) });
+        const initialObserved = snapshotWatchedProperties(scene.ab, opts.watchProperties);
+        report.push({
+          step: "init",
+          statesChanged: initial,
+          inputs: currentInputs(scene.sm),
+          properties: initialObserved.values,
+          propertyWarnings: initialObserved.warnings,
+        });
         for (let i = 0; i < (opts.steps || []).length; i++) {
           const s = opts.steps[i];
           const entry = { step: i };
@@ -1888,6 +2091,9 @@ window.riveApi = {
           entry.advancedSeconds = s.advance || 0;
           entry.statesChanged = changed;
           entry.inputs = currentInputs(scene.sm);
+          const observed = snapshotWatchedProperties(scene.ab, opts.watchProperties);
+          entry.properties = observed.values;
+          entry.propertyWarnings = observed.warnings;
           if (s.capture) {
             scene.draw();
             entry.frameIndex = frames.length;

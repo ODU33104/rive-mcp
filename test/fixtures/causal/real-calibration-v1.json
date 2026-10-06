@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "rive-mcp.real-causal-calibration-fixture/v1",
+  "oracle": false,
+  "note": "Permanent drift/calibration projection for qualified real fixtures. Static possibility and observed runtime facts are retained separately; this file is not a correctness oracle.",
+  "basis": {
+    "integrationHead": "69ea152db6cd1192fab36a4437ac266bc755b0ef",
+    "runtime": "@rive-app/canvas-advanced",
+    "runtimeVersion": "2.38.5"
+  },
+  "fixtures": [
+    {
+      "id": "official-flutter-controller-basic",
+      "artifactSha256": "adf0dd0ab7dff250ba939403cba5b0bf6004a09c735b183fbc623213eb28249a",
+      "scenarioId": "controller-basic-advance",
+      "sourceDefinedCausalOracleAvailable": false,
+      "static": {
+        "nodeCounts": {
+          "animation": 2,
+          "binding": 2,
+          "bindingSource": 2,
+          "property": 2,
+          "state": 11
+        },
+        "edgeCounts": {
+          "activates": 2,
+          "feeds": 2,
+          "writes": 2
+        },
+        "propertyCount": 2,
+        "modeledPropertyCount": 2,
+        "multiWriterPropertyCount": 0,
+        "warningCategories": {
+          "scriptListener": 0,
+          "opaqueSourcePath": 1,
+          "indexFallback": 2,
+          "blendStateUnexpanded": 0,
+          "other": 0
+        }
+      },
+      "dynamic": {
+        "status": "executed",
+        "watchCandidateCount": 0,
+        "observedPropertyChanges": 0,
+        "modeledStaticWriterForObservedChange": 0,
+        "observedSupportedWriter": 0,
+        "competingModeledWriter": 0,
+        "unattributedPropertyChange": 0,
+        "ambiguousPropertyIdentity": 0,
+        "stateChanges": [
+          {
+            "step": "init",
+            "stateName": "Timeline 1"
+          }
+        ],
+        "inputChanges": [],
+        "runtimePropertyWarnings": [],
+        "unsupportedObservationMechanisms": [
+          "The only modeled target properties in the fixed default artboard are unnamed SolidColor.colorValue bindings; current runtime property watcher does not expose them."
+        ]
+      }
+    },
+    {
+      "id": "official-flutter-rapid-pointer",
+      "artifactSha256": "e0584ba73df9bf8a7ac1a4ff1c3e381212967b10025d936e49ddab3d30a13079",
+      "scenarioId": "rapid-pointer-down-up",
+      "sourceDefinedCausalOracleAvailable": true,
+      "sourceDefinedOracle": "hasReached false -> true after pointer down/up at (250,250) and 16ms advance",
+      "static": {
+        "nodeCounts": {
+          "animation": 2,
+          "binding": 4,
+          "bindingSource": 4,
+          "property": 5,
+          "state": 5
+        },
+        "edgeCounts": {
+          "activates": 2,
+          "feeds": 7,
+          "writes": 6
+        },
+        "propertyCount": 5,
+        "modeledPropertyCount": 2,
+        "multiWriterPropertyCount": 1,
+        "warningCategories": {
+          "scriptListener": 1,
+          "opaqueSourcePath": 1,
+          "indexFallback": 5,
+          "blendStateUnexpanded": 0,
+          "other": 0
+        }
+      },
+      "dynamic": {
+        "status": "unsupported",
+        "observedPropertyChanges": null,
+        "modeledStaticWriterForObservedChange": null,
+        "observedSupportedWriter": null,
+        "competingModeledWriter": null,
+        "unattributedPropertyChange": null,
+        "ambiguousPropertyIdentity": null,
+        "unsupportedObservationMechanisms": [
+          "pointer scenario delivery",
+          "ViewModel boolean checkpoint observation for hasReached"
+        ]
+      }
+    },
+    {
+      "id": "official-flutter-rewards-data-binding",
+      "artifactSha256": "9f2fe2408433754350c808c82772fc58fc67228cae02fc0b1d5123a6b80745e3",
+      "scenarioId": "rewards-data-binding",
+      "sourceDefinedCausalOracleAvailable": false,
+      "static": {
+        "nodeCounts": {
+          "animation": 35,
+          "binding": 52,
+          "bindingSource": 52,
+          "converter": 4,
+          "property": 118,
+          "state": 74
+        },
+        "edgeCounts": {
+          "activates": 21,
+          "feeds": 73,
+          "writes": 193
+        },
+        "propertyCount": 118,
+        "modeledPropertyCount": 116,
+        "multiWriterPropertyCount": 62,
+        "warningCategories": {
+          "scriptListener": 1,
+          "opaqueSourcePath": 1,
+          "indexFallback": 89,
+          "blendStateUnexpanded": 5,
+          "other": 0
+        }
+      },
+      "dynamic": {
+        "status": "unsupported",
+        "observedPropertyChanges": null,
+        "modeledStaticWriterForObservedChange": null,
+        "observedSupportedWriter": null,
+        "competingModeledWriter": null,
+        "unattributedPropertyChange": null,
+        "ambiguousPropertyIdentity": null,
+        "unsupportedObservationMechanisms": [
+          "ViewModel data scenario delivery",
+          "ViewModel runtime property checkpoint observation"
+        ]
+      }
+    }
+  ]
+}

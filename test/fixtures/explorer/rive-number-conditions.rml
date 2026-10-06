@@ -1,0 +1,75 @@
+<Rive>
+  <ScrollConstraint threshold="2"/>
+
+  <TransitionViewModelCondition opValue="greaterThan">
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:41" propertyKey="636"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueNumberComparator value="50"/>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition opValue="lessThanOrEqual">
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:42-0:43" propertyKey="636"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueNumberComparator value="10"/>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition opValue="lessThan">
+    <TransitionValueNumberComparator value="5"/>
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:41" propertyKey="636"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition>
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:41" propertyKey="636"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueNumberComparator value="7"/>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition opValue="equal">
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyBoolean>
+        <DataBindContext sourcePathIds="0:40-0:44" propertyKey="634"/>
+      </BindablePropertyBoolean>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueBooleanComparator value="true"/>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition opValue="greaterThan">
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:999" propertyKey="636"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueNumberComparator value="100"/>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition opValue="greaterThan">
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:41" propertyKey="634"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueNumberComparator value="200"/>
+  </TransitionViewModelCondition>
+
+  <TransitionViewModelCondition opValue="5">
+    <TransitionPropertyViewModelComparator>
+      <BindablePropertyNumber>
+        <DataBindContext sourcePathIds="0:40-0:41" propertyKey="636"/>
+      </BindablePropertyNumber>
+    </TransitionPropertyViewModelComparator>
+    <TransitionValueNumberComparator value="300"/>
+  </TransitionViewModelCondition>
+</Rive>

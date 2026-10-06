@@ -1,0 +1,27 @@
+name: Static Provenance
+
+on:
+  pull_request:
+    paths:
+      - "src/staticProvenance.ts"
+      - "src/dataBinding.ts"
+      - "src/rivBinary.ts"
+      - "test/staticProvenance.mjs"
+      - "docs/static-provenance.md"
+      - ".github/workflows/static-provenance.yml"
+  push:
+    branches:
+      - "feat/static-provenance-graph"
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/staticProvenance.mjs
