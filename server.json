@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ODU33104/rive-mcp",
-  "description": "Free, editor-less MCP server for Rive: create, edit, inspect, render and preview .riv animations, plus a local Studio with a two-way AI chat panel for human+AI collaboration",
+  "description": "Free, editor-less MCP server for Rive: create, edit, render .riv — plus an AI-collaborative Studio",
   "repository": {
     "url": "https://github.com/ODU33104/rive-mcp",
     "source": "github"
