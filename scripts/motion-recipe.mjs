@@ -290,6 +290,13 @@ export function selectRecipes(catalog,prompt,options={}){
   if(signals.has('style:minimal')&&recipe.energy==='low'){score+=3;why.push('energy:low(+3)');}
   if(quick&&recipe.durationMs<=700){score+=2;why.push('timing:quick(+2)');}
   if(slow&&recipe.durationMs>=650){score+=2;why.push('timing:slow(+2)');}
+  // Expansion recipes require specific phrase evidence before outranking proven legacy choices.
+  // A broad shared goal alone (e.g. "success") must not elevate a progress-completion recipe.
+  if(recipe.expansionVersion==="v2"){
+   const specific=(positiveTerms.get(recipe.id)??[]).length;
+   score+=specific>0?6:-7;
+   why.push(specific>0?'specific-new-recipe(+6)':'generic-new-recipe(-7)');
+  }
   const grounded=recipe.goals.some(g=>signals.has('goal:'+g))||positiveTerms.has(recipe.id);
   return {id:recipe.id,title:recipe.title,score,why,requiredRoles:recipe.roles,durationMs:recipe.durationMs,grounded};
  }).filter(x=>x.grounded&&x.score>0).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id))
