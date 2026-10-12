@@ -89,7 +89,7 @@ async function main(argv){
    if((d.expected.length&&(!d.top1||!d.top3))||(!d.expected.length&&!d.abstained)||d.forbidden.includes(d.actual[0]))
     console.log(JSON.stringify(d));
   }
-  console.log(failures.length&&!noGate?'GATE FAILED: '+failures.join('; '):'GATE PASSED'+(noGate?' (--no-gate)':''));
+  console.log(noGate?'GATE SKIPPED (--no-gate; '+failures.length+' breached thresholds)':failures.length?'GATE FAILED: '+failures.join('; '):'GATE PASSED');
  }
  if(failures.length&&!noGate)process.exitCode=1;
 }
