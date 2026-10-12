@@ -294,8 +294,8 @@ export function selectRecipes(catalog,prompt,options={}){
   // A broad shared goal alone (e.g. "success") must not elevate a progress-completion recipe.
   if(recipe.expansionVersion==="v2"){
    const specific=(positiveTerms.get(recipe.id)??[]).length;
-   score+=specific>0?6:-7;
-   why.push(specific>0?'specific-new-recipe(+6)':'generic-new-recipe(-7)');
+   score+=specific>0?10:-9;
+   why.push(specific>0?'specific-new-recipe(+10)':'generic-new-recipe(-9)');
   }
   const grounded=recipe.goals.some(g=>signals.has('goal:'+g))||positiveTerms.has(recipe.id);
   return {id:recipe.id,title:recipe.title,score,why,requiredRoles:recipe.roles,durationMs:recipe.durationMs,grounded};
