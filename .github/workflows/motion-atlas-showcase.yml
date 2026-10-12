@@ -1,0 +1,49 @@
+name: Motion Atlas 60 Recipes and GIF
+on:
+  pull_request:
+    paths:
+      - 'data/motion-recipes/catalog.v1.json'
+      - 'test/motionRecipe.mjs'
+      - 'scripts/render-motion-atlas-sequence.mjs'
+      - 'docs/MOTION_RECIPE_EXPANSION.md'
+      - '.github/workflows/motion-atlas-showcase.yml'
+jobs:
+  test-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/motion-recipe.mjs validate
+      - run: node test/motionRecipe.mjs
+      - run: node test/motionRetrieval.mjs
+      - run: node test/motionStoryboard.mjs
+      - name: Install Chromium matching pinned runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Render 82 real Rive frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/render-motion-atlas-sequence.mjs test/tmp/motion-atlas-showcase
+      - name: Create smooth GIF from official Rive PNGs
+        shell: bash
+        run: |
+          test -x "$(command -v ffmpeg)"
+          ffmpeg -hide_banner -loglevel error -y -framerate 18 -i test/tmp/motion-atlas-showcase/frame-%03d.png -filter_complex "[0:v]scale=640:-1:flags=lanczos,split[pal-in][gif-in];[pal-in]palettegen=stats_mode=diff[pal];[gif-in][pal]paletteuse=dither=bayer:bayer_scale=3" -loop 0 test/tmp/motion-atlas-showcase/SOLSTICE.gif
+          file test/tmp/motion-atlas-showcase/SOLSTICE.gif
+          test "$(stat -c%s test/tmp/motion-atlas-showcase/SOLSTICE.gif)" -gt 50000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motion-atlas-showcase-gif
+          path: |
+            test/tmp/motion-atlas-showcase/SOLSTICE.gif
+            test/tmp/motion-atlas-showcase/SOLSTICE-poster.png
+            test/tmp/motion-atlas-showcase/solstice.riv
+            test/tmp/motion-atlas-showcase/frame-info.json
+          if-no-files-found: warn
