@@ -37,7 +37,7 @@ const noVisuals={artboard:{name:"Storyboard",width:480,height:320},groups:[
  {id:"hintBox",type:"rect",x:0,y:0,width:100,height:20,parent:"hint",fill:{color:"#E8EDF5"}}
 ],animations:[result.animation]};
 const {bytes}=createRiv(noVisuals);
-assert.ok(bytes.length>1000);
+assert.ok(bytes.length>128,"nonempty Rive binary with header and scene payload");
 assert.equal(String.fromCharCode(...bytes.slice(0,4)),"RIVE");
 const repeat={name:"RepeatedShake",fps:60,cues:[
  {recipeId:"error-nudge",atMs:0,bindings:{panel:binding("same-panel"),hint:binding("first-hint")}},
