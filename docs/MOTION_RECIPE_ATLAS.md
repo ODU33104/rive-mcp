@@ -64,16 +64,16 @@ Insert the produced AnimationSpec into the artboard animations array of an exist
 
 ## Three runnable .riv demonstrations
 
-After npm ci and npm run build, the following each turn a prebuilt original visual composition plus catalog choreography into a real Rive file:
+After npm ci and npm run build, the following single Japanese requests select a supported prebuilt original visual composition, add catalog choreography, and emit a real Rive file:
 
 ```sh
-node scripts/build-motion-atlas-demo.mjs success-burst test/tmp/motion-atlas/success.riv
-node scripts/build-motion-atlas-demo.mjs editorial-headline test/tmp/motion-atlas/editorial.riv
-node scripts/build-motion-atlas-demo.mjs premium-product-intro test/tmp/motion-atlas/product.riv
+node scripts/build-motion-atlas-demo.mjs "成功を祝う演出" test/tmp/motion-atlas/success.riv
+node scripts/build-motion-atlas-demo.mjs "洗練されたタイトルの登場演出" test/tmp/motion-atlas/editorial.riv
+node scripts/build-motion-atlas-demo.mjs "高級な商品紹介を上品に" test/tmp/motion-atlas/product.riv
 node test/motionAtlasDemo.mjs
 ```
 
-The three demo visuals are **original lightweight illustrations**, not reproductions of works in the referenced galleries. This code is a proof that the new schema can drive the existing writer; it does not evaluate perceived quality.
+The CI workflow also uploads these three generated .riv files as a GitHub Actions artifact. The three demo visuals are **original lightweight illustrations**, not reproductions of works in the referenced galleries. This code is a proof that the new schema can drive the existing writer; it does not evaluate perceived quality.
 
 ## Curated initial source types
 
