@@ -30,6 +30,8 @@ jobs:
         run: |
           CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
           RIVE_MCP_CHROME="$CHROME" node scripts/render-motion-atlas-sequence.mjs test/tmp/motion-atlas-showcase
+      - name: Install full ffmpeg encoder
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - name: Create smooth GIF from official Rive PNGs
         shell: bash
         run: |
