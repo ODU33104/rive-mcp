@@ -1828,7 +1828,8 @@
         "animista"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "A quiet centered symbol with supporting hierarchy."
+      "notes": "A quiet centered symbol with supporting hierarchy.",
+      "expansionVersion": "v2"
     },
     {
       "id": "split-headline",
@@ -1915,7 +1916,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Two independent word groups converge, then details enter."
+      "notes": "Two independent word groups converge, then details enter.",
+      "expansionVersion": "v2"
     },
     {
       "id": "caption-staircase",
@@ -2010,7 +2012,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Narrative phrasing through legible, deliberately paced stagger."
+      "notes": "Narrative phrasing through legible, deliberately paced stagger.",
+      "expansionVersion": "v2"
     },
     {
       "id": "editorial-rule",
@@ -2089,7 +2092,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Line opens first to anchor composition."
+      "notes": "Line opens first to anchor composition.",
+      "expansionVersion": "v2"
     },
     {
       "id": "type-echo",
@@ -2176,7 +2180,8 @@
         "opus-demos"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Requires two distinct text layers; not a text shader."
+      "notes": "Requires two distinct text layers; not a text shader.",
+      "expansionVersion": "v2"
     },
     {
       "id": "word-spotlight",
@@ -2254,7 +2259,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Single strong keyword contrasts supporting sentence."
+      "notes": "Single strong keyword contrasts supporting sentence.",
+      "expansionVersion": "v2"
     },
     {
       "id": "numeral-emphasis",
@@ -2350,7 +2356,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Visual metric reveal; not a changing numeric value."
+      "notes": "Visual metric reveal; not a changing numeric value.",
+      "expansionVersion": "v2"
     },
     {
       "id": "pullquote",
@@ -2428,7 +2435,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Quote readable before attribution."
+      "notes": "Quote readable before attribution.",
+      "expansionVersion": "v2"
     },
     {
       "id": "letter-press",
@@ -2523,7 +2531,8 @@
         "react-bits"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "A controlled elastic impact instead of random shakes."
+      "notes": "A controlled elastic impact instead of random shakes.",
+      "expansionVersion": "v2"
     },
     {
       "id": "title-endcard",
@@ -2610,7 +2619,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Stable final hold for meaningful brand recall."
+      "notes": "Stable final hold for meaningful brand recall.",
+      "expansionVersion": "v2"
     },
     {
       "id": "staggered-kpis",
@@ -2707,7 +2717,8 @@
         "react-bits"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Three pre-existing metric widgets with readable cadence."
+      "notes": "Three pre-existing metric widgets with readable cadence.",
+      "expansionVersion": "v2"
     },
     {
       "id": "magazine-cover",
@@ -2804,7 +2815,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Fixed-layout design with soft camera-like settle."
+      "notes": "Fixed-layout design with soft camera-like settle.",
+      "expansionVersion": "v2"
     },
     {
       "id": "brand-bloom",
@@ -2909,7 +2921,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Center first, peripheral bloom later."
+      "notes": "Center first, peripheral bloom later.",
+      "expansionVersion": "v2"
     },
     {
       "id": "glossy-panel",
@@ -2988,7 +3001,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Requires glass-like artwork supplied by visual layer."
+      "notes": "Requires glass-like artwork supplied by visual layer.",
+      "expansionVersion": "v2"
     },
     {
       "id": "soft-orbit",
@@ -3084,7 +3098,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Optical circle is a separate preauthored asset."
+      "notes": "Optical circle is a separate preauthored asset.",
+      "expansionVersion": "v2"
     },
     {
       "id": "gallery-step",
@@ -3170,7 +3185,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Panel geometry must be laid out independently."
+      "notes": "Panel geometry must be laid out independently.",
+      "expansionVersion": "v2"
     },
     {
       "id": "gallery-vertical",
@@ -3256,7 +3272,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Vertical counterpart with staged caption."
+      "notes": "Vertical counterpart with staged caption.",
+      "expansionVersion": "v2"
     },
     {
       "id": "feature-spotlight",
@@ -3361,7 +3378,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Present feature, then marker, then explanation."
+      "notes": "Present feature, then marker, then explanation.",
+      "expansionVersion": "v2"
     },
     {
       "id": "comparison-swap",
@@ -3447,7 +3465,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Switches prebuilt visual samples, not a computed image morph."
+      "notes": "Switches prebuilt visual samples, not a computed image morph.",
+      "expansionVersion": "v2"
     },
     {
       "id": "reveal-glint",
@@ -3543,7 +3562,8 @@
         "animista"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Glint shape must be properly clipped to product; opacity lanes join exactly."
+      "notes": "Glint shape must be properly clipped to product; opacity lanes join exactly.",
+      "expansionVersion": "v2"
     },
     {
       "id": "dialog-popover",
@@ -3629,7 +3649,8 @@
         "animate-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "dialog-dismiss",
@@ -3715,7 +3736,8 @@
         "animate-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "tooltip-nudge",
@@ -3783,7 +3805,8 @@
         "lucide-animated"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "dropdown-cascade",
@@ -3898,7 +3921,8 @@
         "react-bits"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "search-engage",
@@ -3977,7 +4001,8 @@
         "animate-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "tab-indicator",
@@ -4046,7 +4071,8 @@
         "animate-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "accordion-expand",
@@ -4122,7 +4148,8 @@
         "animate-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "chip-trail",
@@ -4219,7 +4246,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "swipe-card",
@@ -4313,7 +4341,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "snap-dock",
@@ -4399,7 +4428,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "menu-tiles",
@@ -4495,7 +4525,8 @@
         "animate-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "progress-complete",
@@ -4582,7 +4613,8 @@
         "rive-ui"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "skeleton-shimmer",
@@ -4649,7 +4681,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene. Repeat by replaying clip after resetting offscreen, not seamless interpolation."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene. Repeat by replaying clip after resetting offscreen, not seamless interpolation.",
+      "expansionVersion": "v2"
     },
     {
       "id": "button-ripple",
@@ -4753,7 +4786,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "focus-ping",
@@ -4829,7 +4863,8 @@
         "lucide-animated"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "success-checklist",
@@ -4928,7 +4963,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "confetti-sway",
@@ -5052,7 +5088,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "reward-shimmer",
@@ -5157,7 +5194,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "character-hop",
@@ -5262,7 +5300,8 @@
         "rive-learning"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "character-blink",
@@ -5339,7 +5378,8 @@
         "rive-learning"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "weather-cloud",
@@ -5436,7 +5476,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     },
     {
       "id": "ambient-lantern",
@@ -5528,7 +5569,8 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     }
   ]
 }
