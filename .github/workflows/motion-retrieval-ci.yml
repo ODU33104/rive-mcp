@@ -1,0 +1,24 @@
+name: Motion Retrieval Benchmark
+on:
+  pull_request:
+    paths:
+      - 'data/motion-recipes/query-benchmark.v1.json'
+      - 'scripts/motion-recipe.mjs'
+      - 'scripts/evaluate-motion-retrieval.mjs'
+      - 'test/motionRetrieval.mjs'
+      - '.github/workflows/motion-retrieval-ci.yml'
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/evaluate-motion-retrieval.mjs
+      - run: node test/motionRetrieval.mjs
+      - run: node test/motionRecipe.mjs
