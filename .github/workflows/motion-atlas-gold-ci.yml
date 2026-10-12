@@ -19,11 +19,12 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Install official runtime's headless browser
-        run: npx playwright install --with-deps chromium
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Run real binary and runtime rendering tests
         shell: bash
         run: |
           CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          echo "Chromium executable: $CHROME"
           test -x "$CHROME"
           RIVE_MCP_CHROME="$CHROME" node test/motionAtlasGold.mjs
       - name: Build and capture visual frames
