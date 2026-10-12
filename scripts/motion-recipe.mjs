@@ -199,23 +199,103 @@ function contains(hay,needle){
  }
  return hay.includes(n);
 }
+// Curated concepts remain independently inspectable; no external embedding or API.
+const EXTRA_LEXICON={
+ 'goal:success':['チェック','完了した','終わった','保存できた','completed','completed successfully','succeeded','saved successfully','confirmation','confirm','win'],
+ 'goal:feedback':['反応する','押した瞬間','クリックの反応','acknowledge','acknowledgement','click','control','checkmark','知らせたい','伝える'],
+ 'goal:loading':['ロード','脈動','fetching','waiting','during load','pulse','pulsing'],
+ 'goal:progress':['ゲージ','進み具合','プログレスバー','progress bar','upload progress','filling'],
+ 'goal:intro':['現れる','登場する','見せる','launch','appear','appears','introduce','introduction'],
+ 'goal:typography':['見出し','雑誌','記事タイトル','editorial','heading','article headline'],
+ 'goal:product':['新商品','商品紹介','新作製品','製品紹介','product launch','product reveal'],
+ 'goal:onboarding':['初回','新規ユーザー','説明画面','new users','first-run','guide','introductory'],
+ 'goal:notification':['お知らせ','notice','message toast'],
+ 'goal:error':['不正','入力ミス','失敗した入力','warning','failed','mistake'],
+ 'goal:toggle':['オンオフ','on off','settings switch'],
+ 'goal:reward':['バッジ','獲得','達成した記念','earned','earning','prize','trophy'],
+ 'goal:navigation':['次のページ','前のページ','ページへの','between pages','navigate','page change'],
+ 'goal:transition':['ページへの切り替え','between pages','page change'],
+ 'goal:character':['挨拶','手を振って','キャラ','waves hello','waves','greet','greeting'],
+ 'goal:form':['入力欄','フィールド','text field','field focus'],
+ 'goal:ambient':['モチーフ','漂う','ゆらゆら','環境演出','motif','floating','endlessly looping'],
+ 'style:premium':['高級感','上質感','品のある','expensive','sophisticated','refined','high-end'],
+ 'style:minimal':['派手さを抑え','ひかえめ','穏やか','やさしい','そっと','calm','restrained','understated','clean','without fanfare','gentle'],
+ 'style:playful':['弾ませ','飛び跳ね','かわいく','元気','楽しく','bounce','bouncing','pop','cartoon','fun','lively'],
+ 'style:energetic':['勢い','華やか','大げさ','盛大','花火','bold','fireworks','high-energy','loud'],
+ 'style:cinematic':['予告編','cinema','film-like','movie-like','depth'],
+ 'style:technical':['きっちり','機械的','technical','precise','mechanical']
+};
+const TERM_ALIASES={'sticker':['ステッカー'],'弾む':['弾ける','弾けるよう','pop'],'ポップ':['pop'],'press':['click','clicked'],'tap':['タップして'],'成功':['completed','succeeded','confirmation'],'完了':['completed','finished']};
+const ALL_LEXICON=Object.fromEntries(Object.entries(LEXICON).map(([key,terms])=>[key,[...terms,...(EXTRA_LEXICON[key]??[])]]));
+function matches(hay,needle){
+ const term=norm(needle);
+ if(!term)return [];
+ const escaped=term.replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g,'\\$&');
+ const ascii=/^[a-z0-9][a-z0-9 -]*$/.test(term);
+ const regex=new RegExp((ascii?'(^|[^a-z0-9])':'')+escaped+(ascii?'(?=$|[^a-z0-9])':''),'g');
+ const found=[];let m;
+ while((m=regex.exec(hay))){found.push({start:m.index+(ascii?m[1].length:0),end:regex.lastIndex});if(!regex.lastIndex)regex.lastIndex++;}
+ return found;
+}
+function isNegated(text,start,end){
+ const before=text.slice(Math.max(0,start-45),start).split(/[,.，。;；!！?？\n]/).at(-1).trim();
+ const after=text.slice(end,end+24).split(/[,.，。;；!！?？\n]/)[0];
+ const clause=text.slice(0,end).split(/[,.，。;；!！?？\n]/).at(-1);
+ if(/(?:ではなく|じゃなく|ではない|じゃない|は表示せず|は不要|はなし)/.test(clause+after)&&
+    /(?:ではなく|じゃなく|ではない|じゃない|は表示せず|は不要|はなし)/.test(after))return true;
+ if(/^(?:.{0,9}?)(?:すぎない|すぎず|ではない|じゃない|じゃなく|ではなく|しない|させない|せない|ない|くない|はなし|なし|避けたい|避ける|不要|禁止|控える|は表示せず)/.test(after))return true;
+ if(/(?:\b(?:not|no|without|avoid|never|less)\b|\bdon't\b|\bdo not\b)(?:\s+[a-z0-9'-]+){0,4}\s*$/.test(before))return true;
+ return false;
+}
+function evidence(text,terms){
+ let positive=null,negative=null;
+ for(const term of terms){for(const range of matches(text,term)){
+  if(isNegated(text,range.start,range.end))negative??=term;
+  else positive??=term;
+ }}
+ return {positive,negative};
+}
 export function selectRecipes(catalog,prompt,options={}){
- const text=norm(prompt),signals=new Set();
- for(const [feature,terms] of Object.entries(LEXICON))
-  if(terms.some(term=>contains(text,term)))signals.add(feature);
- const avoidFlash=/(派手すぎない|派手ではない|派手じゃない|派手にしない|not flashy|less flashy)/.test(text);
- if(avoidFlash){signals.delete("style:energetic");signals.add("style:minimal");}
+ const text=norm(prompt);
+ if(!text||/(?:what .{0,45} means|explain what|とは何|を解説|sound effect|音を作|効果音)/.test(text))return [];
+ const signals=new Set(),forbidden=new Set();
+ for(const [feature,terms] of Object.entries(ALL_LEXICON)){
+  const e=evidence(text,terms);
+  if(e.positive && !(feature==='goal:form' && e.positive==='input' && /\b(?:click|control|acknowledge)\b/.test(text)))signals.add(feature);
+  if(e.negative)forbidden.add(feature);
+ }
+ const anyGoal=[...signals].some(x=>x.startsWith('goal:'));
+ const positiveTerms=new Map();
+ for(const recipe of catalog.recipes){
+  const terms=recipe.terms.filter(t=>!(t==='input'&&/\b(?:click|control|acknowledge)\b/.test(text)&&!/\b(?:form|field|focus)\b/.test(text))&&evidence(text,[t,...(TERM_ALIASES[t]??[])]).positive);
+  if(terms.length)positiveTerms.set(recipe.id,terms);
+ }
+ if(!anyGoal&&!positiveTerms.size)return [];
+ const quick=/(短く|素早く|速い|quick|snappy|instantly)/.test(text);
+ const slow=/(ゆったり|ゆっくり|slow|gentle|calm|smoothly)/.test(text);
  return catalog.recipes.map(recipe=>{
   let score=0;const why=[];
-  for(const g of recipe.goals)if(signals.has("goal:"+g)){score+=8;why.push("goal:"+g);}
-  for(const s of recipe.styles)if(signals.has("style:"+s)){score+=4;why.push("style:"+s);}
-  for(const term of recipe.terms)if(contains(text,term)){score+=2;why.push("term:"+term);}
-  if(avoidFlash&&recipe.energy==="high")score-=8;
-  if(/(短く|素早く|速い|quick|snappy)/.test(text)&&recipe.durationMs<=700)score+=2;
-  if(/(ゆったり|ゆっくり|slow|gentle)/.test(text)&&recipe.durationMs>=650)score+=2;
-  return {id:recipe.id,title:recipe.title,score,why,requiredRoles:recipe.roles,durationMs:recipe.durationMs};
- }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id)).slice(0,options.limit??5);
+  for(const g of recipe.goals){
+   const key='goal:'+g;
+   if(signals.has(key)){score+=10;why.push(key+'(+10)');}
+   if(forbidden.has(key)&&!signals.has(key)){score-=7;why.push('avoid:'+key+'(-7)');}
+  }
+  for(const s of recipe.styles){
+   const key='style:'+s;
+   if(signals.has(key)){score+=4;why.push(key+'(+4)');}
+   if(forbidden.has(key)&&!signals.has(key)){score-=5;why.push('avoid:'+key+'(-5)');}
+  }
+  for(const term of positiveTerms.get(recipe.id)??[]){score+=2;why.push('term:'+term+'(+2)');}
+  if(recipe.energy==='high'&&(forbidden.has('style:energetic')||forbidden.has('style:playful'))){score-=10;why.push('avoid:high-energy(-10)');}
+  if(signals.has('style:minimal')&&recipe.energy==='low'){score+=3;why.push('energy:low(+3)');}
+  if(quick&&recipe.durationMs<=700){score+=2;why.push('timing:quick(+2)');}
+  if(slow&&recipe.durationMs>=650){score+=2;why.push('timing:slow(+2)');}
+  const grounded=recipe.goals.some(g=>signals.has('goal:'+g))||positiveTerms.has(recipe.id);
+  return {id:recipe.id,title:recipe.title,score,why,requiredRoles:recipe.roles,durationMs:recipe.durationMs,grounded};
+ }).filter(x=>x.grounded&&x.score>0).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id))
+ .slice(0,options.limit??5).map(({grounded,...row})=>row);
 }
+
 export function validateCatalog(catalog){
  const issues=[],ids=new Set(),sourceIds=new Set(catalog.sources.map(s=>s.id));
  for(const source of catalog.sources){
