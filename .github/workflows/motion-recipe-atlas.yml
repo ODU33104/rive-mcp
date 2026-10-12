@@ -31,3 +31,11 @@ jobs:
       - run: node scripts/motion-recipe.mjs validate
       - run: node test/motionRecipe.mjs
       - run: node test/motionAtlasDemo.mjs
+      - run: node scripts/build-motion-atlas-demo.mjs "高級な商品紹介を上品に" test/tmp/motion-atlas/product.riv
+      - run: node scripts/build-motion-atlas-demo.mjs "成功を祝う演出" test/tmp/motion-atlas/success.riv
+      - run: node scripts/build-motion-atlas-demo.mjs "洗練されたタイトルの登場演出" test/tmp/motion-atlas/editorial.riv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: motion-atlas-riv-demos
+          path: test/tmp/motion-atlas/*.riv
+          if-no-files-found: error
