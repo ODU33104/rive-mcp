@@ -1,0 +1,20 @@
+name: Motion Source Ledger
+on:
+  pull_request:
+    paths:
+      - 'data/motion-recipes/source-candidates-2026.json'
+      - 'test/motionSourceLedger.mjs'
+      - '.github/workflows/motion-sources-ci.yml'
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/motionSourceLedger.mjs
