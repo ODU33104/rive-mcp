@@ -4649,7 +4649,7 @@
         "motion-examples"
       ],
       "origin": "original-generalized-choreography",
-      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene."
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene. Repeat by replaying clip after resetting offscreen, not seamless interpolation."
     },
     {
       "id": "button-ripple",
