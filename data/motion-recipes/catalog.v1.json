@@ -1742,6 +1742,3835 @@
       ],
       "origin": "original-generalized-choreography",
       "notes": "Seamless periodic movement."
+    },
+    {
+      "id": "quiet-monogram",
+      "title": "Quiet monogram introduction",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "モノグラム",
+        "ブランドマーク",
+        "monogram",
+        "brand mark"
+      ],
+      "roles": [
+        "glyph",
+        "hairline",
+        "subtitle"
+      ],
+      "durationMs": 800,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "glyph",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 370,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "glyph",
+            "property": "scaleX",
+            "from": 0.88,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 600,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "glyph",
+            "property": "scaleY",
+            "from": 0.88,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 600,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "hairline",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.85,
+            "atMs": 380,
+            "durationMs": 210,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "subtitle",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 510,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "animista"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "A quiet centered symbol with supporting hierarchy.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "split-headline",
+      "title": "Split headline convergence",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "medium",
+      "terms": [
+        "分割見出し",
+        "スプリット見出し",
+        "split headline",
+        "kinetic words"
+      ],
+      "roles": [
+        "leftWord",
+        "rightWord",
+        "subline"
+      ],
+      "durationMs": 830,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "leftWord",
+            "property": "x",
+            "from": -65,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 650,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "leftWord",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 350,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "rightWord",
+            "property": "x",
+            "from": 65,
+            "to": 0,
+            "atMs": 100,
+            "durationMs": 580,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "rightWord",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 100,
+            "durationMs": 350,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "subline",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 540,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Two independent word groups converge, then details enter.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "caption-staircase",
+      "title": "Caption staircase",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "字幕段階",
+        "テキスト階段",
+        "caption sequence",
+        "caption stagger"
+      ],
+      "roles": [
+        "line1",
+        "line2",
+        "line3"
+      ],
+      "durationMs": 890,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "line1",
+            "property": "y",
+            "from": 14,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 380,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "line1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "line2",
+            "property": "y",
+            "from": 14,
+            "to": 0,
+            "atMs": 220,
+            "durationMs": 420,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "line2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 220,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "line3",
+            "property": "y",
+            "from": 14,
+            "to": 0,
+            "atMs": 450,
+            "durationMs": 440,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "line3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 450,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Narrative phrasing through legible, deliberately paced stagger.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "editorial-rule",
+      "title": "Editorial rule and annotation",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "罫線",
+        "アンダーライン",
+        "注釈",
+        "rule reveal",
+        "editorial underline"
+      ],
+      "roles": [
+        "rule",
+        "heading",
+        "annotation"
+      ],
+      "durationMs": 720,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "rule",
+            "property": "scaleX",
+            "from": 0.01,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 530,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "heading",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 120,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "heading",
+            "property": "y",
+            "from": 12,
+            "to": 0,
+            "atMs": 120,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "annotation",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 460,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animista",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Line opens first to anchor composition.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "type-echo",
+      "title": "Typographic echo",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "cinematic",
+        "energetic"
+      ],
+      "energy": "high",
+      "terms": [
+        "エコー文字",
+        "残像文字",
+        "echo type",
+        "kinetic typography"
+      ],
+      "roles": [
+        "ghost",
+        "primary",
+        "subtitle"
+      ],
+      "durationMs": 780,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "ghost",
+            "property": "x",
+            "from": -30,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 400,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ghost",
+            "property": "opacity",
+            "from": 0.52,
+            "to": 0.08,
+            "atMs": 0,
+            "durationMs": 490,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "primary",
+            "property": "x",
+            "from": 25,
+            "to": 0,
+            "atMs": 90,
+            "durationMs": 500,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "primary",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 90,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "subtitle",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 520,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "opus-demos"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Requires two distinct text layers; not a text shader.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "word-spotlight",
+      "title": "Word spotlight",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "medium",
+      "terms": [
+        "一語強調",
+        "スポット文字",
+        "highlight word",
+        "text focus"
+      ],
+      "roles": [
+        "sentence",
+        "keyword",
+        "glow"
+      ],
+      "durationMs": 730,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "sentence",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.42,
+            "atMs": 0,
+            "durationMs": 400,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "keyword",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 260,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "keyword",
+            "property": "scaleX",
+            "from": 0.93,
+            "to": 1,
+            "atMs": 260,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "glow",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.52,
+            "atMs": 350,
+            "durationMs": 380,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Single strong keyword contrasts supporting sentence.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "numeral-emphasis",
+      "title": "Numeral emphasis",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "premium",
+        "technical"
+      ],
+      "energy": "low",
+      "terms": [
+        "数字",
+        "数値の強調",
+        "価格",
+        "number emphasis",
+        "metric reveal"
+      ],
+      "roles": [
+        "number",
+        "unit",
+        "label"
+      ],
+      "durationMs": 760,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "number",
+            "property": "scaleX",
+            "from": 0.84,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 550,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "number",
+            "property": "scaleY",
+            "from": 0.84,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 550,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "number",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "unit",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 420,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "y",
+            "from": 12,
+            "to": 0,
+            "atMs": 440,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 440,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Visual metric reveal; not a changing numeric value.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "pullquote",
+      "title": "Editorial pullquote",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "引用文",
+        "名言",
+        "プルクォート",
+        "pullquote",
+        "quote animation"
+      ],
+      "roles": [
+        "mark",
+        "quote",
+        "attribution"
+      ],
+      "durationMs": 810,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "mark",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "quote",
+            "property": "y",
+            "from": 22,
+            "to": 0,
+            "atMs": 120,
+            "durationMs": 560,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "quote",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 120,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "attribution",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 540,
+            "durationMs": 270,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Quote readable before attribution.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "letter-press",
+      "title": "Letterpress impact",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "energetic",
+        "playful"
+      ],
+      "energy": "high",
+      "terms": [
+        "文字が跳ねる",
+        "インパクト文字",
+        "letterpress",
+        "type punch"
+      ],
+      "roles": [
+        "word",
+        "accent"
+      ],
+      "durationMs": 520,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "word",
+            "property": "scaleX",
+            "from": 1.2,
+            "to": 0.96,
+            "atMs": 0,
+            "durationMs": 220,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "word",
+            "property": "scaleX",
+            "from": 0.96,
+            "to": 1,
+            "atMs": 220,
+            "durationMs": 180,
+            "easing": "ease-out"
+          },
+          {
+            "role": "word",
+            "property": "scaleY",
+            "from": 1.2,
+            "to": 0.96,
+            "atMs": 0,
+            "durationMs": 220,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "word",
+            "property": "scaleY",
+            "from": 0.96,
+            "to": 1,
+            "atMs": 220,
+            "durationMs": 180,
+            "easing": "ease-out"
+          },
+          {
+            "role": "word",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 100,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "accent",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animista",
+        "react-bits"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "A controlled elastic impact instead of random shakes.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "title-endcard",
+      "title": "Branded end card",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "エンドカード",
+        "締め",
+        "最後のロゴ",
+        "end card",
+        "logo closing"
+      ],
+      "roles": [
+        "logo",
+        "strapline",
+        "hairline"
+      ],
+      "durationMs": 880,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "logo",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "logo",
+            "property": "scaleX",
+            "from": 0.91,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 560,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "logo",
+            "property": "scaleY",
+            "from": 0.91,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 560,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "strapline",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 500,
+            "durationMs": 250,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "hairline",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.7,
+            "atMs": 540,
+            "durationMs": 340,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Stable final hold for meaningful brand recall.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "staggered-kpis",
+      "title": "Staggered KPI dashboard",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "technical",
+        "minimal"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ダッシュボード",
+        "データ表示",
+        "KPI",
+        "統計",
+        "dashboard kpi"
+      ],
+      "roles": [
+        "metric1",
+        "metric2",
+        "metric3"
+      ],
+      "durationMs": 690,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "metric1",
+            "property": "y",
+            "from": 18,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "metric1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "metric2",
+            "property": "y",
+            "from": 18,
+            "to": 0,
+            "atMs": 150,
+            "durationMs": 390,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "metric2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 150,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "metric3",
+            "property": "y",
+            "from": 18,
+            "to": 0,
+            "atMs": 300,
+            "durationMs": 390,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "metric3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 300,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "react-bits"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Three pre-existing metric widgets with readable cadence.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "magazine-cover",
+      "title": "Magazine cover staging",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "low",
+      "terms": [
+        "表紙",
+        "雑誌風",
+        "マガジン",
+        "magazine cover",
+        "editorial cover"
+      ],
+      "roles": [
+        "cover",
+        "masthead",
+        "featureLine"
+      ],
+      "durationMs": 930,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "cover",
+            "property": "scaleX",
+            "from": 1.07,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 920,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "cover",
+            "property": "scaleY",
+            "from": 1.07,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 920,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "cover",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "masthead",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 310,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "featureLine",
+            "property": "y",
+            "from": 24,
+            "to": 0,
+            "atMs": 450,
+            "durationMs": 480,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "featureLine",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 450,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "opus-demos",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Fixed-layout design with soft camera-like settle.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "brand-bloom",
+      "title": "Brand mark bloom",
+      "goals": [
+        "intro",
+        "success"
+      ],
+      "styles": [
+        "premium",
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ロゴ開花",
+        "ブランド演出",
+        "brand bloom",
+        "logo flourish"
+      ],
+      "roles": [
+        "seed",
+        "ring",
+        "tagline"
+      ],
+      "durationMs": 780,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "seed",
+            "property": "scaleX",
+            "from": 0.42,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 440,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "seed",
+            "property": "scaleY",
+            "from": 0.42,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 440,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "seed",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 180,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ring",
+            "property": "scaleX",
+            "from": 0.7,
+            "to": 1.44,
+            "atMs": 160,
+            "durationMs": 440,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ring",
+            "property": "scaleY",
+            "from": 0.7,
+            "to": 1.44,
+            "atMs": 160,
+            "durationMs": 440,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ring",
+            "property": "opacity",
+            "from": 0.62,
+            "to": 0,
+            "atMs": 160,
+            "durationMs": 440,
+            "easing": "smooth"
+          },
+          {
+            "role": "tagline",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 470,
+            "durationMs": 310,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-ui",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Center first, peripheral bloom later.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "glossy-panel",
+      "title": "Glossy panel reveal",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "low",
+      "terms": [
+        "ガラス感",
+        "グロッシー",
+        "半透明パネル",
+        "glass panel",
+        "glossy"
+      ],
+      "roles": [
+        "surface",
+        "highlight",
+        "label"
+      ],
+      "durationMs": 760,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "surface",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 390,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "surface",
+            "property": "y",
+            "from": 30,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 590,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "highlight",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.72,
+            "atMs": 210,
+            "durationMs": 420,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 400,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Requires glass-like artwork supplied by visual layer.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "soft-orbit",
+      "title": "Orbiting product accent",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "medium",
+      "terms": [
+        "回転する光",
+        "軌道",
+        "orbit accent",
+        "optical ring"
+      ],
+      "roles": [
+        "product",
+        "orbit",
+        "caption"
+      ],
+      "durationMs": 930,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "product",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "product",
+            "property": "scaleX",
+            "from": 0.86,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 740,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "product",
+            "property": "scaleY",
+            "from": 0.86,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 740,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "orbit",
+            "property": "rotation",
+            "from": -60,
+            "to": 0,
+            "atMs": 200,
+            "durationMs": 720,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "orbit",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.78,
+            "atMs": 200,
+            "durationMs": 510,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 550,
+            "durationMs": 380,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-globe",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Optical circle is a separate preauthored asset.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "gallery-step",
+      "title": "Gallery panel takeover",
+      "goals": [
+        "navigation",
+        "transition"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ギャラリー",
+        "展示切替",
+        "gallery transition",
+        "slide takeover"
+      ],
+      "roles": [
+        "oldPanel",
+        "newPanel",
+        "counter"
+      ],
+      "durationMs": 780,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "oldPanel",
+            "property": "x",
+            "from": 0,
+            "to": -100,
+            "atMs": 0,
+            "durationMs": 480,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "oldPanel",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 100,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "newPanel",
+            "property": "x",
+            "from": 100,
+            "to": 0,
+            "atMs": 120,
+            "durationMs": 520,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "newPanel",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 180,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "counter",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 520,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Panel geometry must be laid out independently.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "gallery-vertical",
+      "title": "Vertical gallery reveal",
+      "goals": [
+        "navigation",
+        "transition"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "medium",
+      "terms": [
+        "縦スクロール",
+        "縦切替",
+        "vertical gallery",
+        "vertical slide"
+      ],
+      "roles": [
+        "oldPanel",
+        "newPanel",
+        "caption"
+      ],
+      "durationMs": 820,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "oldPanel",
+            "property": "y",
+            "from": 0,
+            "to": -70,
+            "atMs": 0,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "oldPanel",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 90,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "newPanel",
+            "property": "y",
+            "from": 70,
+            "to": 0,
+            "atMs": 170,
+            "durationMs": 500,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "newPanel",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 170,
+            "durationMs": 330,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 520,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Vertical counterpart with staged caption.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "feature-spotlight",
+      "title": "Feature tour",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "technical",
+        "premium"
+      ],
+      "energy": "medium",
+      "terms": [
+        "機能紹介",
+        "注目機能",
+        "feature tour",
+        "feature highlight"
+      ],
+      "roles": [
+        "hero",
+        "marker",
+        "detail"
+      ],
+      "durationMs": 900,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "hero",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 310,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "hero",
+            "property": "scaleX",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 520,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "hero",
+            "property": "scaleY",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 520,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "marker",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 300,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "marker",
+            "property": "scaleX",
+            "from": 0.4,
+            "to": 1,
+            "atMs": 300,
+            "durationMs": 320,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "detail",
+            "property": "y",
+            "from": 18,
+            "to": 0,
+            "atMs": 530,
+            "durationMs": 370,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "detail",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 530,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-ui",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Present feature, then marker, then explanation.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "comparison-swap",
+      "title": "Before after comparison",
+      "goals": [
+        "navigation",
+        "product"
+      ],
+      "styles": [
+        "technical",
+        "minimal"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ビフォーアフター",
+        "比較",
+        "before after",
+        "comparison reveal"
+      ],
+      "roles": [
+        "before",
+        "after",
+        "label"
+      ],
+      "durationMs": 840,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "before",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 350,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "before",
+            "property": "x",
+            "from": 0,
+            "to": -25,
+            "atMs": 0,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "after",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 260,
+            "durationMs": 400,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "after",
+            "property": "x",
+            "from": 25,
+            "to": 0,
+            "atMs": 260,
+            "durationMs": 470,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 620,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Switches prebuilt visual samples, not a computed image morph.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "reveal-glint",
+      "title": "Metallic glint reveal",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "low",
+      "terms": [
+        "金属の光沢",
+        "光が流れる",
+        "ハイライト",
+        "metal glint",
+        "sheen"
+      ],
+      "roles": [
+        "object",
+        "glint"
+      ],
+      "durationMs": 1150,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "anticipation",
+          "primary",
+          "secondary",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "object",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "object",
+            "property": "scaleX",
+            "from": 0.93,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 620,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "object",
+            "property": "scaleY",
+            "from": 0.93,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 620,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "glint",
+            "property": "x",
+            "from": -140,
+            "to": 140,
+            "atMs": 350,
+            "durationMs": 800,
+            "easing": "ease-in-out"
+          },
+          {
+            "role": "glint",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.8,
+            "atMs": 350,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "glint",
+            "property": "opacity",
+            "from": 0.8,
+            "to": 0,
+            "atMs": 580,
+            "durationMs": 450,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "animista"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Glint shape must be properly clipped to product; opacity lanes join exactly.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "dialog-popover",
+      "title": "Dialog popover",
+      "goals": [
+        "feedback",
+        "form"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "ダイアログ",
+        "ポップオーバー",
+        "dialog",
+        "popover"
+      ],
+      "roles": [
+        "scrim",
+        "dialog",
+        "contents"
+      ],
+      "durationMs": 500,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "scrim",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.54,
+            "atMs": 0,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "dialog",
+            "property": "scaleX",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 60,
+            "durationMs": 340,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "dialog",
+            "property": "scaleY",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 60,
+            "durationMs": 340,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "dialog",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 60,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "contents",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 260,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "dialog-dismiss",
+      "title": "Dialog dismissal",
+      "goals": [
+        "navigation",
+        "transition"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "ダイアログを閉じる",
+        "モーダル終了",
+        "dialog close",
+        "dismiss modal"
+      ],
+      "roles": [
+        "contents",
+        "dialog",
+        "scrim"
+      ],
+      "durationMs": 320,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "contents",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 120,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "dialog",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 70,
+            "durationMs": 190,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "dialog",
+            "property": "scaleX",
+            "from": 1,
+            "to": 0.95,
+            "atMs": 0,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "dialog",
+            "property": "scaleY",
+            "from": 1,
+            "to": 0.95,
+            "atMs": 0,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "scrim",
+            "property": "opacity",
+            "from": 0.54,
+            "to": 0,
+            "atMs": 110,
+            "durationMs": 210,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "tooltip-nudge",
+      "title": "Tooltip nudge",
+      "goals": [
+        "feedback",
+        "form"
+      ],
+      "styles": [
+        "minimal",
+        "playful"
+      ],
+      "energy": "low",
+      "terms": [
+        "ヒント表示",
+        "ツールチップ",
+        "tooltip",
+        "hint bubble"
+      ],
+      "roles": [
+        "tooltip",
+        "arrow"
+      ],
+      "durationMs": 280,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "tooltip",
+            "property": "y",
+            "from": 10,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 280,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "tooltip",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 180,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "arrow",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 90,
+            "durationMs": 190,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animate-ui",
+        "lucide-animated"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "dropdown-cascade",
+      "title": "Dropdown cascade",
+      "goals": [
+        "feedback",
+        "navigation"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ドロップダウン",
+        "メニューが開く",
+        "dropdown",
+        "select menu"
+      ],
+      "roles": [
+        "surface",
+        "item1",
+        "item2",
+        "item3"
+      ],
+      "durationMs": 560,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "surface",
+            "property": "scaleY",
+            "from": 0.35,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 340,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "surface",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 160,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "item1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 150,
+            "durationMs": 160,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "item1",
+            "property": "y",
+            "from": -8,
+            "to": 0,
+            "atMs": 150,
+            "durationMs": 210,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "item2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "item2",
+            "property": "y",
+            "from": -8,
+            "to": 0,
+            "atMs": 240,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "item3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 330,
+            "durationMs": 200,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "item3",
+            "property": "y",
+            "from": -8,
+            "to": 0,
+            "atMs": 330,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animate-ui",
+        "react-bits"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "search-engage",
+      "title": "Search field focus",
+      "goals": [
+        "feedback",
+        "form"
+      ],
+      "styles": [
+        "minimal",
+        "technical"
+      ],
+      "energy": "low",
+      "terms": [
+        "検索欄",
+        "検索開始",
+        "検索バー",
+        "search focus",
+        "search bar"
+      ],
+      "roles": [
+        "field",
+        "magnifier",
+        "hint"
+      ],
+      "durationMs": 550,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "field",
+            "property": "scaleX",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "field",
+            "property": "opacity",
+            "from": 0.75,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "magnifier",
+            "property": "rotation",
+            "from": -18,
+            "to": 0,
+            "atMs": 120,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "hint",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 300,
+            "durationMs": 250,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "lucide-animated",
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "tab-indicator",
+      "title": "Tab indicator slide",
+      "goals": [
+        "navigation",
+        "toggle"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "タブ切替",
+        "タブ下線",
+        "tabs",
+        "tab indicator"
+      ],
+      "roles": [
+        "oldLabel",
+        "indicator",
+        "newLabel"
+      ],
+      "durationMs": 460,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "oldLabel",
+            "property": "opacity",
+            "from": 1,
+            "to": 0.48,
+            "atMs": 0,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "indicator",
+            "property": "x",
+            "from": -78,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 380,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "newLabel",
+            "property": "opacity",
+            "from": 0.5,
+            "to": 1,
+            "atMs": 160,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "accordion-expand",
+      "title": "Accordion expand",
+      "goals": [
+        "feedback",
+        "navigation"
+      ],
+      "styles": [
+        "minimal",
+        "technical"
+      ],
+      "energy": "medium",
+      "terms": [
+        "アコーディオン",
+        "展開",
+        "accordion expand"
+      ],
+      "roles": [
+        "chevron",
+        "panel",
+        "body"
+      ],
+      "durationMs": 510,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "chevron",
+            "property": "rotation",
+            "from": 0,
+            "to": 180,
+            "atMs": 0,
+            "durationMs": 350,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "panel",
+            "property": "scaleY",
+            "from": 0.03,
+            "to": 1,
+            "atMs": 40,
+            "durationMs": 370,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "panel",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 40,
+            "durationMs": 250,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "body",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 320,
+            "durationMs": 190,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "chip-trail",
+      "title": "Filter chip cascade",
+      "goals": [
+        "intro",
+        "form"
+      ],
+      "styles": [
+        "playful",
+        "minimal"
+      ],
+      "energy": "medium",
+      "terms": [
+        "タグ表示",
+        "チップ",
+        "フィルター",
+        "chips",
+        "filter chips"
+      ],
+      "roles": [
+        "chip1",
+        "chip2",
+        "chip3"
+      ],
+      "durationMs": 510,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "chip1",
+            "property": "scaleX",
+            "from": 0.75,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 290,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "chip1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "chip2",
+            "property": "scaleX",
+            "from": 0.75,
+            "to": 1,
+            "atMs": 110,
+            "durationMs": 290,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "chip2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 110,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "chip3",
+            "property": "scaleX",
+            "from": 0.75,
+            "to": 1,
+            "atMs": 220,
+            "durationMs": 290,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "chip3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 220,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "swipe-card",
+      "title": "Swipe card dismissal",
+      "goals": [
+        "navigation",
+        "feedback"
+      ],
+      "styles": [
+        "playful",
+        "energetic"
+      ],
+      "energy": "high",
+      "terms": [
+        "カードをスワイプ",
+        "スワイプ",
+        "swipe card",
+        "card dismiss"
+      ],
+      "roles": [
+        "topCard",
+        "nextCard"
+      ],
+      "durationMs": 650,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "topCard",
+            "property": "x",
+            "from": 0,
+            "to": 185,
+            "atMs": 0,
+            "durationMs": 460,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "topCard",
+            "property": "rotation",
+            "from": 0,
+            "to": 18,
+            "atMs": 0,
+            "durationMs": 460,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "topCard",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 240,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "nextCard",
+            "property": "scaleX",
+            "from": 0.91,
+            "to": 1,
+            "atMs": 160,
+            "durationMs": 490,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "nextCard",
+            "property": "scaleY",
+            "from": 0.91,
+            "to": 1,
+            "atMs": 160,
+            "durationMs": 490,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "nextCard",
+            "property": "opacity",
+            "from": 0.6,
+            "to": 1,
+            "atMs": 160,
+            "durationMs": 490,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "snap-dock",
+      "title": "Dock snap",
+      "goals": [
+        "feedback",
+        "navigation"
+      ],
+      "styles": [
+        "technical",
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "吸着",
+        "ドック",
+        "ドラッグを戻す",
+        "snap dock",
+        "drag snap"
+      ],
+      "roles": [
+        "tile",
+        "dock"
+      ],
+      "durationMs": 450,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "tile",
+            "property": "x",
+            "from": 92,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 360,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "tile",
+            "property": "y",
+            "from": -55,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 390,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "tile",
+            "property": "rotation",
+            "from": 9,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 390,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "dock",
+            "property": "scaleX",
+            "from": 1,
+            "to": 1.08,
+            "atMs": 130,
+            "durationMs": 150,
+            "easing": "ease-out"
+          },
+          {
+            "role": "dock",
+            "property": "scaleX",
+            "from": 1.08,
+            "to": 1,
+            "atMs": 280,
+            "durationMs": 170,
+            "easing": "ease-out"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "menu-tiles",
+      "title": "Menu tile waterfall",
+      "goals": [
+        "navigation",
+        "intro"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "medium",
+      "terms": [
+        "メニュータイル",
+        "ナビカード",
+        "menu tiles",
+        "navigation grid"
+      ],
+      "roles": [
+        "tile1",
+        "tile2",
+        "tile3"
+      ],
+      "durationMs": 740,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "tile1",
+            "property": "y",
+            "from": -35,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 390,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tile1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 250,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tile2",
+            "property": "y",
+            "from": -35,
+            "to": 0,
+            "atMs": 130,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tile2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 130,
+            "durationMs": 270,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tile3",
+            "property": "y",
+            "from": -35,
+            "to": 0,
+            "atMs": 270,
+            "durationMs": 470,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tile3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 270,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "progress-complete",
+      "title": "Progress to success",
+      "goals": [
+        "progress",
+        "success"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "medium",
+      "terms": [
+        "進捗完了",
+        "ダウンロード完了",
+        "progress complete",
+        "loading done"
+      ],
+      "roles": [
+        "fill",
+        "spinner",
+        "check"
+      ],
+      "durationMs": 1030,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "fill",
+            "property": "scaleX",
+            "from": 0.3,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 740,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "spinner",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 460,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "check",
+            "property": "scaleX",
+            "from": 0.5,
+            "to": 1,
+            "atMs": 700,
+            "durationMs": 330,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "check",
+            "property": "scaleY",
+            "from": 0.5,
+            "to": 1,
+            "atMs": 700,
+            "durationMs": 330,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "check",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 700,
+            "durationMs": 210,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-loader",
+        "rive-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "skeleton-shimmer",
+      "title": "Skeleton shimmer",
+      "goals": [
+        "loading",
+        "ambient"
+      ],
+      "styles": [
+        "technical",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "スケルトン",
+        "プレースホルダー",
+        "shimmer skeleton",
+        "loading placeholder"
+      ],
+      "roles": [
+        "shine"
+      ],
+      "durationMs": 1100,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "shine",
+            "property": "x",
+            "from": -150,
+            "to": 150,
+            "atMs": 0,
+            "durationMs": 1100,
+            "easing": "linear"
+          },
+          {
+            "role": "shine",
+            "property": "opacity",
+            "from": 0.22,
+            "to": 0.72,
+            "atMs": 0,
+            "durationMs": 500,
+            "easing": "smooth"
+          },
+          {
+            "role": "shine",
+            "property": "opacity",
+            "from": 0.72,
+            "to": 0.22,
+            "atMs": 500,
+            "durationMs": 600,
+            "easing": "smooth"
+          }
+        ]
+      },
+      "referenceIds": [
+        "react-bits",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene. Repeat by replaying clip after resetting offscreen, not seamless interpolation.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "button-ripple",
+      "title": "Button ripple",
+      "goals": [
+        "feedback",
+        "success"
+      ],
+      "styles": [
+        "minimal",
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "波紋ボタン",
+        "クリックの波",
+        "button ripple",
+        "tap ripple"
+      ],
+      "roles": [
+        "core",
+        "ripple"
+      ],
+      "durationMs": 600,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "core",
+            "property": "scaleX",
+            "from": 1,
+            "to": 0.96,
+            "atMs": 0,
+            "durationMs": 100,
+            "easing": "ease-out"
+          },
+          {
+            "role": "core",
+            "property": "scaleX",
+            "from": 0.96,
+            "to": 1,
+            "atMs": 100,
+            "durationMs": 220,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "core",
+            "property": "scaleY",
+            "from": 1,
+            "to": 0.96,
+            "atMs": 0,
+            "durationMs": 100,
+            "easing": "ease-out"
+          },
+          {
+            "role": "core",
+            "property": "scaleY",
+            "from": 0.96,
+            "to": 1,
+            "atMs": 100,
+            "durationMs": 220,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "ripple",
+            "property": "scaleX",
+            "from": 0.2,
+            "to": 1.4,
+            "atMs": 70,
+            "durationMs": 530,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ripple",
+            "property": "scaleY",
+            "from": 0.2,
+            "to": 1.4,
+            "atMs": 70,
+            "durationMs": 530,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ripple",
+            "property": "opacity",
+            "from": 0.56,
+            "to": 0,
+            "atMs": 70,
+            "durationMs": 530,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "lucide-animated",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "focus-ping",
+      "title": "Focus ping",
+      "goals": [
+        "feedback",
+        "form"
+      ],
+      "styles": [
+        "technical",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "フォーカス通知",
+        "入力中",
+        "focus ping",
+        "input active"
+      ],
+      "roles": [
+        "focus",
+        "field"
+      ],
+      "durationMs": 440,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "focus",
+            "property": "scaleX",
+            "from": 0.76,
+            "to": 1.3,
+            "atMs": 0,
+            "durationMs": 440,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "focus",
+            "property": "scaleY",
+            "from": 0.76,
+            "to": 1.3,
+            "atMs": 0,
+            "durationMs": 440,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "focus",
+            "property": "opacity",
+            "from": 0.8,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 440,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "field",
+            "property": "opacity",
+            "from": 0.65,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 270,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "lucide-animated"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "success-checklist",
+      "title": "Checklist completion",
+      "goals": [
+        "success",
+        "onboarding"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "medium",
+      "terms": [
+        "チェックリスト",
+        "タスク完了",
+        "done list",
+        "checklist"
+      ],
+      "roles": [
+        "row1",
+        "tick1",
+        "row2",
+        "tick2",
+        "row3",
+        "tick3"
+      ],
+      "durationMs": 940,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "row1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tick1",
+            "property": "scaleX",
+            "from": 0.3,
+            "to": 1,
+            "atMs": 180,
+            "durationMs": 250,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "row2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tick2",
+            "property": "scaleX",
+            "from": 0.3,
+            "to": 1,
+            "atMs": 430,
+            "durationMs": 250,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "row3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 510,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "tick3",
+            "property": "scaleX",
+            "from": 0.3,
+            "to": 1,
+            "atMs": 690,
+            "durationMs": 250,
+            "easing": "ease-out-back"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-ui",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "confetti-sway",
+      "title": "Confetti celebration",
+      "goals": [
+        "success",
+        "reward"
+      ],
+      "styles": [
+        "playful",
+        "energetic"
+      ],
+      "energy": "high",
+      "terms": [
+        "紙吹雪",
+        "祝福",
+        "confetti",
+        "celebration particles"
+      ],
+      "roles": [
+        "burst",
+        "left",
+        "right",
+        "caption"
+      ],
+      "durationMs": 820,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "burst",
+            "property": "scaleX",
+            "from": 0.35,
+            "to": 1.12,
+            "atMs": 0,
+            "durationMs": 280,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "burst",
+            "property": "scaleX",
+            "from": 1.12,
+            "to": 1,
+            "atMs": 280,
+            "durationMs": 230,
+            "easing": "ease-out"
+          },
+          {
+            "role": "burst",
+            "property": "scaleY",
+            "from": 0.35,
+            "to": 1.12,
+            "atMs": 0,
+            "durationMs": 280,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "burst",
+            "property": "scaleY",
+            "from": 1.12,
+            "to": 1,
+            "atMs": 280,
+            "durationMs": 230,
+            "easing": "ease-out"
+          },
+          {
+            "role": "left",
+            "property": "x",
+            "from": 0,
+            "to": -55,
+            "atMs": 110,
+            "durationMs": 650,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "left",
+            "property": "rotation",
+            "from": 0,
+            "to": -55,
+            "atMs": 110,
+            "durationMs": 650,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "right",
+            "property": "x",
+            "from": 0,
+            "to": 55,
+            "atMs": 110,
+            "durationMs": 650,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "right",
+            "property": "rotation",
+            "from": 0,
+            "to": 55,
+            "atMs": 110,
+            "durationMs": 650,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 560,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-dino",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "reward-shimmer",
+      "title": "Reward glint",
+      "goals": [
+        "reward",
+        "success"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "medium",
+      "terms": [
+        "バッジ光沢",
+        "報酬演出",
+        "reward glint",
+        "achievement shine"
+      ],
+      "roles": [
+        "badge",
+        "highlight",
+        "label"
+      ],
+      "durationMs": 940,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "badge",
+            "property": "scaleX",
+            "from": 0.8,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 450,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "badge",
+            "property": "scaleY",
+            "from": 0.8,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 450,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "badge",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 280,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "highlight",
+            "property": "x",
+            "from": -80,
+            "to": 110,
+            "atMs": 330,
+            "durationMs": 580,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "highlight",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.75,
+            "atMs": 330,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "highlight",
+            "property": "opacity",
+            "from": 0.75,
+            "to": 0,
+            "atMs": 570,
+            "durationMs": 340,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 650,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-ui",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "character-hop",
+      "title": "Character greeting hop",
+      "goals": [
+        "character",
+        "onboarding"
+      ],
+      "styles": [
+        "playful",
+        "energetic"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ジャンプするマスコット",
+        "跳ねるキャラ",
+        "character hop",
+        "mascot bounce"
+      ],
+      "roles": [
+        "body",
+        "shadow",
+        "speech"
+      ],
+      "durationMs": 730,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "body",
+            "property": "y",
+            "from": 0,
+            "to": -38,
+            "atMs": 0,
+            "durationMs": 260,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "body",
+            "property": "y",
+            "from": -38,
+            "to": 0,
+            "atMs": 260,
+            "durationMs": 360,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "body",
+            "property": "scaleY",
+            "from": 1,
+            "to": 0.9,
+            "atMs": 0,
+            "durationMs": 110,
+            "easing": "ease-out"
+          },
+          {
+            "role": "body",
+            "property": "scaleY",
+            "from": 0.9,
+            "to": 1,
+            "atMs": 110,
+            "durationMs": 220,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "shadow",
+            "property": "scaleX",
+            "from": 1,
+            "to": 0.65,
+            "atMs": 0,
+            "durationMs": 260,
+            "easing": "smooth"
+          },
+          {
+            "role": "shadow",
+            "property": "scaleX",
+            "from": 0.65,
+            "to": 1,
+            "atMs": 260,
+            "durationMs": 360,
+            "easing": "smooth"
+          },
+          {
+            "role": "speech",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 480,
+            "durationMs": 250,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-bot",
+        "rive-learning"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "character-blink",
+      "title": "Character blinking",
+      "goals": [
+        "character",
+        "ambient"
+      ],
+      "styles": [
+        "minimal",
+        "playful"
+      ],
+      "energy": "low",
+      "terms": [
+        "瞬き",
+        "目を閉じる",
+        "blink smile",
+        "character idle"
+      ],
+      "roles": [
+        "eyelids",
+        "smile"
+      ],
+      "durationMs": 700,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "eyelids",
+            "property": "scaleY",
+            "from": 1,
+            "to": 0.05,
+            "atMs": 0,
+            "durationMs": 80,
+            "easing": "ease-out"
+          },
+          {
+            "role": "eyelids",
+            "property": "scaleY",
+            "from": 0.05,
+            "to": 1,
+            "atMs": 80,
+            "durationMs": 160,
+            "easing": "ease-out"
+          },
+          {
+            "role": "smile",
+            "property": "scaleX",
+            "from": 0.93,
+            "to": 1.03,
+            "atMs": 180,
+            "durationMs": 260,
+            "easing": "smooth"
+          },
+          {
+            "role": "smile",
+            "property": "scaleX",
+            "from": 1.03,
+            "to": 0.93,
+            "atMs": 440,
+            "durationMs": 260,
+            "easing": "smooth"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-bot",
+        "rive-learning"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "weather-cloud",
+      "title": "Weather card reveal",
+      "goals": [
+        "intro",
+        "ambient"
+      ],
+      "styles": [
+        "playful",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "天気",
+        "雲が出る",
+        "雲",
+        "weather card",
+        "cloud animation"
+      ],
+      "roles": [
+        "cloud",
+        "sun",
+        "temperature"
+      ],
+      "durationMs": 930,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "cloud",
+            "property": "x",
+            "from": -45,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 700,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "cloud",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "sun",
+            "property": "scaleX",
+            "from": 0.7,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 460,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "sun",
+            "property": "scaleY",
+            "from": 0.7,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 460,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "sun",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 240,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "temperature",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 580,
+            "durationMs": 350,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-learning",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
+    },
+    {
+      "id": "ambient-lantern",
+      "title": "Breathing ambient light",
+      "goals": [
+        "ambient"
+      ],
+      "styles": [
+        "cinematic",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "灯り",
+        "呼吸する明かり",
+        "lantern glow",
+        "ambient light"
+      ],
+      "roles": [
+        "light"
+      ],
+      "durationMs": 2600,
+      "loop": "loop",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "response",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "light",
+            "property": "scaleX",
+            "from": 0.9,
+            "to": 1.1,
+            "atMs": 0,
+            "durationMs": 1300,
+            "easing": "smooth"
+          },
+          {
+            "role": "light",
+            "property": "scaleX",
+            "from": 1.1,
+            "to": 0.9,
+            "atMs": 1300,
+            "durationMs": 1300,
+            "easing": "smooth"
+          },
+          {
+            "role": "light",
+            "property": "scaleY",
+            "from": 0.9,
+            "to": 1.1,
+            "atMs": 0,
+            "durationMs": 1300,
+            "easing": "smooth"
+          },
+          {
+            "role": "light",
+            "property": "scaleY",
+            "from": 1.1,
+            "to": 0.9,
+            "atMs": 1300,
+            "durationMs": 1300,
+            "easing": "smooth"
+          },
+          {
+            "role": "light",
+            "property": "opacity",
+            "from": 0.28,
+            "to": 0.61,
+            "atMs": 0,
+            "durationMs": 1300,
+            "easing": "smooth"
+          },
+          {
+            "role": "light",
+            "property": "opacity",
+            "from": 0.61,
+            "to": 0.28,
+            "atMs": 1300,
+            "durationMs": 1300,
+            "easing": "smooth"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Role-based choreography requires appropriate original artwork and pivot geometry; not a standalone visual scene.",
+      "expansionVersion": "v2"
     }
   ]
 }
