@@ -1,0 +1,1747 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-12",
+  "sourcePolicy": "reference-only-no-media-no-scraping",
+  "sources": [
+    {
+      "id": "motion-reference",
+      "title": "MOTION MOVEMENT REFERENCE",
+      "url": "https://motion-reference.takayustudio.jp/",
+      "license": "unverified",
+      "permission": "reference-only"
+    },
+    {
+      "id": "claude-video",
+      "title": "Claude Video AI showcase index",
+      "url": "https://claudevideo.org/",
+      "license": "unverified",
+      "permission": "reference-only"
+    },
+    {
+      "id": "opus-demos",
+      "title": "Claude Opus 5.5 demos",
+      "url": "https://github.com/magiccreator-ai/awesome-claude-opus-5-5-demos",
+      "license": "per-item",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-ui",
+      "title": "Interactive UI Motion Showcase",
+      "url": "https://www.rive.app/marketplace/28467-53824-interactive-ui-motion-showcase-rive-components-collection/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-bot",
+      "title": "Friendly Floating Bot",
+      "url": "https://www.rive.app/marketplace/28071-53022-friendly-floating-bot/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-learning",
+      "title": "Fully Interactive Learning App",
+      "url": "https://www.rive.app/marketplace/27975-53590-fully-interactive-learning-app-with-rive/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-globe",
+      "title": "Interactive Particle Globe",
+      "url": "https://www.rive.app/marketplace/26161-48888-interactive-particle-globe/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-button",
+      "title": "put it anywhere",
+      "url": "https://www.rive.app/marketplace/27860-52644-put-it-anywhere/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-dino",
+      "title": "Play the DINO!",
+      "url": "https://www.rive.app/marketplace/28399-53683-play-the-dino/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "rive-loader",
+      "title": "Tree Loading Bar",
+      "url": "https://rive.app/marketplace/3264-6879-tree-loading-bar/",
+      "license": "CC BY",
+      "permission": "reference-only"
+    },
+    {
+      "id": "motion-examples",
+      "title": "Motion examples",
+      "url": "https://examples.motion.dev/",
+      "license": "per-example",
+      "permission": "reference-only"
+    },
+    {
+      "id": "motion-core",
+      "title": "Motion JavaScript library",
+      "url": "https://motion.dev/",
+      "license": "MIT library",
+      "permission": "reference-only"
+    },
+    {
+      "id": "react-bits",
+      "title": "React Bits",
+      "url": "https://reactbits.dev/",
+      "license": "MIT + Commons Clause",
+      "permission": "reference-only"
+    },
+    {
+      "id": "animista",
+      "title": "Animista",
+      "url": "https://animista.net/",
+      "license": "FreeBSD generated CSS",
+      "permission": "reference-only"
+    },
+    {
+      "id": "lucide-animated",
+      "title": "Lucide Animated",
+      "url": "https://lucide-animated.com/",
+      "license": "MIT project; demo restrictions may apply",
+      "permission": "reference-only"
+    },
+    {
+      "id": "lottiefiles-license",
+      "title": "LottieFiles licensing",
+      "url": "https://lottiefiles.com/page/license",
+      "license": "restricted collection",
+      "permission": "reference-only"
+    },
+    {
+      "id": "codepen-license",
+      "title": "CodePen public Pen licensing",
+      "url": "https://blog.codepen.io/docs/pens/licensing/",
+      "license": "MIT public code",
+      "permission": "reference-only"
+    },
+    {
+      "id": "animate-ui",
+      "title": "Animate UI",
+      "url": "https://animate-ui.com/docs",
+      "license": "per-component",
+      "permission": "reference-only"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "success-burst",
+      "title": "Success burst",
+      "goals": [
+        "success",
+        "feedback"
+      ],
+      "styles": [
+        "premium",
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "成功",
+        "完了",
+        "チェック",
+        "success"
+      ],
+      "roles": [
+        "hero",
+        "halo",
+        "caption"
+      ],
+      "durationMs": 510,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "hero",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 130,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "hero",
+            "property": "scaleX",
+            "from": 0.52,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 320,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "hero",
+            "property": "scaleY",
+            "from": 0.52,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 320,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "halo",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.65,
+            "atMs": 150,
+            "durationMs": 100,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "halo",
+            "property": "scaleX",
+            "from": 0.7,
+            "to": 1.35,
+            "atMs": 150,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "halo",
+            "property": "scaleY",
+            "from": 0.7,
+            "to": 1.35,
+            "atMs": 150,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 260,
+            "durationMs": 200,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "y",
+            "from": 12,
+            "to": 0,
+            "atMs": 260,
+            "durationMs": 250,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-ui",
+        "lucide-animated"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Lead with the hero; halo and caption follow."
+    },
+    {
+      "id": "editorial-headline",
+      "title": "Editorial headline reveal",
+      "goals": [
+        "intro",
+        "typography"
+      ],
+      "styles": [
+        "premium",
+        "minimal"
+      ],
+      "energy": "low",
+      "terms": [
+        "タイトル",
+        "タイポグラフィ",
+        "見出し",
+        "headline"
+      ],
+      "roles": [
+        "headline",
+        "rule",
+        "caption"
+      ],
+      "durationMs": 720,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "headline",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "headline",
+            "property": "y",
+            "from": 32,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 520,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "rule",
+            "property": "scaleX",
+            "from": 0.05,
+            "to": 1,
+            "atMs": 210,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 420,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "y",
+            "from": 12,
+            "to": 0,
+            "atMs": 420,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "react-bits"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Typography first, supporting elements later."
+    },
+    {
+      "id": "premium-product-intro",
+      "title": "Premium product entrance",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "premium",
+        "cinematic"
+      ],
+      "energy": "low",
+      "terms": [
+        "商品",
+        "製品",
+        "高級",
+        "プロダクト",
+        "premium",
+        "luxury"
+      ],
+      "roles": [
+        "product",
+        "glow",
+        "title"
+      ],
+      "durationMs": 740,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "product",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 390,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "product",
+            "property": "scaleX",
+            "from": 0.91,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 640,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "product",
+            "property": "scaleY",
+            "from": 0.91,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 640,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "glow",
+            "property": "opacity",
+            "from": 0,
+            "to": 0.65,
+            "atMs": 180,
+            "durationMs": 500,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "title",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 380,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "title",
+            "property": "y",
+            "from": 18,
+            "to": 0,
+            "atMs": 380,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "claude-video",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Quiet appearance and later supporting typography."
+    },
+    {
+      "id": "sticker-pop",
+      "title": "Playful sticker pop",
+      "goals": [
+        "intro",
+        "feedback"
+      ],
+      "styles": [
+        "playful",
+        "energetic"
+      ],
+      "energy": "high",
+      "terms": [
+        "ポップ",
+        "かわいい",
+        "弾む",
+        "bounce",
+        "sticker"
+      ],
+      "roles": [
+        "sticker",
+        "label"
+      ],
+      "durationMs": 440,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "sticker",
+            "property": "scaleX",
+            "from": 0.18,
+            "to": 1.08,
+            "atMs": 0,
+            "durationMs": 250,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "sticker",
+            "property": "scaleX",
+            "from": 1.08,
+            "to": 1,
+            "atMs": 250,
+            "durationMs": 160,
+            "easing": "ease-out"
+          },
+          {
+            "role": "sticker",
+            "property": "scaleY",
+            "from": 0.18,
+            "to": 1.08,
+            "atMs": 0,
+            "durationMs": 250,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "sticker",
+            "property": "scaleY",
+            "from": 1.08,
+            "to": 1,
+            "atMs": 250,
+            "durationMs": 160,
+            "easing": "ease-out"
+          },
+          {
+            "role": "sticker",
+            "property": "rotation",
+            "from": -14,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 410,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "sticker",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 110,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 290,
+            "durationMs": 150,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-dino",
+        "animista"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Intentional overshoot and short settle."
+    },
+    {
+      "id": "press-release",
+      "title": "Press and release feedback",
+      "goals": [
+        "feedback"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "medium",
+      "terms": [
+        "ボタン",
+        "押す",
+        "タップ",
+        "クリック",
+        "press",
+        "tap"
+      ],
+      "roles": [
+        "button",
+        "label"
+      ],
+      "durationMs": 300,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "button",
+            "property": "scaleX",
+            "from": 1,
+            "to": 0.94,
+            "atMs": 0,
+            "durationMs": 90,
+            "easing": "ease-out"
+          },
+          {
+            "role": "button",
+            "property": "scaleX",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 90,
+            "durationMs": 210,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "button",
+            "property": "scaleY",
+            "from": 1,
+            "to": 0.94,
+            "atMs": 0,
+            "durationMs": 90,
+            "easing": "ease-out"
+          },
+          {
+            "role": "button",
+            "property": "scaleY",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 90,
+            "durationMs": 210,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0.85,
+            "to": 1,
+            "atMs": 90,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-button",
+        "lucide-animated"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Scripted press-release, not automatic interaction state wiring."
+    },
+    {
+      "id": "loading-breathe",
+      "title": "Breathing loader",
+      "goals": [
+        "loading"
+      ],
+      "styles": [
+        "minimal",
+        "playful"
+      ],
+      "energy": "low",
+      "terms": [
+        "待機",
+        "読込",
+        "ローディング",
+        "読み込み",
+        "脈動",
+        "loading",
+        "pulse"
+      ],
+      "roles": [
+        "mark"
+      ],
+      "durationMs": 700,
+      "loop": "loop",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "mark",
+            "property": "scaleX",
+            "from": 1,
+            "to": 1.09,
+            "atMs": 0,
+            "durationMs": 350,
+            "easing": "smooth"
+          },
+          {
+            "role": "mark",
+            "property": "scaleX",
+            "from": 1.09,
+            "to": 1,
+            "atMs": 350,
+            "durationMs": 350,
+            "easing": "smooth"
+          },
+          {
+            "role": "mark",
+            "property": "scaleY",
+            "from": 1,
+            "to": 1.09,
+            "atMs": 0,
+            "durationMs": 350,
+            "easing": "smooth"
+          },
+          {
+            "role": "mark",
+            "property": "scaleY",
+            "from": 1.09,
+            "to": 1,
+            "atMs": 350,
+            "durationMs": 350,
+            "easing": "smooth"
+          },
+          {
+            "role": "mark",
+            "property": "opacity",
+            "from": 0.68,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 350,
+            "easing": "smooth"
+          },
+          {
+            "role": "mark",
+            "property": "opacity",
+            "from": 1,
+            "to": 0.68,
+            "atMs": 350,
+            "durationMs": 350,
+            "easing": "smooth"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-loader",
+        "animista"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Loop ends at exactly its starting visual values."
+    },
+    {
+      "id": "progress-fill",
+      "title": "Progress fill",
+      "goals": [
+        "loading",
+        "progress"
+      ],
+      "styles": [
+        "minimal",
+        "technical"
+      ],
+      "energy": "low",
+      "terms": [
+        "進捗",
+        "プログレス",
+        "progress",
+        "loading bar"
+      ],
+      "roles": [
+        "fill",
+        "label"
+      ],
+      "durationMs": 1000,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "fill",
+            "property": "scaleX",
+            "from": 0.02,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 1000,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0.4,
+            "to": 1,
+            "atMs": 600,
+            "durationMs": 300,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-loader",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Requires a left transform origin; not bound to runtime progress."
+    },
+    {
+      "id": "card-deck",
+      "title": "Staggered card deck",
+      "goals": [
+        "intro",
+        "onboarding"
+      ],
+      "styles": [
+        "premium",
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "カード",
+        "順番",
+        "スタッガー",
+        "stagger",
+        "cards"
+      ],
+      "roles": [
+        "card1",
+        "card2",
+        "card3"
+      ],
+      "durationMs": 650,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "card1",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "card1",
+            "property": "y",
+            "from": 26,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 360,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "card2",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 110,
+            "durationMs": 200,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "card2",
+            "property": "y",
+            "from": 26,
+            "to": 0,
+            "atMs": 110,
+            "durationMs": 410,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "card3",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 220,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "card3",
+            "property": "y",
+            "from": 26,
+            "to": 0,
+            "atMs": 220,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "react-bits"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "One staggered reveal across three content roles."
+    },
+    {
+      "id": "toast-arrive",
+      "title": "Notification toast",
+      "goals": [
+        "feedback",
+        "notification"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "通知",
+        "お知らせ",
+        "トースト",
+        "toast",
+        "notification"
+      ],
+      "roles": [
+        "toast",
+        "icon",
+        "message"
+      ],
+      "durationMs": 410,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "toast",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 180,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "toast",
+            "property": "y",
+            "from": -24,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 360,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "icon",
+            "property": "scaleX",
+            "from": 0.8,
+            "to": 1,
+            "atMs": 120,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "icon",
+            "property": "scaleY",
+            "from": 0.8,
+            "to": 1,
+            "atMs": 120,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "message",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 190,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animate-ui",
+        "rive-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Panel arrives before message."
+    },
+    {
+      "id": "soft-onboarding",
+      "title": "Soft onboarding",
+      "goals": [
+        "onboarding",
+        "intro"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "導入",
+        "オンボーディング",
+        "説明",
+        "onboarding",
+        "welcome"
+      ],
+      "roles": [
+        "illustration",
+        "heading",
+        "cta"
+      ],
+      "durationMs": 850,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "illustration",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 340,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "illustration",
+            "property": "y",
+            "from": 24,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 520,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "heading",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 280,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "heading",
+            "property": "y",
+            "from": 14,
+            "to": 0,
+            "atMs": 280,
+            "durationMs": 320,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "cta",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 540,
+            "durationMs": 240,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "cta",
+            "property": "scaleX",
+            "from": 0.94,
+            "to": 1,
+            "atMs": 540,
+            "durationMs": 310,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-learning",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Artwork then copy then call to action."
+    },
+    {
+      "id": "error-nudge",
+      "title": "Error nudge",
+      "goals": [
+        "error",
+        "feedback"
+      ],
+      "styles": [
+        "technical",
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "エラー",
+        "失敗",
+        "警告",
+        "揺れる",
+        "shake",
+        "error"
+      ],
+      "roles": [
+        "panel",
+        "hint"
+      ],
+      "durationMs": 400,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "panel",
+            "property": "x",
+            "from": 0,
+            "to": -8,
+            "atMs": 0,
+            "durationMs": 65,
+            "easing": "linear"
+          },
+          {
+            "role": "panel",
+            "property": "x",
+            "from": -8,
+            "to": 7,
+            "atMs": 65,
+            "durationMs": 80,
+            "easing": "linear"
+          },
+          {
+            "role": "panel",
+            "property": "x",
+            "from": 7,
+            "to": -4,
+            "atMs": 145,
+            "durationMs": 90,
+            "easing": "linear"
+          },
+          {
+            "role": "panel",
+            "property": "x",
+            "from": -4,
+            "to": 0,
+            "atMs": 235,
+            "durationMs": 110,
+            "easing": "ease-out"
+          },
+          {
+            "role": "hint",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 180,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "animista",
+        "lucide-animated"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Short shake then settles."
+    },
+    {
+      "id": "toggle-sweep",
+      "title": "Toggle sweep",
+      "goals": [
+        "feedback",
+        "toggle"
+      ],
+      "styles": [
+        "minimal",
+        "technical"
+      ],
+      "energy": "low",
+      "terms": [
+        "切替",
+        "トグル",
+        "スイッチ",
+        "toggle",
+        "switch"
+      ],
+      "roles": [
+        "knob",
+        "track"
+      ],
+      "durationMs": 280,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "knob",
+            "property": "x",
+            "from": -20,
+            "to": 20,
+            "atMs": 0,
+            "durationMs": 280,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "track",
+            "property": "opacity",
+            "from": 0.6,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 280,
+            "easing": "smooth"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-ui",
+        "lucide-animated"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Geometry must correspond to provided artboard."
+    },
+    {
+      "id": "reward-reveal",
+      "title": "Reward reveal",
+      "goals": [
+        "success",
+        "reward"
+      ],
+      "styles": [
+        "energetic",
+        "playful"
+      ],
+      "energy": "high",
+      "terms": [
+        "ご褒美",
+        "ポイント",
+        "達成",
+        "報酬",
+        "reward",
+        "achievement"
+      ],
+      "roles": [
+        "badge",
+        "halo",
+        "caption"
+      ],
+      "durationMs": 730,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "badge",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 110,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "badge",
+            "property": "scaleX",
+            "from": 0.35,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 420,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "badge",
+            "property": "scaleY",
+            "from": 0.35,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 420,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "halo",
+            "property": "scaleX",
+            "from": 0.65,
+            "to": 1.5,
+            "atMs": 180,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "halo",
+            "property": "scaleY",
+            "from": 0.65,
+            "to": 1.5,
+            "atMs": 180,
+            "durationMs": 430,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "halo",
+            "property": "opacity",
+            "from": 0.8,
+            "to": 0,
+            "atMs": 180,
+            "durationMs": 430,
+            "easing": "smooth"
+          },
+          {
+            "role": "caption",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 460,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "caption",
+            "property": "y",
+            "from": 20,
+            "to": 0,
+            "atMs": 460,
+            "durationMs": 270,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-dino",
+        "rive-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Big celebratory signal, then caption."
+    },
+    {
+      "id": "navigation-swap",
+      "title": "Navigation swap",
+      "goals": [
+        "navigation",
+        "transition"
+      ],
+      "styles": [
+        "minimal",
+        "premium"
+      ],
+      "energy": "low",
+      "terms": [
+        "画面遷移",
+        "切り替え",
+        "ページ",
+        "トランジション",
+        "navigation",
+        "page transition"
+      ],
+      "roles": [
+        "old",
+        "new"
+      ],
+      "durationMs": 520,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "old",
+            "property": "opacity",
+            "from": 1,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 200,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "old",
+            "property": "x",
+            "from": 0,
+            "to": -24,
+            "atMs": 0,
+            "durationMs": 270,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "new",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 180,
+            "durationMs": 230,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "new",
+            "property": "x",
+            "from": 24,
+            "to": 0,
+            "atMs": 180,
+            "durationMs": 340,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Incoming content overlaps outgoing exit."
+    },
+    {
+      "id": "hero-depth",
+      "title": "Hero parallax",
+      "goals": [
+        "intro",
+        "product"
+      ],
+      "styles": [
+        "cinematic",
+        "premium"
+      ],
+      "energy": "medium",
+      "terms": [
+        "奥行き",
+        "パララックス",
+        "映画",
+        "ヒーロー",
+        "parallax",
+        "hero"
+      ],
+      "roles": [
+        "background",
+        "foreground",
+        "title"
+      ],
+      "durationMs": 800,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "background",
+            "property": "scaleX",
+            "from": 1.07,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 800,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "background",
+            "property": "scaleY",
+            "from": 1.07,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 800,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "foreground",
+            "property": "y",
+            "from": 32,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 620,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "foreground",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 400,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "title",
+            "property": "y",
+            "from": 18,
+            "to": 0,
+            "atMs": 300,
+            "durationMs": 420,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "title",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 300,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "opus-demos",
+        "motion-examples"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Depth via differential speed, not true 3D."
+    },
+    {
+      "id": "character-wave",
+      "title": "Character greeting",
+      "goals": [
+        "onboarding",
+        "character"
+      ],
+      "styles": [
+        "playful"
+      ],
+      "energy": "medium",
+      "terms": [
+        "キャラクター",
+        "手を振る",
+        "挨拶",
+        "マスコット",
+        "greeting",
+        "character"
+      ],
+      "roles": [
+        "body",
+        "arm",
+        "bubble"
+      ],
+      "durationMs": 670,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "body",
+            "property": "y",
+            "from": 16,
+            "to": 0,
+            "atMs": 0,
+            "durationMs": 400,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "body",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 160,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "arm",
+            "property": "rotation",
+            "from": -20,
+            "to": 22,
+            "atMs": 180,
+            "durationMs": 220,
+            "easing": "ease-out-back"
+          },
+          {
+            "role": "arm",
+            "property": "rotation",
+            "from": 22,
+            "to": 0,
+            "atMs": 400,
+            "durationMs": 250,
+            "easing": "ease-out"
+          },
+          {
+            "role": "bubble",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 380,
+            "durationMs": 190,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "bubble",
+            "property": "scaleX",
+            "from": 0.8,
+            "to": 1,
+            "atMs": 380,
+            "durationMs": 290,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "rive-bot",
+        "rive-learning"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Arm should be a separate rigged target with proper pivot."
+    },
+    {
+      "id": "focus-ring",
+      "title": "Input focus",
+      "goals": [
+        "feedback",
+        "form"
+      ],
+      "styles": [
+        "minimal",
+        "technical"
+      ],
+      "energy": "low",
+      "terms": [
+        "フォーカス",
+        "入力",
+        "フォーム",
+        "input",
+        "focus"
+      ],
+      "roles": [
+        "ring",
+        "label"
+      ],
+      "durationMs": 320,
+      "loop": "oneShot",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "ring",
+            "property": "opacity",
+            "from": 0,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 170,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ring",
+            "property": "scaleX",
+            "from": 0.97,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "ring",
+            "property": "scaleY",
+            "from": 0.97,
+            "to": 1,
+            "atMs": 0,
+            "durationMs": 220,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "y",
+            "from": 6,
+            "to": 0,
+            "atMs": 60,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          },
+          {
+            "role": "label",
+            "property": "opacity",
+            "from": 0.5,
+            "to": 1,
+            "atMs": 60,
+            "durationMs": 260,
+            "easing": "emphasized-decel"
+          }
+        ]
+      },
+      "referenceIds": [
+        "lucide-animated",
+        "animate-ui"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Animation does not replace accessible focus behavior."
+    },
+    {
+      "id": "ambient-float",
+      "title": "Ambient float",
+      "goals": [
+        "ambient"
+      ],
+      "styles": [
+        "minimal",
+        "playful"
+      ],
+      "energy": "low",
+      "terms": [
+        "ふわふわ",
+        "浮遊",
+        "漂う",
+        "背景",
+        "float",
+        "ambient"
+      ],
+      "roles": [
+        "motif"
+      ],
+      "durationMs": 2200,
+      "loop": "loop",
+      "structure": {
+        "stages": [
+          "setup",
+          "reveal",
+          "settle"
+        ],
+        "steps": [
+          {
+            "role": "motif",
+            "property": "y",
+            "from": 0,
+            "to": -11,
+            "atMs": 0,
+            "durationMs": 1100,
+            "easing": "smooth"
+          },
+          {
+            "role": "motif",
+            "property": "y",
+            "from": -11,
+            "to": 0,
+            "atMs": 1100,
+            "durationMs": 1100,
+            "easing": "smooth"
+          },
+          {
+            "role": "motif",
+            "property": "rotation",
+            "from": 0,
+            "to": 3,
+            "atMs": 0,
+            "durationMs": 1100,
+            "easing": "smooth"
+          },
+          {
+            "role": "motif",
+            "property": "rotation",
+            "from": 3,
+            "to": 0,
+            "atMs": 1100,
+            "durationMs": 1100,
+            "easing": "smooth"
+          }
+        ]
+      },
+      "referenceIds": [
+        "motion-examples",
+        "react-bits"
+      ],
+      "origin": "original-generalized-choreography",
+      "notes": "Seamless periodic movement."
+    }
+  ]
+}
