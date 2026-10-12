@@ -3,7 +3,7 @@ import {loadCatalog,selectRecipes,validateCatalog,compileRecipe} from "../script
 
 const catalog=loadCatalog();
 assert.deepEqual(validateCatalog(catalog),[]);
-assert.equal(catalog.recipes.length,18);
+assert.equal(catalog.recipes.length,60);
 assert.equal(catalog.sources.length,18);
 assert.equal(selectRecipes(catalog,"高級で洗練された商品紹介")[0].id,"premium-product-intro");
 assert.equal(selectRecipes(catalog,"かわいい読み込みアニメ")[0].id,"loading-breathe");
