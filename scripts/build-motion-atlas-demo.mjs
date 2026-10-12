@@ -1,10 +1,10 @@
 // Demonstrates prompt-selected choreography bound to 3 deliberately small original vector scenes.
-// Requires: npm run build; node scripts/build-motion-atlas-demo.mjs <recipe-id> <out.riv>
+// Requires: npm run build; node scripts/build-motion-atlas-demo.mjs <recipe-id-or-prompt> <out.riv>
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRiv } from "../dist/rivWriter.js";
-import {loadCatalog,compileRecipe} from "./motion-recipe.mjs";
+import {loadCatalog,compileRecipe,selectRecipes} from "./motion-recipe.mjs";
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const W=480,H=320;
 const circle=(id,x,y,size,fill,parent,z=10)=>({id,type:"ellipse",x,y,width:size,height:size,parent,z,fill:{color:fill}});
@@ -54,8 +54,13 @@ function sceneFor(id){
  }else throw Error("Only success-burst, editorial-headline and premium-product-intro have complete demo visuals");
  return {groups,shapes,texts,bindings};
 }
-export function buildDemo(id){
- const recipe=loadCatalog().recipes.find(r=>r.id===id);
+export function buildDemo(request){
+ const atlas=loadCatalog();
+ const demoIds=new Set(["success-burst","editorial-headline","premium-product-intro"]);
+ const chosen=demoIds.has(request)?request:selectRecipes({...atlas,recipes:atlas.recipes.filter(r=>demoIds.has(r.id))},request,{limit:1})[0]?.id;
+ if(!chosen)throw Error("No supported demo recipe for prompt: "+request);
+ const id=chosen;
+ const recipe=atlas.recipes.find(r=>r.id===id);
  if(!recipe)throw Error("Unknown recipe: "+id);
  const visual=sceneFor(id);
  const animation=compileRecipe(recipe,visual.bindings);
@@ -66,15 +71,15 @@ export function buildDemo(id){
   animations:[animation],
   stateMachine:{name:"Showcase",states:[{name:"Motion",animation:id}],transitions:[{from:"entry",to:"Motion"}]}
  };
- return createRiv(scene);
+ return {...createRiv(scene),selectedRecipe:id};
 }
 const [id,output]=process.argv.slice(2);
 if(id&&output){
- const {bytes,warnings}=buildDemo(id);
+ const {bytes,warnings,selectedRecipe}=buildDemo(id);
  const destination=resolve(output);
  mkdirSync(dirname(destination),{recursive:true});
  writeFileSync(destination,Buffer.from(bytes));
- console.log(JSON.stringify({recipe:id,path:destination,bytes:bytes.length,warnings}));
+ console.log(JSON.stringify({request:id,recipe:selectedRecipe,path:destination,bytes:bytes.length,warnings}));
 }else if(import.meta.url===new URL("file://"+resolve(process.argv[1]??"")).href){
- console.log("Usage: node scripts/build-motion-atlas-demo.mjs <success-burst|editorial-headline|premium-product-intro> <output.riv>");
+ console.log("Usage: node scripts/build-motion-atlas-demo.mjs <recipe-id-or-Japanese-prompt> <output.riv>");
 }
