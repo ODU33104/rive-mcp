@@ -4,6 +4,7 @@ on:
     paths:
       - 'data/motion-recipes/catalog.v1.json'
       - 'test/motionRecipe.mjs'
+      - 'test/motionExpansion.mjs'
       - 'scripts/render-motion-atlas-sequence.mjs'
       - 'docs/MOTION_RECIPE_EXPANSION.md'
       - '.github/workflows/motion-atlas-showcase.yml'
@@ -21,6 +22,7 @@ jobs:
       - run: npm run build
       - run: node scripts/motion-recipe.mjs validate
       - run: node test/motionRecipe.mjs
+      - run: node test/motionExpansion.mjs
       - run: node test/motionRetrieval.mjs
       - run: node test/motionStoryboard.mjs
       - name: Install Chromium matching pinned runtime
