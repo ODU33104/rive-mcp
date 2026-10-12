@@ -1,0 +1,869 @@
+{
+  "schemaVersion": 1,
+  "researchedAt": "2026-10-12",
+  "policy": "links-and-original-observational-notes-only; no third-party media, code, or prompt archives acquired",
+  "allowedUsesVocabulary": {
+    "link": "Link to the source without copying media/code.",
+    "manual-study": "Human visual/structural inspection of publicly viewable work; not automated harvesting.",
+    "attributed-adaptation": "Only as permitted by work-level CC BY 4.0; provide attribution/license/change notice and inspect third-party assets."
+  },
+  "candidates": [
+    {
+      "id": "rive-interactive-hero",
+      "title": "Interactive Hero Section — Rive UI Template",
+      "workUrl": "https://rive.app/marketplace/28570-54030-interactive-hero-section-rive-ui-template/",
+      "author": "robin-islam",
+      "site": "Rive Marketplace",
+      "publishedAt": "2026-08-19",
+      "format": "Rive / state machine",
+      "featureTags": [
+        "hero",
+        "hover",
+        "progress",
+        "counter",
+        "data-binding"
+      ],
+      "referenceRole": "interactive-hero",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/28570-54030-interactive-hero-section-rive-ui-template/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Six hover states organize a hero around shared progress/counter feedback. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-ui-showcase",
+      "title": "Interactive UI Motion Showcase — Rive Components Collection",
+      "workUrl": "https://rive.app/marketplace/28467-53824-interactive-ui-motion-showcase-rive-components-collection/",
+      "author": "robin-islam",
+      "site": "Rive Marketplace",
+      "publishedAt": "2026-08-12",
+      "format": "Rive / state machine",
+      "featureTags": [
+        "ui",
+        "microinteraction",
+        "dial",
+        "card",
+        "playback",
+        "data-binding"
+      ],
+      "referenceRole": "ui-choreography",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/28467-53824-interactive-ui-motion-showcase-rive-components-collection/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Compact interactive widgets contrast tactile input feedback with secondary display motion. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-floating-bot",
+      "title": "Friendly Floating Bot",
+      "workUrl": "https://rive.app/marketplace/28071-53022-friendly-floating-bot/",
+      "author": "sukeycool",
+      "site": "Rive Marketplace",
+      "publishedAt": "2026-06-25",
+      "format": "Rive / character",
+      "featureTags": [
+        "character",
+        "idle",
+        "talking",
+        "welcome",
+        "anticipation"
+      ],
+      "referenceRole": "character-performance",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/28071-53022-friendly-floating-bot/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Idle, receive, welcome and talking states supply communicative character poses. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-globe",
+      "title": "Interactive Particle Globe",
+      "workUrl": "https://rive.app/marketplace/26161-48888-interactive-particle-globe/",
+      "author": "sm_motion",
+      "site": "Rive Marketplace",
+      "publishedAt": "2026-01-29",
+      "format": "Rive / scripting",
+      "featureTags": [
+        "globe",
+        "particle",
+        "hover",
+        "drag",
+        "3d"
+      ],
+      "referenceRole": "spatial-interaction",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/26161-48888-interactive-particle-globe/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Drag/spin coordinates depth, icon emphasis and user input. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-word-bloom",
+      "title": "Word Bloom",
+      "workUrl": "https://rive.app/marketplace/27922-52781-word-bloom/",
+      "author": "Yi-Lai",
+      "site": "Rive Marketplace",
+      "publishedAt": "2026-06-12",
+      "format": "Rive / scripting",
+      "featureTags": [
+        "typography",
+        "hover",
+        "reveal",
+        "lettering"
+      ],
+      "referenceRole": "type-reveal",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/27922-52781-word-bloom/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Pointer-driven word artwork links focus and text reveal. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-character-follow",
+      "title": "Interactive Character Follow",
+      "workUrl": "https://rive.app/marketplace/28334-53514-interactive-character-follow/",
+      "author": "alinazari",
+      "site": "Rive Marketplace",
+      "publishedAt": "2026-07-25",
+      "format": "Rive / state machine",
+      "featureTags": [
+        "character",
+        "pointer",
+        "gaze",
+        "follow",
+        "constraint"
+      ],
+      "referenceRole": "character-performance",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/28334-53514-interactive-character-follow/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Constraint-driven gaze tracking gives a legible stimulus/response. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-iconic-state",
+      "title": "An Iconic State",
+      "workUrl": "https://rive.app/marketplace/20373-39064-an-iconic-state/",
+      "author": "KellMartinez",
+      "site": "Rive Marketplace",
+      "publishedAt": "2025-06-05",
+      "format": "Rive / state machine",
+      "featureTags": [
+        "icon",
+        "layers",
+        "transition",
+        "state",
+        "feedback"
+      ],
+      "referenceRole": "microinteraction",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/20373-39064-an-iconic-state/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Icon transitions show consistent visual language; creator credits Iconsax. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-data-card",
+      "title": "Data Binding Card",
+      "workUrl": "https://rive.app/marketplace/25446-47494-data-binding-card/",
+      "author": "tleriche",
+      "site": "Rive Marketplace",
+      "publishedAt": "2025-12-17",
+      "format": "Rive / data binding",
+      "featureTags": [
+        "card",
+        "data",
+        "input",
+        "selection",
+        "feedback"
+      ],
+      "referenceRole": "ui-choreography",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/25446-47494-data-binding-card/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Card number/suit selection links data changes to focused visual response. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-avatar",
+      "title": "Interactive Avatar",
+      "workUrl": "https://rive.app/marketplace/20059-37724-interactive-avatar/",
+      "author": "geoffdubs",
+      "site": "Rive Marketplace",
+      "publishedAt": "2025-05-13",
+      "format": "Rive / interactive character",
+      "featureTags": [
+        "avatar",
+        "cursor-tracking",
+        "high-five",
+        "character"
+      ],
+      "referenceRole": "character-performance",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/20059-37724-interactive-avatar/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "A high-five character ties expression to cursor response. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "rive-tree-loader",
+      "title": "Tree Loading Bar",
+      "workUrl": "https://rive.app/marketplace/3264-6879-tree-loading-bar/",
+      "author": "JcToon",
+      "site": "Rive Marketplace",
+      "publishedAt": "2022-09-16",
+      "format": "Rive / state machine",
+      "featureTags": [
+        "progress",
+        "tree",
+        "trim-path",
+        "loader"
+      ],
+      "referenceRole": "progress-communication",
+      "licenseStatus": "verified",
+      "licenseName": "CC BY 4.0",
+      "licenseEvidenceUrl": "https://rive.app/marketplace/3264-6879-tree-loading-bar/",
+      "allowedUses": [
+        "link",
+        "manual-study",
+        "attributed-adaptation"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Tree growth reinterprets progress using trim paths; this is a remix with ancestor rights to check. Work-level CC BY 4.0 link appears on its marketplace listing; verify embedded third-party elements before redistribution."
+    },
+    {
+      "id": "motion-word-reveal",
+      "title": "Scroll word reveal",
+      "workUrl": "https://motion.dev/examples/react-text-scroll-word-reveal",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2026-07-29",
+      "format": "React / Motion",
+      "featureTags": [
+        "text",
+        "scroll",
+        "stagger",
+        "opacity",
+        "editorial"
+      ],
+      "referenceRole": "editorial-reveal",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Word-by-word contrast follows scroll progress and supports reduced motion. Visible source is not a per-example reuse license."
+    },
+    {
+      "id": "motion-rolling-stagger",
+      "title": "Rolling text button: Staggered",
+      "workUrl": "https://motion.dev/examples/react-rolling-text-button-stagger",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2026-07-29",
+      "format": "React / Motion+",
+      "featureTags": [
+        "button",
+        "text",
+        "stagger",
+        "roll",
+        "hover"
+      ],
+      "referenceRole": "microinteraction",
+      "licenseStatus": "restricted",
+      "licenseName": null,
+      "licenseEvidenceUrl": "https://motion.dev/examples/react-rolling-text-button-stagger",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Character rollover creates compact hover choreography. The Motion+ source is gated; no source redistribution grant is inferred."
+    },
+    {
+      "id": "motion-toast-stack",
+      "title": "Toast: Stacked notifications",
+      "workUrl": "https://motion.dev/examples/react-toast-stack",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2026-03-06",
+      "format": "React / Motion+",
+      "featureTags": [
+        "toast",
+        "stack",
+        "3d",
+        "notification",
+        "entrance"
+      ],
+      "referenceRole": "notification-flow",
+      "licenseStatus": "restricted",
+      "licenseName": null,
+      "licenseEvidenceUrl": "https://motion.dev/examples/react-toast-stack",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Depth-scaled toasts stage arrival, compression and exit. The Motion+ source is gated; no source redistribution grant is inferred."
+    },
+    {
+      "id": "motion-scroll-horizontal",
+      "title": "Scroll Horizontal Gallery",
+      "workUrl": "https://motion.dev/examples/react-scroll-horizontal",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2026-01-29",
+      "format": "React / Motion",
+      "featureTags": [
+        "gallery",
+        "scroll",
+        "parallax",
+        "cinematic"
+      ],
+      "referenceRole": "scroll-story",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "A sticky stage converts vertical scroll into horizontal gallery travel. Visible source is not a per-example reuse license."
+    },
+    {
+      "id": "motion-ai-ripple",
+      "title": "Apple Intelligence ripple",
+      "workUrl": "https://motion.dev/examples/vue-apple-intelligence",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2025-04-22",
+      "format": "Vue / Motion+",
+      "featureTags": [
+        "ripple",
+        "hover",
+        "distortion",
+        "overlay"
+      ],
+      "referenceRole": "ambient-interaction",
+      "licenseStatus": "restricted",
+      "licenseName": null,
+      "licenseEvidenceUrl": "https://motion.dev/examples/vue-apple-intelligence",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "A content-clone ripple responds around a hotspot; Apple reference is inspirational only. The Motion+ source is gated; no source redistribution grant is inferred."
+    },
+    {
+      "id": "motion-jumping-dots",
+      "title": "Loading: Jumping dots",
+      "workUrl": "https://motion.dev/examples/vue-loading-jumping-dots",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2025-03-09",
+      "format": "Vue / Motion",
+      "featureTags": [
+        "loader",
+        "dots",
+        "repeat",
+        "stagger",
+        "bounce"
+      ],
+      "referenceRole": "loading-rhythm",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Three dots share a phase-offset bouncing cadence. Visible source is not a per-example reuse license."
+    },
+    {
+      "id": "motion-confetti",
+      "title": "Confetti",
+      "workUrl": "https://motion.dev/examples/react-confetti",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2026-03-04",
+      "format": "React / Motion+",
+      "featureTags": [
+        "reward",
+        "confetti",
+        "press",
+        "spring",
+        "particles"
+      ],
+      "referenceRole": "success-celebration",
+      "licenseStatus": "restricted",
+      "licenseName": null,
+      "licenseEvidenceUrl": "https://motion.dev/examples/react-confetti",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Spring button response precedes a particle reward. The Motion+ source is gated; no source redistribution grant is inferred."
+    },
+    {
+      "id": "motion-scramble",
+      "title": "Scramble text",
+      "workUrl": "https://motion.dev/examples/js-scramble-text",
+      "author": "Matt Perry",
+      "site": "Motion Examples",
+      "publishedAt": "2026-01-30",
+      "format": "JavaScript / Motion+",
+      "featureTags": [
+        "type",
+        "scramble",
+        "glyph",
+        "decode",
+        "transition"
+      ],
+      "referenceRole": "type-reveal",
+      "licenseStatus": "restricted",
+      "licenseName": null,
+      "licenseEvidenceUrl": "https://motion.dev/examples/js-scramble-text",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Glyph cycling creates anticipation before a readable label. The Motion+ source is gated; no source redistribution grant is inferred."
+    },
+    {
+      "id": "codrops-infinite-gallery",
+      "title": "Building an Infinite GSAP Scroll Gallery with Parallax and Flip Transitions",
+      "workUrl": "https://tympanus.net/codrops/2026/07/30/building-an-infinite-gsap-scroll-gallery-with-parallax-and-flip-transitions/",
+      "author": "Surya Aditya",
+      "site": "Codrops",
+      "publishedAt": "2026-07-30",
+      "format": "Web / GSAP",
+      "featureTags": [
+        "gallery",
+        "parallax",
+        "flip",
+        "fullscreen",
+        "scroll"
+      ],
+      "referenceRole": "scroll-story",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Scattered infinite items reveal and expand into detail using Flip. Article/demo access does not license third-party media."
+    },
+    {
+      "id": "codrops-dual-wave",
+      "title": "Building a Scroll-Driven Dual-Wave Text Animation with GSAP",
+      "workUrl": "https://tympanus.net/codrops/2026/01/15/building-a-scroll-driven-dual-wave-text-animation-with-gsap/",
+      "author": "Valentin Descombes",
+      "site": "Codrops",
+      "publishedAt": "2026-01-15",
+      "format": "Web / GSAP",
+      "featureTags": [
+        "typography",
+        "wave",
+        "scroll",
+        "synchronized-image"
+      ],
+      "referenceRole": "editorial-reveal",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Opposing word columns frame a synchronized central image. Article/demo access does not license third-party media."
+    },
+    {
+      "id": "codrops-webgl-text",
+      "title": "How to Create Responsive and SEO-friendly WebGL Text",
+      "workUrl": "https://tympanus.net/codrops/2025/06/05/how-to-create-responsive-and-seo-friendly-webgl-text/",
+      "author": "Eemeli Haakana",
+      "site": "Codrops",
+      "publishedAt": "2025-06-05",
+      "format": "WebGL / Three.js",
+      "featureTags": [
+        "typography",
+        "shader",
+        "reveal",
+        "scroll"
+      ],
+      "referenceRole": "editorial-reveal",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "HTML-backed typography acquires shader reveals while preserving accessibility. Article/demo access does not license third-party media."
+    },
+    {
+      "id": "codrops-gravity-trail",
+      "title": "Made With Gsap: Building a Fun Gravity-Based Mouse Trail",
+      "workUrl": "https://tympanus.net/codrops/2026/05/20/made-with-gsap-building-a-fun-gravity-based-mouse-trail/",
+      "author": "Made With Gsap",
+      "site": "Codrops",
+      "publishedAt": "2026-05-20",
+      "format": "Web / GSAP",
+      "featureTags": [
+        "pointer",
+        "trail",
+        "physics",
+        "bounce",
+        "image"
+      ],
+      "referenceRole": "physical-response",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Mouse-spawned images fall, bounce and vanish, exposing gravity and settle timing. Article/demo access does not license third-party media."
+    },
+    {
+      "id": "codrops-maxima",
+      "title": "Building the Maxima Therapy Website: React, GSAP, and Dabbling with AI",
+      "workUrl": "https://tympanus.net/codrops/2026/04/06/building-the-maxima-therapy-website-react-gsap-and-dabbling-with-ai/",
+      "author": "Nicolas Garnier",
+      "site": "Codrops",
+      "publishedAt": "2026-04-06",
+      "format": "Web / GSAP / Lottie",
+      "featureTags": [
+        "hero",
+        "carousel",
+        "illustrated-svg",
+        "drag",
+        "ai-assisted"
+      ],
+      "referenceRole": "interactive-hero",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Wheel rotation suspends SVG loops, then activates a selected illustrated scene; AI usage is self-reported. Article/demo access does not license third-party media."
+    },
+    {
+      "id": "codrops-claude-mascot",
+      "title": "Reverse-Engineering Claude AI’s Mascot Animations with SVG and GSAP",
+      "workUrl": "https://tympanus.net/codrops/2026/05/05/reverse-engineering-claude-ais-mascot-animations-with-svg-and-gsap/",
+      "author": "Ayotomiwa Wale-Durojaye",
+      "site": "Codrops",
+      "publishedAt": "2026-05-05",
+      "format": "SVG / GSAP / React",
+      "featureTags": [
+        "character",
+        "sprite",
+        "hold",
+        "anticipation",
+        "confetti"
+      ],
+      "referenceRole": "character-performance",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Delayed confetti and variable sprite holds are instructive, but this derivative mascot has third-party IP risk. Article/demo access does not license third-party media."
+    },
+    {
+      "id": "bits-click-spark",
+      "title": "Click Spark",
+      "workUrl": "https://reactbits.dev/animations/click-spark",
+      "author": "David Haz / React Bits",
+      "site": "React Bits",
+      "publishedAt": null,
+      "format": "React / canvas",
+      "featureTags": [
+        "microinteraction",
+        "spark",
+        "click",
+        "particles"
+      ],
+      "referenceRole": "success-celebration",
+      "licenseStatus": "restricted",
+      "licenseName": "MIT + Commons Clause",
+      "licenseEvidenceUrl": "https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "An impact-centered spark differentiates input contact and decay. Repository license prohibits component resale/redistribution; JS-rendered page and embedded assets require separate inspection."
+    },
+    {
+      "id": "bits-magnet",
+      "title": "Magnet",
+      "workUrl": "https://reactbits.dev/animations/magnet",
+      "author": "David Haz / React Bits",
+      "site": "React Bits",
+      "publishedAt": null,
+      "format": "React / Motion",
+      "featureTags": [
+        "button",
+        "magnet",
+        "spring",
+        "hover",
+        "return"
+      ],
+      "referenceRole": "physical-response",
+      "licenseStatus": "restricted",
+      "licenseName": "MIT + Commons Clause",
+      "licenseEvidenceUrl": "https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "medium",
+      "notes": "Magnetic hover offsets ease back to rest with spring physics. Repository license prohibits component resale/redistribution; JS-rendered page and embedded assets require separate inspection."
+    },
+    {
+      "id": "bits-sticker-peel",
+      "title": "Sticker Peel",
+      "workUrl": "https://reactbits.dev/animations/sticker-peel",
+      "author": "David Haz / React Bits",
+      "site": "React Bits",
+      "publishedAt": null,
+      "format": "React / CSS 3D",
+      "featureTags": [
+        "card",
+        "sticker",
+        "peel",
+        "shadow",
+        "hover"
+      ],
+      "referenceRole": "physical-response",
+      "licenseStatus": "restricted",
+      "licenseName": "MIT + Commons Clause",
+      "licenseEvidenceUrl": "https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "medium",
+      "notes": "Hinge rotation combines with shadow depth during peeling. Repository license prohibits component resale/redistribution; JS-rendered page and embedded assets require separate inspection."
+    },
+    {
+      "id": "bits-split-text",
+      "title": "Split Text",
+      "workUrl": "https://reactbits.dev/text-animations/split-text",
+      "author": "David Haz / React Bits",
+      "site": "React Bits",
+      "publishedAt": null,
+      "format": "React / GSAP",
+      "featureTags": [
+        "typography",
+        "split",
+        "stagger",
+        "reveal"
+      ],
+      "referenceRole": "editorial-reveal",
+      "licenseStatus": "restricted",
+      "licenseName": "MIT + Commons Clause",
+      "licenseEvidenceUrl": "https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "medium",
+      "notes": "Grouping characters and words sequences headline entrances. Repository license prohibits component resale/redistribution; JS-rendered page and embedded assets require separate inspection."
+    },
+    {
+      "id": "bits-decrypted-text",
+      "title": "Decrypted Text",
+      "workUrl": "https://reactbits.dev/text-animations/decrypted-text",
+      "author": "David Haz / React Bits",
+      "site": "React Bits",
+      "publishedAt": null,
+      "format": "React / text effect",
+      "featureTags": [
+        "typography",
+        "decode",
+        "scrambling",
+        "anticipation"
+      ],
+      "referenceRole": "type-reveal",
+      "licenseStatus": "restricted",
+      "licenseName": "MIT + Commons Clause",
+      "licenseEvidenceUrl": "https://github.com/DavidHDev/react-bits/blob/main/LICENSE.md",
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "medium",
+      "notes": "Glyph substitution resolves to real labels. Repository license prohibits component resale/redistribution; JS-rendered page and embedded assets require separate inspection."
+    },
+    {
+      "id": "acet-gradient",
+      "title": "Background Gradient Animation",
+      "workUrl": "https://ui.aceternity.com/components/background-gradient-animation",
+      "author": "Aceternity UI",
+      "site": "Aceternity UI",
+      "publishedAt": null,
+      "format": "React / CSS",
+      "featureTags": [
+        "gradient",
+        "ambient",
+        "hero",
+        "drift"
+      ],
+      "referenceRole": "ambient-background",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Slow multi-vector gradients add atmospheric depth behind a static hero. A public preview or copy button is not a verified grant for embedded media."
+    },
+    {
+      "id": "acet-canvas-type",
+      "title": "Canvas Text",
+      "workUrl": "https://ui.aceternity.com/components/canvas-text",
+      "author": "Aceternity UI",
+      "site": "Aceternity UI",
+      "publishedAt": null,
+      "format": "React / canvas",
+      "featureTags": [
+        "typography",
+        "canvas",
+        "clipping",
+        "curve",
+        "color"
+      ],
+      "referenceRole": "editorial-reveal",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Clipped colorful curved strokes animate within readable letterforms. A public preview or copy button is not a verified grant for embedded media."
+    },
+    {
+      "id": "acet-tabs",
+      "title": "Animated Tabs",
+      "workUrl": "https://ui.aceternity.com/components/tabs",
+      "author": "Aceternity UI",
+      "site": "Aceternity UI",
+      "publishedAt": null,
+      "format": "React / Motion",
+      "featureTags": [
+        "tabs",
+        "shared-layout",
+        "hover",
+        "selection"
+      ],
+      "referenceRole": "navigation-state",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Active tab motion preserves relative emphasis during selection. A public preview or copy button is not a verified grant for embedded media."
+    },
+    {
+      "id": "acet-noise",
+      "title": "Noise Background",
+      "workUrl": "https://ui.aceternity.com/components/noise-background",
+      "author": "Aceternity UI",
+      "site": "Aceternity UI",
+      "publishedAt": null,
+      "format": "React / CSS",
+      "featureTags": [
+        "noise",
+        "gradient",
+        "texture",
+        "ambient"
+      ],
+      "referenceRole": "ambient-background",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "Subtle grain and gradient drift deepen a quiet product backdrop. A public preview or copy button is not a verified grant for embedded media."
+    },
+    {
+      "id": "acet-magnetic",
+      "title": "Magnetic Button",
+      "workUrl": "https://ui.aceternity.com/components/magnetic-button",
+      "author": "Aceternity UI",
+      "site": "Aceternity UI",
+      "publishedAt": null,
+      "format": "React / Motion",
+      "featureTags": [
+        "button",
+        "magnetic",
+        "hover",
+        "spring"
+      ],
+      "referenceRole": "physical-response",
+      "licenseStatus": "unknown",
+      "licenseName": null,
+      "licenseEvidenceUrl": null,
+      "allowedUses": [
+        "link"
+      ],
+      "provenanceConfidence": "high",
+      "notes": "A bounded pointer tug settles back without disturbing layout. A public preview or copy button is not a verified grant for embedded media."
+    }
+  ]
+}
