@@ -1,0 +1,42 @@
+name: Motion Atlas Gold Rive Runtime
+on:
+  pull_request:
+    paths:
+      - 'scripts/build-motion-atlas-gold.mjs'
+      - 'samples/motion-atlas-gold/**'
+      - 'test/motionAtlasGold.mjs'
+      - '.github/workflows/motion-atlas-gold-ci.yml'
+jobs:
+  render-gold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install official runtime's headless browser
+        run: npx playwright install --with-deps chromium
+      - name: Run real binary and runtime rendering tests
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          test -x "$CHROME"
+          RIVE_MCP_CHROME="$CHROME" node test/motionAtlasGold.mjs
+      - name: Build and capture visual frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/build-motion-atlas-gold.mjs test/tmp/motion-atlas-gold/solstice.riv --preview
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: motion-atlas-gold-runtime-evidence
+          path: |
+            test/tmp/motion-atlas-gold/*.riv
+            test/tmp/motion-atlas-gold/*.png
+            test/tmp/motion-atlas-gold/*.html
+          if-no-files-found: warn
