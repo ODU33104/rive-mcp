@@ -34,17 +34,5 @@
   },
   "durationFrames": 270,
   "fps": 60,
-  "keyBeats": {
-    "haze": 0,
-    "orbit": 20,
-    "watchArrival": 37,
-    "bezelResolve": 110,
-    "headline1": 83,
-    "headline2": 111,
-    "dialReveal": 124,
-    "caption": 169,
-    "glint": 178,
-    "settle": 239
-  },
   "creator": "Original vector composition and choreography authored for ODU33104/rive-mcp; no imported external image, clip, artwork, or animation."
 }
