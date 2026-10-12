@@ -7,7 +7,7 @@ This work deliberately prioritizes generation capability over another verificati
 - 18 **original generalized** choreography recipes with semantic goals, styles, energy, Japanese/English keywords, bound scene roles, timing offsets, easing and duration. These are not copied keyframes extracted from third-party scenes.
 - 18 source **pointers** to community Rive works, component sites, CSS libraries, AI showcases and license references. Each external source is marked `reference-only`. No third-party animations, images, source code or user prompts have been imported.
 - A dependency-free natural-language matcher and recipe compiler.
-- No full visual scene generator yet. No claim of professional one-shot output quality, multi-layer character rigging, or exact recreation of referenced artworks.
+- Three original **small executable scene compositions** (success, editorial typography, product entrance) compile to real Rive binaries through the existing writer after a build. This is not a generic visual scene generator, and there is no claim of professional one-shot quality or exact recreation of referenced artworks.
 
 ## Correct intermediate representation: meaning -> choreography -> Rive
 
@@ -61,6 +61,19 @@ node scripts/motion-recipe.mjs compile success-burst bindings.json > animation.j
 ```
 
 Insert the produced AnimationSpec into the artboard animations array of an existing SceneSpec and compile with the current project writer. x/y/rotation values are offsets added to bound base properties, scaleX/Y values multiply bound base scales, and opacity uses absolute values. Easing is written to the departing keyframe, matching the local writer. The output does not create assets or state-machine transitions.
+
+## Three runnable .riv demonstrations
+
+After npm ci and npm run build, the following each turn a prebuilt original visual composition plus catalog choreography into a real Rive file:
+
+```sh
+node scripts/build-motion-atlas-demo.mjs success-burst test/tmp/motion-atlas/success.riv
+node scripts/build-motion-atlas-demo.mjs editorial-headline test/tmp/motion-atlas/editorial.riv
+node scripts/build-motion-atlas-demo.mjs premium-product-intro test/tmp/motion-atlas/product.riv
+node test/motionAtlasDemo.mjs
+```
+
+The three demo visuals are **original lightweight illustrations**, not reproductions of works in the referenced galleries. This code is a proof that the new schema can drive the existing writer; it does not evaluate perceived quality.
 
 ## Curated initial source types
 
