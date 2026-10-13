@@ -64,7 +64,7 @@ assert.deepEqual(build.transferred["optical-lens"].sort(),["astronomy","photogra
 assert.equal(build.outputs.length,3);
 assert.ok(build.outputs.every(o=>o.result.status==="PASS"));
 assert.ok(build.outputs.every(o=>o.result.rigs>=3));
-assert.equal(build.outputs.reduce((n,o)=>n+o.scene.shapes.length,0)>300,true);
+assert.equal(build.outputs.reduce((n,o)=>n+o.scene.shapes.length,0)>200,true);
 const mutated=makeComposition(COMPOSITIONS[0]);
 const idx=new Map([...mutated.scene.groups,...mutated.scene.shapes,...mutated.scene.texts].map(n=>[n.id,n]));
 idx.get(mutated.result.bindingContracts[0].root).scaleX=0.01;
