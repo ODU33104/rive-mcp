@@ -1,0 +1,24 @@
+name: Rights-Aware Marketplace FX Intake
+on:
+  pull_request:
+    paths:
+      - 'data/effect-scout/**'
+      - 'scripts/effect-scout-gate.mjs'
+      - 'test/effectScoutGate.mjs'
+      - 'docs/EFFECT_SOURCE_HARVEST.md'
+      - '.github/workflows/effect-scout-ci.yml'
+jobs:
+  audit-marketplace-effects:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Block counterfeit effect counts and unreviewed licenses
+        run: node test/effectScoutGate.mjs
+      - name: Inspect reference-only effect coverage
+        run: node scripts/effect-scout-gate.mjs
