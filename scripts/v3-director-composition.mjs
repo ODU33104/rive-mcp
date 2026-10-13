@@ -106,6 +106,19 @@ export function buildPortfolioScene(prompt){
  const plan=planPortfolioPrompt(prompt);
  if(plan.status!=="PLANNED")return {plan};
  const {scene,provenance}=createArtDirectedScene(plan.direction);
+ // Visual QA of genuine 600x600 posters revealed baseline/text collisions.
+ // Reserve a clean bottom typographic strip; translate the detail animation's
+ // ORIGINAL y coordinates rather than moving just the resting group.
+ if(provenance.mode==="square"){
+  const baseline=scene.shapes.find(s=>s.id==="baseline");
+  if(baseline)baseline.opacity=0;
+  const detail=scene.groups.find(g=>g.id==="detail");
+  if(!detail)throw Error("No square-layout detail rig");
+  detail.y-=12;
+  for(const animation of scene.animations)for(const track of animation.tracks)
+   if(track.target==="detail"&&track.property==="y")
+    for(const key of track.keyframes)key.value-=12;
+ }
  const before=createRiv(scene);
  const fx=plan.effectId?addExistingEffectToDirection(scene,plan):null;
  const after=createRiv(scene);
