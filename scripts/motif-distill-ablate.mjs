@@ -136,6 +136,7 @@ export async function buildTrials(outDir,{render=false,gif=false}={}){
    const name=domain+"--"+motif+"--"+(ablation?"ablated":"control");
    const folder=join(dir,name);mkdirSync(folder,{recursive:true});
    writeFileSync(join(folder,"scene.riv"),bytes);
+   writeFileSync(join(folder,"scene.json"),JSON.stringify(scene,null,2)+"\n");
    const item={name,domain,motif,ablation,rivSha256:sha(bytes),bytes:bytes.length,
     source:"self-authored geometries; no fonts, images, or imported reference assets",
     nativeEditableObjects:scene.shapes.map(x=>x.id),
@@ -222,9 +223,19 @@ export async function buildTrials(outDir,{render=false,gif=false}={}){
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
  try{
   const opts=process.argv.slice(2);
-  const report=await buildTrials(opts.find(x=>!x.startsWith("--"))??"test/tmp/motif-distillation",
-   {render:opts.includes("--render"),gif:opts.includes("--gif")});
-  console.log(JSON.stringify({cases:report.caseCount,domains:report.domainCount,
-   motifs:report.motifCount,renderer:report.renderer}));
+  if(opts[0]==="--compile-scene"){
+   if(!opts[1]||!opts[2])throw Error("Usage: --compile-scene editable-scene.json output.riv");
+   const scene=JSON.parse(readFileSync(resolve(opts[1]),"utf8"));
+   const output=createRiv(scene);
+   mkdirSync(dirname(resolve(opts[2])),{recursive:true});
+   writeFileSync(resolve(opts[2]),Buffer.from(output.bytes));
+   console.log(JSON.stringify({compiledFrom:resolve(opts[1]),output:resolve(opts[2]),
+    riveSha256:sha(Buffer.from(output.bytes)),warnings:output.warnings}));
+  }else{
+   const report=await buildTrials(opts.find(x=>!x.startsWith("--"))??"test/tmp/motif-distillation",
+    {render:opts.includes("--render"),gif:opts.includes("--gif")});
+   console.log(JSON.stringify({cases:report.caseCount,domains:report.domainCount,
+    motifs:report.motifCount,renderer:report.renderer}));
+  }
  }catch(e){console.error(e);process.exitCode=1;}
 }
