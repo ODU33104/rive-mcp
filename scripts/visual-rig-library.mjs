@@ -232,6 +232,7 @@ function builder(id,opts){
    semantic:META[id].semantic,domain:opts.domain||META[id].domains[0],
    unit:"px",scale:opts.scale??1,style:opts.style||"nocturne",
    root:uid("root"),pivot:uid(META[id].pivot),
+   pivotLocal:(()=>{const p=[...groups,...shapes].find(n=>n.id===uid(META[id].pivot));return p?{x:p.x,y:p.y,parent:p.parent}:null})(),
    allowedMotion:[uid(META[id].pivot)+".rotation",uid(META[id].pivot)+".scaleY",uid(META[id].pivot)+".opacity",
       uid("root")+".opacity",uid("root")+".y"],
    nodeIds:[...groups,...shapes,...texts].map(n=>n.id),
@@ -260,10 +261,12 @@ export function validateRigScene(scene,manifests){
  const tracks=scene.animations.flatMap(a=>a.tracks);
  for(const m of manifests){
    const root=idx.get(m.root),pivot=idx.get(m.pivot);
-   if(!root||!pivot||!scene.groups.includes(root)||!scene.groups.includes(pivot))
+   if(!root||!pivot||!scene.groups.includes(root)||!(scene.groups.includes(pivot)||scene.shapes.includes(pivot)))
      throw Error("invalid root/pivot attachment "+m.rig);
    if(root.scaleX!==m.scale||root.scaleY!==m.scale||m.unit!=="px")
      throw Error("rig scale/unit witness failed "+m.rig);
+   if(!m.pivotLocal||pivot.x!==m.pivotLocal.x||pivot.y!==m.pivotLocal.y||pivot.parent!==m.pivotLocal.parent)
+     throw Error("rig pivot geometry moved "+m.rig);
    const ownNodes=m.nodeIds.map(id=>idx.get(id));
    if(ownNodes.some(n=>!n))throw Error("missing bound vector geometry "+m.rig);
    const motion=new Set(m.allowedMotion);
