@@ -1,9 +1,9 @@
 // Build an offline, anonymized, blind-ready (not independently blinded) review pack.
 // node scripts/v3-judge-pack.mjs --audit test/tmp/v3-judge/audit.json
-import {readFileSync,writeFileSync,mkdirSync} from "node:fs";
+import {readFileSync,writeFileSync,mkdirSync,copyFileSync,existsSync} from "node:fs";
 import {resolve,dirname,join} from "node:path";
 import {fileURLToPath,pathToFileURL} from "node:url";
-import {createHash} from "node:crypto";
+import {createHash,randomBytes} from "node:crypto";
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const hash=v=>createHash("sha256").update(v).digest("hex");
 const stable=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==="object"&&!Array.isArray(x)?
@@ -16,6 +16,11 @@ export function comparability(a,b){
   if(!a?.promptId||a.promptId!==b?.promptId)failed.push("different or unspecified prompt");
   if(!a.holdoutMembership||!b.holdoutMembership)failed.push("reference prompts are not frozen holdout trials");
   if(a.fallbackFrom||b.fallbackFrom)failed.push("fallback-attributed candidate");
+  if(!Number.isFinite(a.durationSeconds)||a.durationSeconds<=0||
+    a.durationSeconds!==b.durationSeconds)failed.push("duration not explicitly matched");
+  if(!["finished-scene-edit","typed-slot","new-generation"].includes(a.route)||
+    !["finished-scene-edit","typed-slot","new-generation"].includes(b.route)||
+    a.route===b.route)failed.push("must compare different specified generation routes");
   const requiredBudget=["model","tokenCap","candidates","repairs","wallTimeCapMs"];
   if(!equalBudget(a.budget,b.budget)||requiredBudget.some(k=>a.budget?.[k]===undefined||b.budget?.[k]===undefined))
     failed.push("budget/model/candidate/repair mismatch or missing");
@@ -27,15 +32,20 @@ export function comparability(a,b){
       stable(assetIdentity(a.assets))!==stable(assetIdentity(b.assets)))failed.push("assets/rights identity mismatch or missing hashes");
   if(a.render?.status!=="PASS"||b.render?.status!=="PASS")failed.push("real rendered frames missing");
   if(!a.png?.length||!b.png?.length)failed.push("captures missing");
+  if(!a.gif?.sha256||!b.gif?.sha256)failed.push("official runtime GIF evidence missing");
   return {status:failed.length?"NOT_COMPARABLE":"COMPARABLE_ON_DECLARED_CONTROLS",
     reasons:failed,warning:"Comparability does not imply aesthetic superiority or independent human blinding"};
 }
 const csvRow=xs=>xs.map(x=>'"'+String(x??"").replaceAll('"','""')+'"').join(",");
 export function makePack(auditPath,outputDir){
   const audit=JSON.parse(readFileSync(auditPath,"utf8"));
-  if(audit.schema!=="scene-tournament-audit/v1")throw Error("wrong audit schema");
+  if(audit.schema!=="v3-judge-audit/v1")throw Error("wrong audit schema");
   const out=resolve(outputDir||join(dirname(auditPath),"review-pack"));mkdirSync(out,{recursive:true});
-  const attempts=audit.attempts||[],sorted=[...attempts].sort((a,b)=>hash(a.id+"::"+audit.schema).localeCompare(hash(b.id+"::"+audit.schema)));
+  const attempts=audit.attempts||[];
+  if(new Set(attempts.map(a=>a.id)).size!==attempts.length)throw Error("duplicate candidate IDs");
+  // A fresh cryptographic seed avoids deterministic route-to-slot leaks.
+  const seed=randomBytes(32).toString("hex");
+  const sorted=[...attempts].sort((a,b)=>hash(seed+"::"+a.id).localeCompare(hash(seed+"::"+b.id)));
   const names=new Map(sorted.map((a,i)=>[a.id,"Candidate "+String(i+1).padStart(2,"0")]));
   const columns=["candidate","prompt_id","typography_1_to_5","composition_1_to_5","motion_1_to_5","semantic_1_to_5","editability_1_to_5","preference","reviewer_code","notes"];
   const forms=[csvRow(columns)];
@@ -48,7 +58,20 @@ export function makePack(auditPath,outputDir){
       if(bytes.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("invalid real PNG "+p.path);
       return '<figure><img alt="Rive frame" src="data:image/png;base64,'+bytes.toString("base64")+'"><figcaption>'+esc(p.timeSeconds)+" s</figcaption></figure>";
     }).join("");
-    sections.push('<section><h2>'+esc(label)+'</h2><div class="frames">'+imageNodes+'</div></section>');
+    if(a.gif?.path){
+      const source=resolve(dirname(auditPath),a.gif.path),dest=join(out,label.replace(" ","-")+".gif");
+      if(!existsSync(source)||hash(readFileSync(source))!==a.gif.sha256)
+        throw Error("missing/mismatched real GIF for "+label);
+      copyFileSync(source,dest);
+    }
+    if(a.riv?.path){
+      const source=resolve(dirname(auditPath),a.riv.path),dest=join(out,label.replace(" ","-")+".riv");
+      if(!existsSync(source)||hash(readFileSync(source))!==a.riv.hash)
+        throw Error("missing/mismatched editable native binary for "+label);
+      copyFileSync(source,dest);
+    }
+    const gif=a.gif?.path?'<p><img alt="Official-runtime animation" src="'+esc(label.replace(" ","-"))+'.gif"></p>':"";
+    sections.push('<section><h2>'+esc(label)+'</h2><div class="frames">'+imageNodes+'</div>'+gif+'</section>');
   }
   const comparisons=[];
   for(let i=0;i<sorted.length;i++)for(let j=i+1;j<sorted.length;j++){
@@ -62,10 +85,11 @@ export function makePack(auditPath,outputDir){
     sections.join("")+'</html>';
   writeFileSync(join(out,"review.html"),html);
   writeFileSync(join(out,"human-ratings-blank.csv"),forms.join("\n")+"\n");
-  writeFileSync(join(out,"comparisons.json"),JSON.stringify({schema:"scene-tournament-comparison/v1",comparisons,
-    humanRatings:"NOT_EVALUATED",method:"pair same prompts/assets/declared budget; hard gating in audit"},null,2)+"\n");
+  writeFileSync(join(out,"comparisons.json"),JSON.stringify({schema:"v3-judge-comparison/v1",comparisons,
+    humanRatings:"NOT_EVALUATED",eligibleForAestheticRanking:false,
+    method:"pair same prompts/assets/declared budget; hard gating in audit"},null,2)+"\n");
   // Deliberately outside review-pack. Do not upload to the anonymous review artifact.
-  writeFileSync(join(dirname(out),"sealed-blind-key.json"),JSON.stringify({schema:"scene-tournament-blind-key/v1",mapping:map},null,2)+"\n");
+  writeFileSync(join(dirname(out),"sealed-blind-key.json"),JSON.stringify({schema:"v3-judge-blind-key/v1",seed,mapping:map},null,2)+"\n");
   return {candidates:sorted.length,pairs:comparisons.length,comparable:comparisons.filter(x=>x.status.startsWith("COMPARABLE")).length,dir:out};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
