@@ -52,7 +52,7 @@ export function makeComposition(c){
  const addText=(id,str,x,y,width,size,color,align="left")=>
   texts.push({id,x,y,width,z:8000,align,
     runs:[{...font(str)[0],fontSize:size,color}]});
- addText("heading",c.heading,50,29,820,37,T.paper);
+ addText("heading",c.heading,50,29,820,37,c.style==="porcelain"?T.ink:T.paper);
  addText("subheading",c.subtitle,52,82,825,13,T.accent);
  addText("folio","ORIGINAL VECTOR ASSEMBLIES   /   "+c.id.toUpperCase(),51,529,750,12,T.subtle);
  addText("counter","0"+c.placements.length+"  OBJECTS",765,532,150,11,T.accent,"right");
