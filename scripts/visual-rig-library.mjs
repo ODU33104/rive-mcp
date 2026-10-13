@@ -201,7 +201,7 @@ function builder(id,opts){
    stroked("inner-bezel",0,0,142,142,t.subtle,1,null);
    for(let i=0;i<12;i++){const a=i*Math.PI/6-Math.PI/2,p0=polar(94,a),p1=polar(99,a);
      line("minute-notch-"+i,p0.x,p0.y,p1.x,p1.y,t.metal,i%3?1:2);}
-   label("numeral","72%",-74,-23,148,43,t.glint);
+   label("numeral","72%",-74,-23,148,43,opts.style==="porcelain"?t.ink:t.glint);
    label("description","COMPLETE",-74,33,148,12,t.subtle);
    glint("progress-glint",0,0,188,188);
    break;
@@ -225,7 +225,7 @@ function builder(id,opts){
    g("letter",0,0);
    for(let i=0;i<4;i++)rect("speed-"+i,-84+i*9,-44-i*7,66-i*8,3,solid(t.accent),
     {parent:"letter",cornerRadius:1});
-   label("brand","VELOCITY",-126,-8,252,35,t.glint,{parent:"letter"});
+   label("brand","VELOCITY",-126,-8,252,35,opts.style==="porcelain"?t.ink:t.glint,{parent:"letter"});
    line("underline",-117,39,117,39,t.accent,2,{parent:"letter"});
    line("slash-left",-118,50,-103,63,t.accent,2,{parent:"letter"});
    line("slash-right",103,50,118,63,t.accent,2,{parent:"letter"});
