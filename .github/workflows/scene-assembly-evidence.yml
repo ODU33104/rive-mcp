@@ -4,6 +4,8 @@ on:
     paths:
       - 'scripts/scene-assembly-lab.mjs'
       - 'test/sceneAssemblyLab.mjs'
+      - 'scripts/prompt-solstice.mjs'
+      - 'test/promptSolstice.mjs'
       - 'docs/SCENE_ASSEMBLY_EVIDENCE_LAB.md'
       - '.github/workflows/scene-assembly-evidence.yml'
 jobs:
@@ -19,7 +21,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Check semantic roundtrip and malicious pivot/motion mutations
-        run: node test/sceneAssemblyLab.mjs
+        run: |
+          node test/sceneAssemblyLab.mjs
+          node test/promptSolstice.mjs
       - name: Install Chromium matching Rive runtime
         run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Generate distinct editable Rive candidates and runtime frames
