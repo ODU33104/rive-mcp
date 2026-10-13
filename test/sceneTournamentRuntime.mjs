@@ -7,6 +7,7 @@ import {createRiv} from "../dist/rivWriter.js";
 import {RiveHost} from "../dist/riveHost.js";
 import {PAGE_SCRIPT} from "../dist/pageScript.js";
 import {pivotCheck,FAIL} from "../scripts/scene-tournament-verify.mjs";
+import {compareVisiblePixels} from "../scripts/scene-tournament-pixels.mjs";
 const dir=resolve("test/tmp/scene-tournament");mkdirSync(dir,{recursive:true});
 const {bytes,scene}=buildGold();
 const mutated=structuredClone(scene);
@@ -35,7 +36,8 @@ try {
   const first=await render(bytes),second=await render(tampered.bytes);
   writeFileSync(resolve(dir,"art-original.png"),first);
   writeFileSync(resolve(dir,"art-tampered.png"),second);
-  assert.notDeepEqual(first,second,
-    "FAIL: shifted caseMetal must alter official-runtime pixels; a blind structural-only check is insufficient");
-  console.log("sceneTournamentRuntime: PASS — official renderer detected +8px vector object tamper and structural pivot tamper");
+  const pixels=compareVisiblePixels(first,second);
+  assert.ok(pixels.changedPixels>20,
+    "FAIL: shifted caseMetal must alter actual decoded pixels, not just PNG metadata: "+JSON.stringify(pixels));
+  console.log("sceneTournamentRuntime: PASS — official renderer detected +8px caseMetal ("+pixels.changedPixels+" changed real pixels) and pivot tamper");
 }finally{await host.close();}
