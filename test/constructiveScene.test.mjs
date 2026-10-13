@@ -18,7 +18,7 @@ test("six bilingual prompts construct three unrelated editable topologies",()=>{
     assert.ok(a.verifiedSlots.length>=2);
     assert.ok(a.scene.animations[0].tracks.length>=2);
     assert.deepEqual(makeConstructiveScene(plan).scene,a.scene,"deterministic repeat");
-    fingerprints.add(JSON.stringify(a.scene.shapes.map(s=>[s.id,s.type,s.points?.length,s.x,s.y,s.width,s.height])));
+    fingerprints.add(JSON.stringify([a.scene.shapes.map(s=>[s.id,s.type,s.points?.length,s.x,s.y,s.width,s.height]),a.scene.groups.map(g=>[g.id,g.x,g.y])]));
   }
   assert.deepEqual([...domains].sort(),["earbuds","instrument","poster"]);
   assert.equal(fingerprints.size,6,"different prompts must vary actual geometry, not merely text/colors");
@@ -36,6 +36,7 @@ test("motion respects no bounce, no spin and case-only without silent fallback",
   for(const prompt of [
     "イヤホン ケースだけ動かして バウンスなし",
     "軌道計器を回転させない",
+    "floating open premium earbuds, do not spin",
     "bold typographic poster with no bounce"
   ]){
     const plan=planConstructiveScene(prompt);
@@ -60,7 +61,7 @@ test("ambiguous, unknown and unsupported jobs abstain explicitly",()=>{
 });
 test("constructive scene never splices GOLD/watch stems into earbuds",()=>{
   const {scene}=makeConstructiveScene(planConstructiveScene(fixtures[0].prompt));
-  assert.ok(scene.shapes.some(s=>s.id==="budLst em".replace(" ","")));
+  assert.ok(scene.shapes.some(s=>s.id==="budLstem"));
   assert.ok(scene.shapes.every(s=>!s.id.toLowerCase().includes("seconds")));
   assert.ok(scene.groups.some(g=>g.id==="stemL"));
   assert.ok(!scene.groups.some(g=>g.id==="watch"));
