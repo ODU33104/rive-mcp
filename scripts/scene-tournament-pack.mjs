@@ -16,7 +16,13 @@ export function comparability(a,b){
   if(!a?.promptId||a.promptId!==b?.promptId)failed.push("different or unspecified prompt");
   if(!a.holdoutMembership||!b.holdoutMembership)failed.push("reference prompts are not frozen holdout trials");
   if(a.fallbackFrom||b.fallbackFrom)failed.push("fallback-attributed candidate");
-  if(!equalBudget(a.budget,b.budget))failed.push("budget/model/candidate/repair mismatch or missing");
+  const requiredBudget=["model","tokenCap","candidates","repairs","wallTimeCapMs"];
+  if(!equalBudget(a.budget,b.budget)||requiredBudget.some(k=>a.budget?.[k]===undefined||b.budget?.[k]===undefined))
+    failed.push("budget/model/candidate/repair mismatch or missing");
+  if(!a.source?.hash||!b.source?.hash||!a.riv?.hash||!b.riv?.hash)
+    failed.push("source or generated binary hash missing");
+  if(a.rights?.assetsDeclaredComplete!==true||b.rights?.assetsDeclaredComplete!==true)
+    failed.push("incomplete embedded-asset inventory");
   if(!a.assets||!b.assets||a.assets.some(x=>!x.hash)||b.assets.some(x=>!x.hash)||
       stable(assetIdentity(a.assets))!==stable(assetIdentity(b.assets)))failed.push("assets/rights identity mismatch or missing hashes");
   if(a.render?.status!=="PASS"||b.render?.status!=="PASS")failed.push("real rendered frames missing");
