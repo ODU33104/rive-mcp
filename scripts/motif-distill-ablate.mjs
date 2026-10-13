@@ -170,12 +170,52 @@ export async function buildTrials(outDir,{render=false,gif=false}={}){
    results.push(item);
   }
  }finally{if(host)await host.close();}
+ const visualPairs=[];
+ if(render){
+  for(const domain of DOMAINS)for(const motif of MOTIFS){
+   const prefix=domain+"--"+motif+"--";
+   const a=results.find(x=>x.name===prefix+"control");
+   const b=results.find(x=>x.name===prefix+"ablated");
+   const changed=a.frames.map((f,i)=>i).filter(i=>
+    a.frames[i]?.sha256!==b.frames[i]?.sha256);
+   if(!changed.length)throw Error("Control/ablation visually indistinguishable in official runtime: "+prefix);
+   const selected=changed[0];
+   const delta={domain,motif,changedFrameIndices:changed,
+    atMs:a.frames[selected].timeMs,hashesDiffer:true,
+    meaning:"rendered-output-change-only; not aesthetic-effect-proof"};
+   if(gif){
+    const frameBytes=(item)=>{
+     const png=join(dir,item.name,item.frames[selected].filename);
+     const r=spawnSync("ffmpeg",["-loglevel","error","-i",png,
+      "-frames:v","1","-f","rawvideo","-pix_fmt","rgba","pipe:1"],
+      {maxBuffer:4*1024*1024});
+     if(r.status!==0)throw Error("Cannot decode pixel witness "+png+": "+r.stderr);
+     return r.stdout;
+    };
+    const px=frameBytes(a),py=frameBytes(b);
+    if(px.length!==480*320*4||py.length!==px.length)
+     throw Error("Unexpected frame size for pixel comparison");
+    let count=0,sum=0;
+    for(let i=0;i<px.length;i+=4){
+     let different=false;
+     for(let j=0;j<4;j++){const d=Math.abs(px[i+j]-py[i+j]);sum+=d;if(d)different=true;}
+     if(different)count++;
+    }
+    if(count===0)throw Error("Zero changed pixels despite different hashes");
+    delta.changedPixels=count;
+    delta.totalPixels=480*320;
+    delta.meanAbsChannelDifference=Number((sum/px.length).toFixed(6));
+   }
+   visualPairs.push(delta);
+  }
+ }
+
  const report={schema:"motif-ablation-evidence/v1",authoring:"existing SceneSpec/rivWriter",
   renderer:render?"actual official Rive runtime, version pinned by lockfile":"NOT_RENDERED",
   caseCount:results.length,domainCount:DOMAINS.length,motifCount:MOTIFS.length,
   interpretation:"Single-variable controlled source interventions. Measurable traces do not establish preferred aesthetics",
   promotionStage:render?"rendered-experiment-only; human and rights gate pending":"buildable-experiment-only",
-  cases:results};
+  visualPairs,cases:results};
  writeFileSync(join(dir,"evidence.json"),JSON.stringify(report,null,2)+"\n");
  return report;
 }
