@@ -1,0 +1,52 @@
+name: V3 Director Native Rive Compositions
+on:
+  pull_request:
+    paths:
+      - 'scripts/v3-director-composition.mjs'
+      - 'test/v3DirectorComposition.mjs'
+      - 'docs/V3_DIRECTOR_COMPOSITION.md'
+      - '.github/workflows/v3-director-composition.yml'
+jobs:
+  native-source-assembly:
+    name: Director ${{ matrix.concept }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        concept: [optics, crystal, celestial, silicon]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Semantic contracts, original authored component reuse, hard negative abstain
+        run: node test/v3DirectorComposition.mjs
+      - name: Install pinned Chromium for official Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Real native Rive build, inspect, dynamic FX placement and actual PNG frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/v3-director-composition.mjs "${{ matrix.concept }}" "test/tmp/v3-director/${{ matrix.concept }}" --render
+      - name: Convert actual Rive runtime frames into GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/v3-director/${{ matrix.concept }}"
+          /usr/bin/ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 10 -i frame-%03d.png -vf "scale=640:-1:flags=lanczos" -loop 0 "${{ matrix.concept }}.gif"
+          test "$(stat -c%s "${{ matrix.concept }}.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-v3-director-${{ matrix.concept }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/v3-director/${{ matrix.concept }}/*.riv
+            test/tmp/v3-director/${{ matrix.concept }}/*.gif
+            test/tmp/v3-director/${{ matrix.concept }}/*-poster.png
+            test/tmp/v3-director/${{ matrix.concept }}/*.json
