@@ -34,10 +34,17 @@ jobs:
           node scripts/motif-distill-catalog.mjs --check
       - name: Fail-closed evidence tests and original native sources
         run: node test/motifDistill.mjs
+      - name: Install Chromium matching pinned runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Install GIF encoder
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - name: Native Rive output and official runtime PNG / GIF evidence
+        shell: bash
         run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          test -x "$CHROME"
           command -v ffmpeg
-          RIVE_MCP_CHROME=/usr/bin/chromium node scripts/motif-distill-ablate.mjs test/tmp/motif-distillation --render --gif
+          RIVE_MCP_CHROME="$CHROME" node scripts/motif-distill-ablate.mjs test/tmp/motif-distillation --render --gif
       - uses: actions/upload-artifact@v4
         if: always()
         with:
