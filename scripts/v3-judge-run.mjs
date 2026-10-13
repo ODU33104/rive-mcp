@@ -5,7 +5,8 @@ import {readFileSync,writeFileSync,mkdirSync,existsSync} from "node:fs";
 import {resolve,dirname,join,relative} from "node:path";
 import {fileURLToPath,pathToFileURL} from "node:url";
 import {createHash} from "node:crypto";
-import {PASS,FAIL,UNKNOWN,evaluate} from "./v3-judge-verify.mjs";
+import {spawnSync} from "node:child_process";
+import {PASS,FAIL,UNKNOWN,evaluate,rightsDisposition,stopGate} from "./v3-judge-verify.mjs";
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const digest=b=>createHash("sha256").update(b).digest("hex");
 const fileDigest=p=>existsSync(p)?digest(readFileSync(p)):null;
@@ -14,16 +15,6 @@ const readJSON=p=>JSON.parse(readFileSync(resolve(ROOT,p),"utf8"));
 const abs=p=>resolve(ROOT,p);
 const repoPath=p=>p?relative(ROOT,abs(p)).replaceAll("\\","/"):null;
 const status=(status,reason)=>({status,reason});
-function rightsCheck(rights={},assets=[]){
-  const issues=[];
-  if(!rights.sourceEvidence)issues.push("source permission evidence missing");
-  if(rights.assetsDeclaredComplete!==true)issues.push("embedded asset list completeness unverified");
-  for(const operation of ["inspect","render","adapt","embed","redistribute"])
-    if(rights.operations?.[operation]!=="allow")issues.push(operation+" not explicitly allowed");
-  for(const asset of assets)
-    if(asset.rights!=="allow"||!asset.rightsEvidence)issues.push("asset rights unresolved: "+asset.path);
-  return status(issues.length?UNKNOWN:PASS,issues.length?issues.join("; "):"explicit source/asset operation claims (not legal opinion)");
-}
 function completeness(a){
   const needed=["promptId","route","budget","rights","assets"];
   return needed.filter(k=>a[k]===undefined);
@@ -70,7 +61,7 @@ export async function runTournament({input=null,gold=false,out="test/tmp/v3-judg
         render:status(UNKNOWN,"not run"),structural:status(UNKNOWN,"scene spec not supplied"),
         semantic:status(UNKNOWN,"no independently verified semantic object-class mapping"),
         editability:status(UNKNOWN,"editable in official Rive Editor not measured"),
-        licensing:rightsCheck(a.rights,a.assets),restrictions:[],missingFields:missing,
+        licensing:rightsDisposition(a.rights,a.assets),restrictions:[],missingFields:missing,
         candidateGate:UNKNOWN};
       try{
         if(missing.length)throw Error("missing manifest fields: "+missing.join(", "));
@@ -143,6 +134,28 @@ export async function runTournament({input=null,gold=false,out="test/tmp/v3-judg
           writeFileSync(join(dir,name),frame);
           record.png.push({path:name,timeSeconds:t,sha256:digest(frame),bytes:frame.length});
         }
+        // Real official-runtime animation frames. Never synthesize a GIF from
+        // hand-painted mockups, placeholders, or a file signature alone.
+        const filmDir=join(dir,record.id.replace(/[^a-zA-Z0-9_-]/g,"_")+"-sequence");
+        mkdirSync(filmDir,{recursive:true});
+        const sequence=await host.renderFrames(bytes,{animation,startTime:0,frameCount:24,
+          fps:8,width:a.width||720,format:"png"});
+        if(sequence.frames?.length!==24)throw Error("official runtime produced insufficient GIF source frames");
+        for(const [i,b64] of sequence.frames.entries()){
+          const frame=Buffer.from(b64,"base64");
+          if(!pngOk(frame))throw Error("invalid official-runtime motion frame "+i);
+          writeFileSync(join(filmDir,"frame-"+String(i).padStart(3,"0")+".png"),frame);
+        }
+        const gifFile=join(dir,record.id.replace(/[^a-zA-Z0-9_-]/g,"_")+".gif");
+        const encode=spawnSync("ffmpeg",["-nostdin","-loglevel","error","-y","-framerate","8",
+          "-i",join(filmDir,"frame-%03d.png"),"-vf","fps=8","-loop","0",gifFile],
+          {encoding:"utf8",timeout:120000});
+        if(encode.status!==0||!existsSync(gifFile))throw Error("real-frame GIF encoding failed: "+(encode.stderr||encode.error));
+        const gifBytes=readFileSync(gifFile);
+        if(gifBytes.subarray(0,3).toString("ascii")!=="GIF")
+          throw Error("not an encoded GIF");
+        record.gif={path:relative(dir,gifFile),sha256:digest(gifBytes),
+          provenance:"24 PNG frames from bundled official Rive canvas-advanced runtime; ffmpeg encoded"};
         record.render=status(PASS,"real Rive canvas-advanced frames from Chromium; not an aesthetic score");
       }catch(e){
         record.render=status(FAIL,String(e));record.restrictions.push(status(FAIL,String(e)));runtimeFailed=true;
@@ -150,15 +163,14 @@ export async function runTournament({input=null,gold=false,out="test/tmp/v3-judg
       if(record.fallbackFrom)record.restrictions.push(status(UNKNOWN,"fallback success not attributed to requested route"));
       if(!record.holdoutMembership)record.restrictions.push(status(UNKNOWN,"reference or external prompt; excluded from frozen holdout metrics"));
       if(!a.constraints||Object.keys(a.constraints).length===0)record.restrictions.push(status(UNKNOWN,"semantic constraints missing"));
-      record.candidateGate=record.render.status===PASS&&record.structural.status===PASS&&
-        record.semantic.status===PASS&&record.editability.status===PASS&&record.licensing.status===PASS&&
-        record.restrictions.every(r=>r.status===PASS)?PASS:
-        [record.render,record.structural,record.licensing,...record.restrictions].some(x=>x.status===FAIL)?FAIL:UNKNOWN;
+      record.objectiveStopGate=stopGate(record);
+      record.candidateGate=record.objectiveStopGate.status;
+      record.aestheticQuality="NOT_EVALUATED";
       record.elapsedMs=Number(process.hrtime.bigint()-startedNs)/1e6;
       audits.push(record);
     }
   }finally{await host.close();}
-  const output={schema:"scene-tournament-audit/v1",generatedAt:new Date().toISOString(),
+  const output={schema:"v3-judge-audit/v1",generatedAt:new Date().toISOString(),
     protocol:{dataset:"data/v3-judge/frozen-prompts.v1.json",holdoutAuthoring:dataset.authoring,
       unknownDisposition:"REJECT",aestheticScores:"NOT_EVALUATED",costBasis:"declared budgets, not inferred"},
     attempts:audits};
