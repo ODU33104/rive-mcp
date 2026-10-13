@@ -15,6 +15,11 @@ for(const id of DIRECTOR_CONCEPTS){
  assert.ok(output.evidence.fx.importedNodes>=1);
  assert.ok(output.evidence.fx.originalGeometryHash.length===64);
  assert.ok(output.evidence.fx.importedTracks>=0);
+ if(output.evidence.layoutMode==="square"){
+  assert.equal(output.scene.shapes.find(s=>s.id==="baseline").opacity,0,
+   "square art direction has no obstructing rule through microcopy");
+  assert.ok(output.scene.groups.find(g=>g.id==="detail").y<545);
+ }
  assert.equal(output.evidence.renderStatus,"NOT_RENDERED_BY_BUILDER");
  assert.equal(output.evidence.blindHumanQuality,"NOT_EVALUATED");
  const a=[...output.scene.groups,...output.scene.shapes,...output.scene.texts];
