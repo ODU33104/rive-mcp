@@ -30,7 +30,7 @@ function noFX(s){return /(?:no (?:effect|fx|glow|glint|sparkles?)|without (?:fx|
 function noSpinning(s){return /(?:no spin|without spin|no rotation|do not rotate|回転(?:なし|禁止|させない)|回さない)/iu.test(s);}
 function noBounce(s){return /(?:no bounce|without bounce|バウンス(?:なし|禁止)|弾ませない|跳ねさせない)/iu.test(s);}
 function exclusive(s){return /(?:only (?:the )?(?:lens|planet|object|chip|camera)|だけ動かす|以外は動かさない)/iu.test(s);}
-function unsupported(s){return /(?:photorealistic|real-?time physics|ray.?tracing|物理シミュレーション|リアル3D|写真そっくり)/iu.test(s);}
+function unsupported(s){return /(?:photorealistic|real-?time physics|physics simulation|ray.?tracing|物理シミュレーション|リアル3D|写真そっくり)/iu.test(s);}
 const abstain=(reason)=>({status:"ABSTAIN",reason});
 export function planPortfolioPrompt(prompt){
  if(typeof prompt!=="string"||!prompt.trim())return abstain("Empty prompt");
