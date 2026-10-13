@@ -39,7 +39,7 @@ export function planConstructiveScene(prompt){
     /(?:大胆|bold|強烈)/iu.test(p)?"bold":"minimal";
   const energy=/(?:energetic|high.energy|劇的|大胆な動き|ダイナミック|勢いよく|活発)/iu.test(p)?"high":"low";
   const mode=domain==="earbuds"
-    ? (/(?:開く|開いた|open|floating|浮遊)/iu.test(p)?"open":"closed")
+    ? (/(?:開く|開いた|開いて|開け|open|floating|浮遊)/iu.test(p)?"open":"closed")
     : domain==="instrument"
       ? (/(?:scan|スキャン|oscilloscope|波形)/iu.test(p)?"scan":"orbital")
       : (/(?:grid|グリッド|整列)/iu.test(p)?"grid":"modular");
