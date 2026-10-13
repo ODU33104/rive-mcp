@@ -1,0 +1,238 @@
+{
+  "schema": "v3-rig-compositions/v1",
+  "source": {
+    "upstream": "PR #65 samples/visual-rigs/compositions.json",
+    "rights": "original project authored"
+  },
+  "compositions": [
+    {
+      "id": "atelier",
+      "domain": "photography",
+      "style": "nocturne",
+      "background": [
+        "#08131F",
+        "#223B4A"
+      ],
+      "heading": "OBJECTS / IN MOTION",
+      "subtitle": "ATELIER 01 — PRECISION, OPTICS AND EXPOSURE",
+      "placements": [
+        {
+          "rig": "studio-camera",
+          "domain": "photography",
+          "x": 190,
+          "y": 294,
+          "scale": 1.04,
+          "rotation": -5
+        },
+        {
+          "rig": "precision-watch",
+          "domain": "horology",
+          "x": 490,
+          "y": 290,
+          "scale": 1.07,
+          "rotation": 6
+        },
+        {
+          "rig": "optical-lens",
+          "domain": "photography",
+          "x": 774,
+          "y": 292,
+          "scale": 0.98,
+          "rotation": 8
+        }
+      ],
+      "artDirection": "editorial"
+    },
+    {
+      "id": "signal",
+      "domain": "audio interface",
+      "style": "porcelain",
+      "background": [
+        "#F2F4ED",
+        "#DBE7E8"
+      ],
+      "heading": "THE SIGNAL ROOM",
+      "subtitle": "STUDIO 02 — SOUND AND INTERACTIVE TIME",
+      "placements": [
+        {
+          "rig": "earbuds-case",
+          "domain": "audio",
+          "x": 194,
+          "y": 289,
+          "scale": 1.04
+        },
+        {
+          "rig": "audio-equalizer",
+          "domain": "audio",
+          "x": 479,
+          "y": 290,
+          "scale": 1.04
+        },
+        {
+          "rig": "progress-ring",
+          "domain": "interface",
+          "x": 764,
+          "y": 292,
+          "scale": 1.04
+        },
+        {
+          "rig": "kinetic-wordmark",
+          "domain": "identity",
+          "x": 476,
+          "y": 454,
+          "scale": 0.77
+        }
+      ],
+      "artDirection": "dashboard"
+    },
+    {
+      "id": "observatory",
+      "domain": "astronomy",
+      "style": "aurora",
+      "background": [
+        "#061725",
+        "#164456"
+      ],
+      "heading": "THE LIVING COSMOS",
+      "subtitle": "FIELD NOTES 03 — ORBITS / ORGANISMS / OPTICAL FOCUS",
+      "placements": [
+        {
+          "rig": "celestial-atlas",
+          "domain": "astronomy",
+          "x": 187,
+          "y": 288,
+          "scale": 1.02
+        },
+        {
+          "rig": "optical-lens",
+          "domain": "astronomy",
+          "x": 472,
+          "y": 287,
+          "scale": 1,
+          "rotation": -6
+        },
+        {
+          "rig": "botanical-form",
+          "domain": "botany",
+          "x": 762,
+          "y": 286,
+          "scale": 1.02
+        },
+        {
+          "rig": "abstract-emote",
+          "domain": "illustration",
+          "x": 375,
+          "y": 454,
+          "scale": 0.46
+        }
+      ],
+      "artDirection": "star-chart"
+    },
+    {
+      "id": "pulse-stage",
+      "domain": "dance",
+      "style": "nocturne",
+      "artDirection": "spotlight",
+      "background": [
+        "#101124",
+        "#392035"
+      ],
+      "heading": "TEMPO / MOVEMENT",
+      "subtitle": "LIVE STAGE 04 / SWING AND RESPONSE",
+      "placements": [
+        {
+          "rig": "mechanical-metronome",
+          "domain": "dance",
+          "x": 215,
+          "y": 297,
+          "scale": 1.02,
+          "rotation": -4
+        },
+        {
+          "rig": "pendant-lamp",
+          "domain": "lighting",
+          "x": 488,
+          "y": 247,
+          "scale": 0.92
+        },
+        {
+          "rig": "abstract-emote",
+          "domain": "illustration",
+          "x": 769,
+          "y": 311,
+          "scale": 0.91
+        }
+      ]
+    },
+    {
+      "id": "field-lab",
+      "domain": "education",
+      "style": "porcelain",
+      "artDirection": "field-notes",
+      "background": [
+        "#F6F0DD",
+        "#DDEDE6"
+      ],
+      "heading": "MOTION IS A SYSTEM",
+      "subtitle": "FIELD LAB 05 / WIND / LIFT / GROWTH",
+      "placements": [
+        {
+          "rig": "windmill",
+          "domain": "energy",
+          "x": 195,
+          "y": 302,
+          "scale": 1.02
+        },
+        {
+          "rig": "paper-kite",
+          "domain": "education",
+          "x": 478,
+          "y": 277,
+          "scale": 0.93
+        },
+        {
+          "rig": "botanical-form",
+          "domain": "botany",
+          "x": 760,
+          "y": 307,
+          "scale": 0.96
+        }
+      ]
+    },
+    {
+      "id": "radio-outpost",
+      "domain": "telecommunications",
+      "style": "aurora",
+      "artDirection": "radar",
+      "background": [
+        "#031923",
+        "#063D40"
+      ],
+      "heading": "POINT / RECEIVE / RELAY",
+      "subtitle": "REMOTE LINK 06 / STEERABLE OPTICS",
+      "placements": [
+        {
+          "rig": "satellite-dish",
+          "domain": "telecommunications",
+          "x": 175,
+          "y": 299,
+          "scale": 1.01
+        },
+        {
+          "rig": "celestial-atlas",
+          "domain": "astronomy",
+          "x": 468,
+          "y": 288,
+          "scale": 1
+        },
+        {
+          "rig": "paper-kite",
+          "domain": "festival",
+          "x": 753,
+          "y": 282,
+          "scale": 0.9
+        }
+      ]
+    }
+  ]
+}
