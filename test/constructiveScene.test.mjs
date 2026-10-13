@@ -32,6 +32,12 @@ test("strongly typed child pivots are world-validated and tampering fails",()=>{
   stem.x+=5;
   assert.throws(()=>validateConstructiveSlots(out.scene,out.slots),/pivot shifted/);
 });
+test("Japanese open-case conjugations bind to an actually opening lid",()=>{
+  const p=planConstructiveScene("高級イヤホンケースを静かに開いて見せる、バウンスなし");
+  assert.equal(p.design.mode,"open");
+  const s=makeConstructiveScene(p).scene;
+  assert.ok(s.animations[0].tracks.some(t=>t.target==="lidRig"&&t.property==="rotation"));
+});
 test("motion respects no bounce, no spin and case-only without silent fallback",()=>{
   for(const prompt of [
     "イヤホン ケースだけ動かして バウンスなし",
