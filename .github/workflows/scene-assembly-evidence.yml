@@ -1,0 +1,53 @@
+name: Scene Assembly Evidence Lab
+on:
+  pull_request:
+    paths:
+      - 'scripts/scene-assembly-lab.mjs'
+      - 'test/sceneAssemblyLab.mjs'
+      - 'scripts/prompt-solstice.mjs'
+      - 'test/promptSolstice.mjs'
+      - 'docs/SCENE_ASSEMBLY_EVIDENCE_LAB.md'
+      - '.github/workflows/scene-assembly-evidence.yml'
+jobs:
+  reassemble-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check semantic roundtrip and malicious pivot/motion mutations
+        run: |
+          node test/sceneAssemblyLab.mjs
+          node test/promptSolstice.mjs
+      - name: Install Chromium matching Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Generate distinct editable Rive candidates and runtime frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          test -x "$CHROME"
+          RIVE_MCP_CHROME="$CHROME" node scripts/scene-assembly-lab.mjs test/tmp/scene-assembly-evidence --render
+      - name: Encode actual motion into GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          for variant in original seconds-only; do
+            /usr/bin/ffmpeg -hide_banner -loglevel error -y -framerate 10 -i "test/tmp/scene-assembly-evidence/$variant/frame-%03d.png" -filter_complex "[0:v]scale=640:-1:flags=lanczos,split[pal-in][gif-in];[pal-in]palettegen=stats_mode=diff[pal];[gif-in][pal]paletteuse=dither=bayer:bayer_scale=3" -loop 0 "test/tmp/scene-assembly-evidence/$variant.gif"
+            file "test/tmp/scene-assembly-evidence/$variant.gif"
+            test "$(stat -c%s "test/tmp/scene-assembly-evidence/$variant.gif")" -gt 10000
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scene-assembly-evidence
+          path: |
+            test/tmp/scene-assembly-evidence/*.riv
+            test/tmp/scene-assembly-evidence/*.gif
+            test/tmp/scene-assembly-evidence/*-poster.png
+            test/tmp/scene-assembly-evidence/*.json
+          if-no-files-found: warn
