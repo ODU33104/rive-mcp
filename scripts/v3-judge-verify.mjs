@@ -153,5 +153,100 @@ export function evaluate(scene,constraints={},observations={}){
   for(const p of constraints.pivots||[])checks.push({constraint:p,...pivotCheck(scene,p)});
   for(const m of constraints.motion||[])checks.push({constraint:m,...motionCheck(scene,m,observations.traces||{})});
   for(const v of constraints.visual||[])checks.push({constraint:v,...visualCheck(scene,v,observations.visual||{})});
+  for(const v of constraints.layout||[])checks.push({constraint:v,...layoutCheck(scene,v,observations.layout||{})});
+  for(const v of constraints.fx||[])checks.push({constraint:v,...fxCheck(scene,v,observations.fx||{})});
+  for(const v of constraints.identity||[])checks.push({constraint:v,...identityCheck(scene,v,observations.identity||{})});
+  for(const v of constraints.material||[])checks.push({constraint:v,...result(UNKNOWN,"material/lens believability requires calibrated human/editor review")});
   return {status:overall(checks),checks};
+}
+
+
+// V3 adds deliberately conservative visual-quality stop gates. They identify
+// measurable faults; they never infer beauty from passing a geometry check.
+const rectOk=b=>b&&[b.x,b.y,b.width,b.height].every(finite)&&b.width>=0&&b.height>=0;
+const intersection=(a,b)=>Math.max(0,Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x))*
+  Math.max(0,Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y));
+export function layoutCheck(scene,c,observations={}){
+  const a=observations[c.target],b=observations[c.other];
+  if(c.kind==="collision"){
+    if(!rectOk(a?.bounds)||!rectOk(b?.bounds))return result(UNKNOWN,"both pixel/object boxes missing");
+    const px=intersection(a.bounds,b.bounds),allow=c.maxOverlapPx2??0;
+    if(px>allow)return result(FAIL,"measured objects collide",{overlapPx2:px});
+    return a.verifiedRuntimeBytes===true&&b.verifiedRuntimeBytes===true?
+      result(PASS,"no collision in inspected runtime frame"):
+      result(UNKNOWN,"non-collision requires binary/frame-pinned runtime measurement");
+  }
+  if(c.kind==="crop"){
+    if(!rectOk(a?.bounds)||!rectOk(observations.artboard?.bounds))return result(UNKNOWN,"artboard and visible bounds needed");
+    if(!within(a.bounds,observations.artboard.bounds,c.marginPx||0))
+      return result(FAIL,"object cropped/outside artboard");
+    return a.verifiedRuntimeBytes===true&&observations.artboard.verifiedRuntimeBytes===true?
+      result(PASS,"measured object inside artboard"):result(UNKNOWN,"unverified bounds cannot pass");
+  }
+  if(c.kind==="negative-space"){
+    if(!finite(a?.occupiedFraction)||a.occupiedFraction<0||a.occupiedFraction>1)
+      return result(UNKNOWN,"occupied area not measured");
+    if(a.occupiedFraction>(c.maxOccupiedFraction??0.8))
+      return result(FAIL,"subject swallows required quiet zone",{occupiedFraction:a.occupiedFraction});
+    return result(UNKNOWN,"area fraction cannot prove aesthetic negative space");
+  }
+  return result(UNKNOWN,"unhandled layout issue");
+}
+export function fxCheck(scene,c,observations={}){
+  const m=observations[c.target];
+  if(c.kind==="pointless-confetti"){
+    if(c.requestedByPrompt!==false||!c.promptEvidenceSha256)
+      return result(UNKNOWN,"no independently pinned proof that confetti was unrequested");
+    return m?.present===true?result(FAIL,"unrequested confetti violates intent"):result(UNKNOWN,"absence not verified");
+  }
+  if(c.kind==="invisible-fx"){
+    if(m?.actualRiveRender!==true||!finite(m.changedPixelFraction))
+      return result(UNKNOWN,"real before/after mask and frame evidence missing");
+    if(m.changedPixelFraction<=(c.minChangedPixelFraction??0.0005))
+      return result(FAIL,"FX no visible meaningful pixel impact");
+    return result(UNKNOWN,"visible change is not useful FX or aesthetic quality");
+  }
+  if(c.kind==="ugly-fx"||c.kind==="fx-occlusion"){
+    if(!m?.actualRiveRender||!finite(m.occludedSubjectFraction))
+      return result(UNKNOWN,"FX subject-segmentation/occlusion evidence missing");
+    if(m.occludedSubjectFraction>(c.maxOccludedSubjectFraction??0.08))
+      return result(FAIL,"FX occludes focal subject");
+    return result(UNKNOWN,"low occlusion and large pixel diffs cannot establish taste/material realism");
+  }
+  if(c.kind==="fx-redundancy")return result(UNKNOWN,"redundant or generic effect needs human review");
+  return result(UNKNOWN,"unhandled effect requirement");
+}
+export function identityCheck(scene,c,observations={}){
+  const m=observations[c.target];
+  if(!c.expectedSubject||!m?.independentlyObservedSubject||!m?.reviewerEvidenceSha256)
+    return result(UNKNOWN,"subject silhouette class unverified independently");
+  if(c.expectedSubject!==m.independentlyObservedSubject)
+    return result(FAIL,"wrong subject/silhouette swap",{expected:c.expectedSubject,actual:m.independentlyObservedSubject});
+  return result(UNKNOWN,"matching subject label does not establish visual or geometry fidelity");
+}
+export function rightsDisposition(rights={},assets=[]){
+  const ops=["inspect","render","adapt","embed","redistribute"],problems=[],unresolved=[];
+  if(!rights.sourceEvidence||rights.assetsDeclaredComplete!==true)unresolved.push("incomplete source/embedded inventory");
+  for(const op of ops){
+    if(rights.operations?.[op]==="deny")problems.push("permission denied for "+op);
+    else if(rights.operations?.[op]!=="allow")unresolved.push("permission not established for "+op);
+  }
+  for(const x of assets){
+    if(x.rights==="deny")problems.push("denied embedded asset "+x.path);
+    else if(x.rights!=="allow"||!x.rightsEvidence)unresolved.push("embedded asset permission unresolved "+x.path);
+  }
+  return result(problems.length?FAIL:unresolved.length?UNKNOWN:PASS,
+    [...problems,...unresolved].join("; ")||"declared permissions (not independent legal clearance)");
+}
+export function stopGate(a){
+  const fail=[];
+  if(a.semantic?.status===FAIL||a.structural?.status===FAIL||a.binaryStructural?.status===FAIL)
+    fail.push("critical intent or structural violation");
+  if(a.licensing?.status===FAIL)fail.push("rights violation");
+  if((a.restrictions||[]).some(x=>x.status===FAIL))fail.push("explicit critical restriction");
+  if(fail.length)return {status:FAIL,reasons:fail};
+  const known=[a.semantic,a.structural,a.binaryStructural,a.render,a.editability,a.licensing];
+  if(known.some(x=>x?.status!==PASS)||(a.restrictions||[]).some(x=>x.status!==PASS))
+    return {status:UNKNOWN,reasons:["unresolved evidence never promotes"]};
+  return {status:PASS,reasons:["all objective gates passed; aesthetic review remains NOT_EVALUATED"]};
 }
