@@ -19,3 +19,15 @@ Own only `scripts/studio-foundry-*.mjs`, `test/studioFoundry*.mjs`, `samples/stu
 Success is not "12 files exist" but genuine striking *visuals*, creative diversity and reproducible native Rive. If 12 cannot all meet the bar, explicitly report which fail and deliver strongest completed ones. Do not claim blinded aesthetic quality without panel.
 
 Make changes directly on GitHub branch, push, open PR, do NOT merge PR yourself. Minimize questions. Include runtime evidence links and honest defects.
+
+## Current status and stricter next artistic iteration (added after first 12-render proof)
+The lead session already delivered 12 genuine vector scenes and GitHub Actions matrix in PR #61. All 12 initial sources passed first real-runtime GIF builds. The first visual contact sheet revealed a serious art-direction deficiency: many scenes reused left headline / right hero / shared stripe background. The script has been refined for text isolation/size and each scene now has additional scene-specific animated parts.
+
+**DO NOT stop or claim the task finished merely because it generated 12 GIFs.** Continue on this existing branch and **existing PR #61** with a *visual art-direction breakthrough*: 
+- For at least 8 scenes, meaningfully change global composition, scale/negative space, focus and typography rather than changing colors and icon bodies. Use at least 5 distinctly recognizable layout languages (full-bleed, typographic poster, asymmetric object/detail, editorial portrait, restrained product studio, information architecture, expressive character, etc.). 
+- Replace the generic shared 'STUDIO FOUNDRY / 2026' strip when appropriate with intentional scene-specific copy and detail. Preserve editability. Make each scene feel individually art-directed.
+- Inspect actual PNGs/GIF motion phases and fix collisions/cropping. Verify typography not obscured by guide lines. Provide side-by-side **before / after** contact sheet and actual .riv deliverables, annotate which scenes truly improved.
+- Do not invent aesthetic rankings or claim awards without independent blind study. Call out any designs that remain generic and provide honest reasons.
+- Real official-runtime Actions must pass **after your latest commit**, not just an earlier commit. PR base stays feat/motion-recipe-atlas and worker must not auto-merge.
+
+The next iteration should surprise with composition and intentional motion, not be a mere catalog count.
