@@ -197,6 +197,8 @@ function builder(id,opts){
    stroked("base-ring",0,0,170,170,t.surface,16,null,{opacity:.95});
    stroked("trace",0,0,170,170,t.accent,16,{start:0,end:.72,offset:0});
    stroked("inner-bezel",0,0,142,142,t.subtle,1,null);
+   for(let i=0;i<12;i++){const a=i*Math.PI/6-Math.PI/2,p0=polar(94,a),p1=polar(99,a);
+     line("minute-notch-"+i,p0.x,p0.y,p1.x,p1.y,t.metal,i%3?1:2);}
    label("numeral","72%",-74,-23,148,43,t.glint);
    label("description","COMPLETE",-74,33,148,12,t.subtle);
    glint("progress-glint",0,0,188,188);
