@@ -47,10 +47,10 @@ export function applyExistingEffect(targetScene,capsuleId,placement={}){
  if(!source.spec.compatibleScenes.includes(targetScene))throw Error(
   "Semantically invalid FX transfer: "+capsuleId+" to "+targetScene);
  const {
-  x=0,y=0,scale=1,rotation=0
+  x=0,y=0,scale=1,rotation=0,zOffset=0
  }=placement;
- if(![x,y,scale,rotation].every(Number.isFinite)||scale<.45||scale>1.5||
-   Math.abs(x)>200||Math.abs(y)>200||Math.abs(rotation)>90)
+ if(![x,y,scale,rotation,zOffset].every(Number.isFinite)||scale<.45||scale>1.5||
+   Math.abs(x)>200||Math.abs(y)>200||Math.abs(rotation)>90||zOffset<0||zOffset>80)
   throw Error("Invalid effect attachment transform");
  const hero=target.groups.find(g=>g.id==="hero");
  if(!hero)throw Error("Target has no semantic hero attachment point");
@@ -75,7 +75,7 @@ export function applyExistingEffect(targetScene,capsuleId,placement={}){
    throw Error("Unsupported nested FX parent "+shape.id);
   const id=namespace+"__"+shape.id;
   oldToNew.set(shape.id,id);
-  target.shapes.push({...copy(shape),id,parent:namespace});
+  target.shapes.push({...copy(shape),id,parent:namespace,z:(shape.z??0)+zOffset});
  }
  for(const tr of source.tracks){
   const id=tr.target==="__ROOT__"?namespace:oldToNew.get(tr.target);
@@ -99,7 +99,7 @@ export function applyExistingEffect(targetScene,capsuleId,placement={}){
   capsuleId,targetScene,sourceScene:source.spec.sourceScene,
   geometryHash:source.provenance.sourceGeometryHash,
   effectNodeIds:[...oldToNew.values()],importedTracks:source.tracks.length,
-  attachment:{parent:"hero",local:{x,y,scale,rotation}},
+  attachment:{parent:"hero",local:{x,y,scale,rotation},depthReorder:zOffset},
   sourceRights:"self-authored source code; imported third-party art = none",
   reuseType:"COPY_PREEXISTING_SHAPES_AND_KEYFRAMES",
   humanAestheticRating:"NOT_EVALUATED",rendererStatus:"NOT_RUN_YET"};
