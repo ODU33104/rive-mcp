@@ -1,0 +1,1605 @@
+{
+  "schema": "scene-tournament-prompts/v1",
+  "frozenAt": "2026-10-13",
+  "authoring": "authored-in-project; unseen by prior code at freeze; NOT an independent or statistically blinded sample",
+  "developmentExclusion": "data/motion-recipes/query-benchmark.v1.json (106 development prompts)",
+  "evaluationPolicy": "No subjective beauty scores. Hard-negative expected.motion denotes evaluation demands, not automatic proof. OOS must abstain.",
+  "distribution": {
+    "existing": 40,
+    "novel": 20,
+    "hard-negative": 20,
+    "oos": 20
+  },
+  "cases": [
+    {
+      "id": "existing-001",
+      "bucket": "existing",
+      "prompt": "Design a restrained completion check for a billing confirmation screen, with no celebratory fireworks.",
+      "expected": {
+        "intent": "success-feedback",
+        "required": [
+          "completion cue",
+          "check or confirmation symbol"
+        ],
+        "forbidden": [
+          "confetti burst"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-002",
+      "bucket": "existing",
+      "prompt": "Provide a one-shot saved-state success transition on a compact settings card.",
+      "expected": {
+        "intent": "success-feedback",
+        "required": [
+          "completion cue",
+          "check or confirmation symbol"
+        ],
+        "forbidden": [
+          "confetti burst"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-003",
+      "bucket": "existing",
+      "prompt": "Show a completed upload with a legible check and a quiet settle phase.",
+      "expected": {
+        "intent": "success-feedback",
+        "required": [
+          "completion cue",
+          "check or confirmation symbol"
+        ],
+        "forbidden": [
+          "confetti burst"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-004",
+      "bucket": "existing",
+      "prompt": "Create a confirmation microinteraction for an accessible form submission.",
+      "expected": {
+        "intent": "success-feedback",
+        "required": [
+          "completion cue",
+          "check or confirmation symbol"
+        ],
+        "forbidden": [
+          "confetti burst"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-005",
+      "bucket": "existing",
+      "prompt": "Show an earned reward token after an explicit user action, then settle.",
+      "expected": {
+        "intent": "reward",
+        "required": [
+          "earned reward focal element"
+        ],
+        "forbidden": [
+          "unrelated loading indicator"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-006",
+      "bucket": "existing",
+      "prompt": "Animate a bronze achievement badge for a reading milestone.",
+      "expected": {
+        "intent": "reward",
+        "required": [
+          "earned reward focal element"
+        ],
+        "forbidden": [
+          "unrelated loading indicator"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-007",
+      "bucket": "existing",
+      "prompt": "Create a points-awarded feedback panel with a discrete total.",
+      "expected": {
+        "intent": "reward",
+        "required": [
+          "earned reward focal element"
+        ],
+        "forbidden": [
+          "unrelated loading indicator"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-008",
+      "bucket": "existing",
+      "prompt": "Build a collectible star moment that never obscures the earned score.",
+      "expected": {
+        "intent": "reward",
+        "required": [
+          "earned reward focal element"
+        ],
+        "forbidden": [
+          "unrelated loading indicator"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-009",
+      "bucket": "existing",
+      "prompt": "Create a restrained three-dot activity indicator with a seamless loop.",
+      "expected": {
+        "intent": "loading",
+        "required": [
+          "ongoing progress state"
+        ],
+        "forbidden": [
+          "false completion claim"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-010",
+      "bucket": "existing",
+      "prompt": "Show a small indeterminate progress ring in a modal header.",
+      "expected": {
+        "intent": "loading",
+        "required": [
+          "ongoing progress state"
+        ],
+        "forbidden": [
+          "false completion claim"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-011",
+      "bucket": "existing",
+      "prompt": "Animate a data-sync wait state that can be interrupted by completion.",
+      "expected": {
+        "intent": "loading",
+        "required": [
+          "ongoing progress state"
+        ],
+        "forbidden": [
+          "false completion claim"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-012",
+      "bucket": "existing",
+      "prompt": "Build a horizontal loading skeleton with an accessible rest state.",
+      "expected": {
+        "intent": "loading",
+        "required": [
+          "ongoing progress state"
+        ],
+        "forbidden": [
+          "false completion claim"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-013",
+      "bucket": "existing",
+      "prompt": "Compose a two-line editorial headline revealing in reading order.",
+      "expected": {
+        "intent": "editorial-type",
+        "required": [
+          "editable headline"
+        ],
+        "forbidden": [
+          "flattened type"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-014",
+      "bucket": "existing",
+      "prompt": "Reveal a Japanese title and compact English subtitle without overlap.",
+      "expected": {
+        "intent": "editorial-type",
+        "required": [
+          "editable headline"
+        ],
+        "forbidden": [
+          "flattened type"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-015",
+      "bucket": "existing",
+      "prompt": "Animate a luxury-product masthead with type kept editable.",
+      "expected": {
+        "intent": "editorial-type",
+        "required": [
+          "editable headline"
+        ],
+        "forbidden": [
+          "flattened type"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-016",
+      "bucket": "existing",
+      "prompt": "Build an event opener with large typography and calm final hold.",
+      "expected": {
+        "intent": "editorial-type",
+        "required": [
+          "editable headline"
+        ],
+        "forbidden": [
+          "flattened type"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-017",
+      "bucket": "existing",
+      "prompt": "Produce a hover-to-press transition for a pill-shaped action button.",
+      "expected": {
+        "intent": "button",
+        "required": [
+          "visible control state"
+        ],
+        "forbidden": [
+          "unintended navigation"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-018",
+      "bucket": "existing",
+      "prompt": "Build a disabled-state aware primary CTA with readable label.",
+      "expected": {
+        "intent": "button",
+        "required": [
+          "visible control state"
+        ],
+        "forbidden": [
+          "unintended navigation"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-019",
+      "bucket": "existing",
+      "prompt": "Animate a compact toggle with distinct on and off positions.",
+      "expected": {
+        "intent": "button",
+        "required": [
+          "visible control state"
+        ],
+        "forbidden": [
+          "unintended navigation"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-020",
+      "bucket": "existing",
+      "prompt": "Create a focus-visible button response without moving its label bounds.",
+      "expected": {
+        "intent": "button",
+        "required": [
+          "visible control state"
+        ],
+        "forbidden": [
+          "unintended navigation"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-021",
+      "bucket": "existing",
+      "prompt": "Show a two-item toast stack where the newer item leads.",
+      "expected": {
+        "intent": "notification",
+        "required": [
+          "notification hierarchy"
+        ],
+        "forbidden": [
+          "hidden copy"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-022",
+      "bucket": "existing",
+      "prompt": "Animate one notification entering, holding, then dismissing.",
+      "expected": {
+        "intent": "notification",
+        "required": [
+          "notification hierarchy"
+        ],
+        "forbidden": [
+          "hidden copy"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-023",
+      "bucket": "existing",
+      "prompt": "Create an unread badge that updates without popping the whole toolbar.",
+      "expected": {
+        "intent": "notification",
+        "required": [
+          "notification hierarchy"
+        ],
+        "forbidden": [
+          "hidden copy"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-024",
+      "bucket": "existing",
+      "prompt": "Build a restrained error toast with visible retry affordance.",
+      "expected": {
+        "intent": "notification",
+        "required": [
+          "notification hierarchy"
+        ],
+        "forbidden": [
+          "hidden copy"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-025",
+      "bucket": "existing",
+      "prompt": "Animate a friendly geometric helper acknowledging a pointer hover.",
+      "expected": {
+        "intent": "character",
+        "required": [
+          "character response"
+        ],
+        "forbidden": [
+          "unprovoked confetti"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-026",
+      "bucket": "existing",
+      "prompt": "Show a simplified avatar turning toward a tapped control.",
+      "expected": {
+        "intent": "character",
+        "required": [
+          "character response"
+        ],
+        "forbidden": [
+          "unprovoked confetti"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-027",
+      "bucket": "existing",
+      "prompt": "Build a character blink and idle cycle that settles after interaction.",
+      "expected": {
+        "intent": "character",
+        "required": [
+          "character response"
+        ],
+        "forbidden": [
+          "unprovoked confetti"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-028",
+      "bucket": "existing",
+      "prompt": "Animate a mascot waving only after an explicit trigger.",
+      "expected": {
+        "intent": "character",
+        "required": [
+          "character response"
+        ],
+        "forbidden": [
+          "unprovoked confetti"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-029",
+      "bucket": "existing",
+      "prompt": "Stage a premium watch arrival with a stable dial and readable copy.",
+      "expected": {
+        "intent": "product-hero",
+        "required": [
+          "dominant product",
+          "clear typographic hierarchy"
+        ],
+        "forbidden": [
+          "unlicensed brand logo"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-030",
+      "bucket": "existing",
+      "prompt": "Present original earbuds with a subtle metallic glint and no stock photos.",
+      "expected": {
+        "intent": "product-hero",
+        "required": [
+          "dominant product",
+          "clear typographic hierarchy"
+        ],
+        "forbidden": [
+          "unlicensed brand logo"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-031",
+      "bucket": "existing",
+      "prompt": "Create a camera product reveal with restrained parallax and edit-ready labels.",
+      "expected": {
+        "intent": "product-hero",
+        "required": [
+          "dominant product",
+          "clear typographic hierarchy"
+        ],
+        "forbidden": [
+          "unlicensed brand logo"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-032",
+      "bucket": "existing",
+      "prompt": "Animate a perfume bottle silhouette then a secondary caption reveal.",
+      "expected": {
+        "intent": "product-hero",
+        "required": [
+          "dominant product",
+          "clear typographic hierarchy"
+        ],
+        "forbidden": [
+          "unlicensed brand logo"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-033",
+      "bucket": "existing",
+      "prompt": "Animate a single gauge from 0 to its selected value without overshoot.",
+      "expected": {
+        "intent": "data-viz",
+        "required": [
+          "readable metric"
+        ],
+        "forbidden": [
+          "invented numeric unit"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-034",
+      "bucket": "existing",
+      "prompt": "Show a metric card total counting up while labels remain still.",
+      "expected": {
+        "intent": "data-viz",
+        "required": [
+          "readable metric"
+        ],
+        "forbidden": [
+          "invented numeric unit"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-035",
+      "bucket": "existing",
+      "prompt": "Create a horizontal progress chart that only grows rightward.",
+      "expected": {
+        "intent": "data-viz",
+        "required": [
+          "readable metric"
+        ],
+        "forbidden": [
+          "invented numeric unit"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-036",
+      "bucket": "existing",
+      "prompt": "Build a readout switching between two named sensor states.",
+      "expected": {
+        "intent": "data-viz",
+        "required": [
+          "readable metric"
+        ],
+        "forbidden": [
+          "invented numeric unit"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-037",
+      "bucket": "existing",
+      "prompt": "Animate a two-tab underline following the selected tab.",
+      "expected": {
+        "intent": "navigation",
+        "required": [
+          "active navigation state"
+        ],
+        "forbidden": [
+          "unrequested page transition"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-038",
+      "bucket": "existing",
+      "prompt": "Create a back-navigation arrow that rotates only on selection.",
+      "expected": {
+        "intent": "navigation",
+        "required": [
+          "active navigation state"
+        ],
+        "forbidden": [
+          "unrequested page transition"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-039",
+      "bucket": "existing",
+      "prompt": "Build a menu opening with sequential readable rows.",
+      "expected": {
+        "intent": "navigation",
+        "required": [
+          "active navigation state"
+        ],
+        "forbidden": [
+          "unrequested page transition"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "existing-040",
+      "bucket": "existing",
+      "prompt": "Show a small carousel progress control that reflects actual position.",
+      "expected": {
+        "intent": "navigation",
+        "required": [
+          "active navigation state"
+        ],
+        "forbidden": [
+          "unrequested page transition"
+        ],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-001",
+      "bucket": "novel",
+      "prompt": "Show two distinct channels converging on a central mixer with reversible state.",
+      "expected": {
+        "intent": "spatial-audio",
+        "required": [
+          "observable audio state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-002",
+      "bucket": "novel",
+      "prompt": "Animate a waveform mute state that clearly stops output.",
+      "expected": {
+        "intent": "spatial-audio",
+        "required": [
+          "observable audio state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-003",
+      "bucket": "novel",
+      "prompt": "Present a microphone-monitoring indicator whose active state is unambiguous.",
+      "expected": {
+        "intent": "spatial-audio",
+        "required": [
+          "observable audio state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-004",
+      "bucket": "novel",
+      "prompt": "Create a mixing console dial moving only when its value changes.",
+      "expected": {
+        "intent": "spatial-audio",
+        "required": [
+          "observable audio state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-005",
+      "bucket": "novel",
+      "prompt": "Create an original seismograph needle sweep with calibrated baseline.",
+      "expected": {
+        "intent": "scientific-instrument",
+        "required": [
+          "measurable instrument geometry"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-006",
+      "bucket": "novel",
+      "prompt": "Show a lab pipette releasing exactly one droplet at a labeled volume.",
+      "expected": {
+        "intent": "scientific-instrument",
+        "required": [
+          "measurable instrument geometry"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-007",
+      "bucket": "novel",
+      "prompt": "Animate a telescope alignment reticle locking on a target.",
+      "expected": {
+        "intent": "scientific-instrument",
+        "required": [
+          "measurable instrument geometry"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-008",
+      "bucket": "novel",
+      "prompt": "Illustrate an astronomy azimuth gauge moving between marked angles.",
+      "expected": {
+        "intent": "scientific-instrument",
+        "required": [
+          "measurable instrument geometry"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-009",
+      "bucket": "novel",
+      "prompt": "Illustrate a train arrival indicator with doors remaining closed.",
+      "expected": {
+        "intent": "public-transit",
+        "required": [
+          "correct transit state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-010",
+      "bucket": "novel",
+      "prompt": "Show a transit transfer path lighting in station order.",
+      "expected": {
+        "intent": "public-transit",
+        "required": [
+          "correct transit state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-011",
+      "bucket": "novel",
+      "prompt": "Animate a bus delay badge updating with no celebratory effects.",
+      "expected": {
+        "intent": "public-transit",
+        "required": [
+          "correct transit state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-012",
+      "bucket": "novel",
+      "prompt": "Create a ferry boarding gate opening only after boarding permission.",
+      "expected": {
+        "intent": "public-transit",
+        "required": [
+          "correct transit state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-013",
+      "bucket": "novel",
+      "prompt": "Show a soil-moisture indicator transitioning from dry to sufficient.",
+      "expected": {
+        "intent": "agriculture",
+        "required": [
+          "causal state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-014",
+      "bucket": "novel",
+      "prompt": "Animate a solar irrigation valve opening after confirmed input.",
+      "expected": {
+        "intent": "agriculture",
+        "required": [
+          "causal state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-015",
+      "bucket": "novel",
+      "prompt": "Illustrate seed germination across three labeled phases.",
+      "expected": {
+        "intent": "agriculture",
+        "required": [
+          "causal state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-016",
+      "bucket": "novel",
+      "prompt": "Show crop-temperature warning turning on only above threshold.",
+      "expected": {
+        "intent": "agriculture",
+        "required": [
+          "causal state"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-017",
+      "bucket": "novel",
+      "prompt": "Show a medical appointment check-in status with sober visual hierarchy.",
+      "expected": {
+        "intent": "healthcare-workflow",
+        "required": [
+          "workflow state without medical claims"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-018",
+      "bucket": "novel",
+      "prompt": "Animate a sterile equipment readiness checklist without implying diagnosis.",
+      "expected": {
+        "intent": "healthcare-workflow",
+        "required": [
+          "workflow state without medical claims"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-019",
+      "bucket": "novel",
+      "prompt": "Illustrate a scheduled reminder acknowledgement that can be undone.",
+      "expected": {
+        "intent": "healthcare-workflow",
+        "required": [
+          "workflow state without medical claims"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "novel-020",
+      "bucket": "novel",
+      "prompt": "Show a lab sample barcode verification state with no clinical result.",
+      "expected": {
+        "intent": "healthcare-workflow",
+        "required": [
+          "workflow state without medical claims"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": []
+      }
+    },
+    {
+      "id": "hard-negative-001",
+      "bucket": "hard-negative",
+      "prompt": "Animate a watch hero; the hour hand may move, but the minute hand must never rotate.",
+      "expected": {
+        "intent": "quiet-watch",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "forbid-rotation",
+            "target": "minuteHand"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-002",
+      "bucket": "hard-negative",
+      "prompt": "Animate a watch hero; the hour hand may move, but the minute hand must never rotate. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "quiet-watch",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "forbid-rotation",
+            "target": "minuteHand"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-003",
+      "bucket": "hard-negative",
+      "prompt": "Bring a watch case to rest without reversing, overshooting, or bouncing.",
+      "expected": {
+        "intent": "no-bounce-watch",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "no-bounce",
+            "target": "watch",
+            "property": "x"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-004",
+      "bucket": "hard-negative",
+      "prompt": "Bring a watch case to rest without reversing, overshooting, or bouncing. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "no-bounce-watch",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "no-bounce",
+            "target": "watch",
+            "property": "x"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-005",
+      "bucket": "hard-negative",
+      "prompt": "Translate the product only along X; no Y, rotation, scale or opacity changes.",
+      "expected": {
+        "intent": "only-x",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "only-x",
+            "target": "watch"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-006",
+      "bucket": "hard-negative",
+      "prompt": "Translate the product only along X; no Y, rotation, scale or opacity changes. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "only-x",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "only-x",
+            "target": "watch"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-007",
+      "bucket": "hard-negative",
+      "prompt": "Celebrate completion with a static check only; no confetti or particle clouds.",
+      "expected": {
+        "intent": "no-particles",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "forbid-class",
+            "target": "scattering-particles"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-008",
+      "bucket": "hard-negative",
+      "prompt": "Celebrate completion with a static check only; no confetti or particle clouds. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "no-particles",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "forbid-class",
+            "target": "scattering-particles"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-009",
+      "bucket": "hard-negative",
+      "prompt": "Show a long Japanese headline without glyph clipping or overflow.",
+      "expected": {
+        "intent": "type-crop",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "text-overflow",
+            "target": "headline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-010",
+      "bucket": "hard-negative",
+      "prompt": "Show a long Japanese headline without glyph clipping or overflow. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "type-crop",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "text-overflow",
+            "target": "headline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-011",
+      "bucket": "hard-negative",
+      "prompt": "Keep the crown fully visible within the mask while the watch arrives.",
+      "expected": {
+        "intent": "hidden-crown",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "visible-region",
+            "target": "crown"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-012",
+      "bucket": "hard-negative",
+      "prompt": "Keep the crown fully visible within the mask while the watch arrives. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "hidden-crown",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "visible-region",
+            "target": "crown"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-013",
+      "bucket": "hard-negative",
+      "prompt": "Animate the hero but keep its projected shadow aligned to the floor relation.",
+      "expected": {
+        "intent": "fixed-shadow",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "shadow-relation",
+            "target": "heroShadow"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-014",
+      "bucket": "hard-negative",
+      "prompt": "Animate the hero but keep its projected shadow aligned to the floor relation. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "fixed-shadow",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "shadow-relation",
+            "target": "heroShadow"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-015",
+      "bucket": "hard-negative",
+      "prompt": "Loop only the ambient orbit; all entrance objects must stay at rest after reveal.",
+      "expected": {
+        "intent": "single-loop",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "loop-isolation",
+            "target": "orbit"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-016",
+      "bucket": "hard-negative",
+      "prompt": "Loop only the ambient orbit; all entrance objects must stay at rest after reveal. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "single-loop",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "loop-isolation",
+            "target": "orbit"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-017",
+      "bucket": "hard-negative",
+      "prompt": "Use direct official RML or abstain; never claim a finished-scene fallback is RML success.",
+      "expected": {
+        "intent": "no-fallback",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "route-only",
+            "target": "B"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-018",
+      "bucket": "hard-negative",
+      "prompt": "Use direct official RML or abstain; never claim a finished-scene fallback is RML success. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "no-fallback",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "route-only",
+            "target": "B"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-019",
+      "bucket": "hard-negative",
+      "prompt": "After creation replace English title with Japanese copy while preserving editable text.",
+      "expected": {
+        "intent": "glyph-swap",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "runtime-glyphs",
+            "target": "headline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hard-negative-020",
+      "bucket": "hard-negative",
+      "prompt": "After creation replace English title with Japanese copy while preserving editable text. Preserve editable native shapes, typography, and keyframes.",
+      "expected": {
+        "intent": "glyph-swap",
+        "required": [
+          "semantic fidelity"
+        ],
+        "forbidden": [],
+        "abstain": false,
+        "motion": [
+          {
+            "kind": "runtime-glyphs",
+            "target": "headline"
+          }
+        ]
+      }
+    },
+    {
+      "id": "oos-001",
+      "bucket": "oos",
+      "prompt": "Render a live 4K video feed inside Rive with no external media runtime.",
+      "expected": {
+        "intent": "live-video",
+        "required": [],
+        "forbidden": [
+          "live video unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-002",
+      "bucket": "oos",
+      "prompt": "Create a remotely streamed camera view with real-time codec decoding.",
+      "expected": {
+        "intent": "live-video",
+        "required": [],
+        "forbidden": [
+          "live video unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-003",
+      "bucket": "oos",
+      "prompt": "Show a webcam preview synchronized to device time in a standalone Rive binary.",
+      "expected": {
+        "intent": "live-video",
+        "required": [],
+        "forbidden": [
+          "live video unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-004",
+      "bucket": "oos",
+      "prompt": "Encode a full-length film inside editable native vector tracks.",
+      "expected": {
+        "intent": "live-video",
+        "required": [],
+        "forbidden": [
+          "live video unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-005",
+      "bucket": "oos",
+      "prompt": "Reproduce a protected cartoon character exactly, including original visual assets.",
+      "expected": {
+        "intent": "licensed-replica",
+        "required": [],
+        "forbidden": [
+          "rights not cleared"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-006",
+      "bucket": "oos",
+      "prompt": "Copy an identifiable major-brand logo and its entire ad as an editable Rive scene.",
+      "expected": {
+        "intent": "licensed-replica",
+        "required": [],
+        "forbidden": [
+          "rights not cleared"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-007",
+      "bucket": "oos",
+      "prompt": "Bundle an unlicensed commercial font into a redistributable Rive file.",
+      "expected": {
+        "intent": "licensed-replica",
+        "required": [],
+        "forbidden": [
+          "rights not cleared"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-008",
+      "bucket": "oos",
+      "prompt": "Extract and repackage another creator's proprietary animation file without permission.",
+      "expected": {
+        "intent": "licensed-replica",
+        "required": [],
+        "forbidden": [
+          "rights not cleared"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-009",
+      "bucket": "oos",
+      "prompt": "Simulate photorealistic cloth contact dynamics with exact collision guarantees.",
+      "expected": {
+        "intent": "unsupported-physics",
+        "required": [],
+        "forbidden": [
+          "physical guarantee unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-010",
+      "bucket": "oos",
+      "prompt": "Run an unconstrained 3D fluid solver wholly inside a Rive state machine.",
+      "expected": {
+        "intent": "unsupported-physics",
+        "required": [],
+        "forbidden": [
+          "physical guarantee unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-011",
+      "bucket": "oos",
+      "prompt": "Model real-time ray traced glass caustics natively without raster assets.",
+      "expected": {
+        "intent": "unsupported-physics",
+        "required": [],
+        "forbidden": [
+          "physical guarantee unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-012",
+      "bucket": "oos",
+      "prompt": "Produce exact 6DOF rigid-body simulation with physically verified collisions.",
+      "expected": {
+        "intent": "unsupported-physics",
+        "required": [],
+        "forbidden": [
+          "physical guarantee unsupported"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-013",
+      "bucket": "oos",
+      "prompt": "Query a secure bank account in an offline Rive binary with no credential connector.",
+      "expected": {
+        "intent": "unsupported-data",
+        "required": [],
+        "forbidden": [
+          "external/private data unavailable"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-014",
+      "bucket": "oos",
+      "prompt": "Predict an unknown user's private location using only vector keyframes.",
+      "expected": {
+        "intent": "unsupported-data",
+        "required": [],
+        "forbidden": [
+          "external/private data unavailable"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-015",
+      "bucket": "oos",
+      "prompt": "Fetch live confidential patient records without authorization.",
+      "expected": {
+        "intent": "unsupported-data",
+        "required": [],
+        "forbidden": [
+          "external/private data unavailable"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-016",
+      "bucket": "oos",
+      "prompt": "Guarantee correct real-time stock prices from a standalone offline Rive file.",
+      "expected": {
+        "intent": "unsupported-data",
+        "required": [],
+        "forbidden": [
+          "external/private data unavailable"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-017",
+      "bucket": "oos",
+      "prompt": "Guarantee all professional designers will prefer this composition before a human review.",
+      "expected": {
+        "intent": "unverifiable-aesthetic",
+        "required": [],
+        "forbidden": [
+          "subjective quality cannot be auto-proven"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-018",
+      "bucket": "oos",
+      "prompt": "Promise a statistically universal beauty score from one PNG frame.",
+      "expected": {
+        "intent": "unverifiable-aesthetic",
+        "required": [],
+        "forbidden": [
+          "subjective quality cannot be auto-proven"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-019",
+      "bucket": "oos",
+      "prompt": "Certify perfect typography in every language without real fonts or text renders.",
+      "expected": {
+        "intent": "unverifiable-aesthetic",
+        "required": [],
+        "forbidden": [
+          "subjective quality cannot be auto-proven"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    },
+    {
+      "id": "oos-020",
+      "bucket": "oos",
+      "prompt": "Declare a newly generated poster aesthetically superior solely because CI passed.",
+      "expected": {
+        "intent": "unverifiable-aesthetic",
+        "required": [],
+        "forbidden": [
+          "subjective quality cannot be auto-proven"
+        ],
+        "abstain": true,
+        "motion": []
+      }
+    }
+  ]
+}
