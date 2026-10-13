@@ -45,3 +45,12 @@ A CI pass establishes that **one authored scene** can be segmented/reassembled w
 Not yet delivered: direct official RML generated candidate, same-prompt/same-assets/same-budget scene-edit vs RML vs typed-slot blind comparison, independent 80-question holdout, real scene conversion into earbud or unrelated product, actual runtime world-matrix witness for arbitrary animations, and permission-cleared mass external asset reuse.
 
 Aesthetic quality must be evaluated by humans on genuine rendered outputs, distinct from runtime and source checks. Failure rates, costs and non-applicable routes must count in any future comparison.
+
+## Restricted one-request route selection
+
+The included command accepts one Japanese/English watch request and produces a real, editable RIVE file plus an evidence receipt:
+
+    node scripts/prompt-solstice.mjs "静かな腕時計。秒針だけを動かして、弾ませない" test/tmp/my-quiet-watch.riv
+    node scripts/prompt-solstice.mjs "Cinematic editorial watch launch reveal" test/tmp/my-watch-launch.riv
+
+Supported routes are **finished-scene** (unaltered original gold animation) and **typed-slot** (the seconds-only modification above). The selector explicitly abstains on new product types, unsupported constraints or ambiguous motion requests rather than inventing evidence that they are supported. See test/promptSolstice.mjs for its 9-case bilingual and adversarial test. It is **keyword routing for one watch scene only**, not a general-purpose LLM, style planner or visual editing agent.
