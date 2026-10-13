@@ -15,6 +15,8 @@ const body=mutated.shapes.find(s=>s.id==="caseMetal");
 assert.ok(body&&body.type==="ellipse");
 body.x+=8; // true art-object translation, not metadata or animation-name tamper
 const tampered=createRiv(mutated);
+writeFileSync(resolve(dir,"art-original.riv"),Buffer.from(bytes));
+writeFileSync(resolve(dir,"art-tampered.riv"),Buffer.from(tampered.bytes));
 assert.equal(Buffer.from(bytes).subarray(0,4).toString("ascii"),"RIVE");
 assert.equal(Buffer.from(tampered.bytes).subarray(0,4).toString("ascii"),"RIVE");
 const hand=structuredClone(scene);
