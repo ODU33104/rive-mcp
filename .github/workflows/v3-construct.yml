@@ -1,0 +1,62 @@
+name: V3 autonomous composer — official Rive proof
+on:
+  push:
+    branches:
+      - parallel/prompt-constructor-v3-20261014
+    paths:
+      - 'scripts/v3-construct-*.mjs'
+      - 'test/v3Construct*.mjs'
+      - 'samples/v3-construct/**'
+      - 'docs/V3_AUTONOMOUS_COMPOSER.md'
+      - '.github/workflows/v3-construct.yml'
+  pull_request:
+    branches:
+      - feat/motion-recipe-atlas
+  workflow_dispatch:
+jobs:
+  native-artifact-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install and compile
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Validate plan contracts and actual writer
+        run: node --test test/v3Construct.test.mjs
+      - name: Create eight editable RIVE files and official runtime frame evidence
+        run: node scripts/v3-construct-agent.mjs --batch samples/v3-construct/prompts.json --out test/tmp/v3-construct --render
+      - name: Compare six identical prompts without fabricating unsupported baseline outputs
+        run: node scripts/v3-construct-compare.mjs
+      - name: Encode GIFs and fail on missing evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          for scene in test/tmp/v3-construct/*; do
+            test -d "$scene" || continue
+            test -s "$scene/poster.png"
+            test "$(find "$scene" -maxdepth 1 -name 'frame-*.png' | wc -l)" -eq 31
+            test "$(find "$scene" -maxdepth 1 -name '*.riv' | wc -l)" -eq 1
+            grep -q 'OFFICIAL_RIVE_RUNTIME_PNG' "$scene/"*.riv.evidence.json
+            ffmpeg -nostdin -y -loglevel error -framerate 12 -i "$scene/frame-%03d.png" -vf "fps=12,scale=720:-1:flags=lanczos" "$scene/preview.gif"
+            test -s "$scene/preview.gif"
+          done
+          test "$(find test/tmp/v3-construct -name '*.riv' | wc -l)" -eq 8
+          test "$(find test/tmp/v3-construct -name 'poster.png' | wc -l)" -eq 8
+          test "$(find test/tmp/v3-construct -name 'preview.gif' | wc -l)" -eq 8
+          test -s test/tmp/v3-construct/comparison.json
+      - name: Upload traceable native evidence, including failures
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-eight-official-native-scenes
+          path: test/tmp/v3-construct/
+          retention-days: 14
