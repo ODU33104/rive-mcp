@@ -1,0 +1,68 @@
+{
+  "schema": "visual-rig-asset-rights/v1",
+  "purpose": "source provenance, not independently assessed aesthetic quality",
+  "source": "original hand-authored vector paths in scripts/visual-rig-library.mjs",
+  "rigs": [
+    {
+      "id": "precision-watch",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "earbuds-case",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "studio-camera",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "optical-lens",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "audio-equalizer",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "celestial-atlas",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "botanical-form",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "progress-ring",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "abstract-emote",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    },
+    {
+      "id": "kinetic-wordmark",
+      "art": "original geometric path construction, no external art copied or downloaded",
+      "right_to_use": "authored as original project code"
+    }
+  ],
+  "font": {
+    "file": "assets/inter.ttf",
+    "provenance": "existing repository asset",
+    "license": "SIL Open Font License 1.1",
+    "reference": "repository LICENSE section 4"
+  },
+  "evidence_policy": {
+    "approved": "PNG/GIF generated from compiled Rive file using bundled official Rive runtime",
+    "not_approved": "mock posters, inferred screenshot descriptions, artificial frames"
+  },
+  "aesthetic_assessment": "not scored"
+}
