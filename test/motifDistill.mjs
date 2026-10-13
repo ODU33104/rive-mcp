@@ -75,5 +75,11 @@ for(const domain of DOMAINS)for(const motif of MOTIFS){
   assert.equal(Buffer.from(result.bytes).subarray(0,4).toString("ascii"),"RIVE");
   assert.ok(result.bytes.length>500);
  }
+ const edited=structuredClone(control.scene);
+ const original=edited.shapes.find(s=>s.id==="backdrop");
+ original.fill.color="#334455";
+ const before=Buffer.from(createRiv(control.scene).bytes);
+ const after=Buffer.from(createRiv(edited).bytes);
+ assert.notDeepEqual(before,after,"Changing the editable authored vector scene changes native Rive bytes");
 }
 console.log("motif distillation: PASS, 60 catalog analyses, 36 discoveries, 12 native Rive variants");
