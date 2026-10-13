@@ -1,0 +1,46 @@
+{
+  "schema": "rights-clear-thirdparty-rive/v1",
+  "id": "kabi-bryl-lim",
+  "title": "Kabi — CC BY 4.0 bone-rigged Rive mascot",
+  "author": "Bryl Lim",
+  "repository": "https://github.com/bryllim/kabi-mascot",
+  "sourceCommit": "7dee2abc2320fcc72f08c7064214ba9df84687f5",
+  "artifacts": {
+    "riv": "dist/kabi.riv",
+    "editableModel": "dist/kabi.model.json",
+    "license": "LICENSE"
+  },
+  "license": "CC-BY-4.0",
+  "canonicalLicense": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Kabi mascot by Bryl Lim, https://github.com/bryllim/kabi-mascot, CC BY 4.0. Native render/crop/pose export is an adaptation; original scene and author remain credited.",
+  "sourceUses": [
+    "legal reference",
+    "runtime inspection",
+    "standalone display and parameterized animation",
+    "editor via source model rather than compiled .riv"
+  ],
+  "restrictions": [
+    "do not claim local Part Atlas portability merely from loading raw .riv",
+    "compiled .riv is runtime payload, source model editable in original Kabi tooling, not automatically an editable Rive Editor project",
+    "fonts/images/brands outside explicitly licensed repository need separate clearance",
+    "keep attribution and note visual transformation"
+  ],
+  "assetRights": {
+    "workLevel": "CC BY 4.0 asserted by project README and LICENSE",
+    "embeddedAssets": "README says traced from reference.jpeg; creator ownership/permissions require independent check before production redistributable promotion",
+    "productionPromotion": "BLOCKED_PENDING_EMBEDDED_SOURCE_RIGHTS"
+  },
+  "stage": "external-source-prototype",
+  "sourceQualityReview": "NOT_EVALUATED",
+  "comparisonTargets": [
+    "current luma Studio mascot",
+    "original Kabi state-machine animation"
+  ],
+  "tests": [
+    "source-acquisition",
+    "JSON-source-geometry",
+    "official-native-runtime-inspect",
+    "state-machine-pose-captures",
+    "distinct-pose-pixel-hashes"
+  ]
+}
