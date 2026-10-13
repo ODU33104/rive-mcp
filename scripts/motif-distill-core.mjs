@@ -80,15 +80,35 @@ export function buildClusters(records){
 }
 const verifiedHash=v=>typeof v==="string"&&/^[a-f0-9]{64}$/i.test(v);
 const completeRights=m=>{
- const p=m?.provenance;
- if(!p || !verifiedHash(p.sourceSha256) || !p.sourceRights?.reviewed)return false;
- if(!(["self-authored","verified-work-license"].includes(p.sourceRights.status)))return false;
+ const p=m?.provenance,rights=p?.sourceRights;
+ if(!p || !verifiedHash(p.sourceSha256) || rights?.reviewed!==true ||
+    !verifiedHash(rights.evidenceSha256))return false;
+ if(!(["self-authored","verified-work-license"].includes(rights.status)))return false;
+ if(rights.status==="verified-work-license" &&
+    (typeof rights.workLicenseEvidenceUrl!=="string" ||
+     !/^https:\/\/\S+/.test(rights.workLicenseEvidenceUrl)))return false;
  for(const op of ["adapt","render","embed","redistribute"]){
-  if(p.sourceRights.grants?.[op]!==true)return false;
+  if(rights.grants?.[op]!==true)return false;
  }
  if(!Array.isArray(p.embeddedAssets))return false;
  return p.embeddedAssets.every(a=>verifiedHash(a.sha256) &&
-  a.licenseReviewed===true && a.grants?.embed===true && a.grants?.redistribute===true);
+  verifiedHash(a.rightsEvidenceSha256) && a.licenseReviewed===true &&
+  a.grants?.embed===true && a.grants?.redistribute===true);
+};
+const validTrial=t=>{
+ const h=t?.blindHumanRating,ballots=h?.ballots??[];
+ if(t?.verified!==true || t.ablationEffect?.measured!==true ||
+    !Number.isFinite(t.ablationEffect.absoluteDifference) ||
+    t.ablationEffect.absoluteDifference<=0 ||
+    !verifiedHash(t.controlRivSha256) || !verifiedHash(t.ablationRivSha256) ||
+    h?.status!=="EVALUATED" || h.blinded!==true ||
+    !verifiedHash(h.protocolSha256) || !verifiedHash(h.ballotEvidenceSha256) ||
+    !Array.isArray(ballots) || ballots.length<3)return false;
+ const ids=ballots.map(b=>b.raterPseudonym);
+ if(ids.some(id=>typeof id!=="string" || !id.trim()) ||
+    new Set(ids).size!==ids.length ||
+    ballots.some(b=>!["control","ablation","tie"].includes(b.choice)))return false;
+ return ballots.filter(b=>b.choice==="control").length>ballots.length/2;
 };
 export function promotionDecision(motif,target){
  if(!STAGES.includes(target))throw Error("Unknown stage: "+target);
@@ -103,14 +123,13 @@ export function promotionDecision(motif,target){
  }
  if(pos>1){
   const e=motif?.renderEvidence;
-  if(!verifiedHash(e?.riveSha256)||!e?.runtimeVersion||e?.inspectPassed!==true||
+  if(!verifiedHash(e?.riveSha256)||!/^\d+\.\d+\.\d+$/.test(e?.runtimeVersion??"")||e?.inspectPassed!==true||
      !Array.isArray(e?.frames)||e.frames.length<2||!e.frames.every(f=>verifiedHash(f.sha256)))
    errors.push("actual-pinned-runtime-and-frame-evidence-missing");
  }
  if(pos>2){
   const trials=motif?.transferTrials??[];
-  if(new Set(trials.filter(t=>t.verified===true && t.ablationEffect?.measured===true &&
-    t.blindHumanRating?.status==="EVALUATED" && t.blindHumanRating.n>=3)
+  if(new Set(trials.filter(validTrial)
    .map(t=>t.domain)).size<2)errors.push("two-independent-blind-rated-domains-missing");
  }
  const current=STAGES.indexOf(motif?.stage??"discovery-only");
