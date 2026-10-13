@@ -10,9 +10,9 @@ const SPECS={
  "portrait-archive":{source:"archive",W:540,H:720,hero:[269,264],headline:[57,500],detail:[57,623],headingSize:64,mode:"portrait"},
  "portrait-botanica":{source:"botanica",W:540,H:720,hero:[269,264],headline:[57,501],detail:[57,621],headingSize:55,mode:"portrait"},
  "portrait-luma":{source:"luma",W:540,H:720,hero:[270,265],headline:[58,490],detail:[58,620],headingSize:70,mode:"portrait"},
- "cinematic-spectra":{source:"spectra",W:960,H:540,hero:[690,265],headline:[76,165],detail:[76,340],headingSize:84,mode:"cinematic"},
- "cinematic-bassline":{source:"bassline",W:960,H:540,hero:[684,263],headline:[74,164],detail:[74,340],headingSize:82,mode:"cinematic"},
- "cinematic-quantum":{source:"quantum",W:960,H:540,hero:[693,264],headline:[74,165],detail:[74,335],headingSize:79,mode:"cinematic"},
+ "cinematic-spectra":{source:"spectra",W:960,H:540,hero:[722,265],headline:[76,165],detail:[76,340],headingSize:84,mode:"cinematic"},
+ "cinematic-bassline":{source:"bassline",W:960,H:540,hero:[724,263],headline:[74,164],detail:[74,340],headingSize:82,mode:"cinematic"},
+ "cinematic-quantum":{source:"quantum",W:960,H:540,hero:[722,264],headline:[74,165],detail:[74,335],headingSize:79,mode:"cinematic"},
  "square-prism":{source:"prism",W:600,H:600,hero:[310,225],headline:[54,428],detail:[54,546],headingSize:69,mode:"square"},
  "square-orbital":{source:"orbital",W:600,H:600,hero:[304,218],headline:[52,430],detail:[52,548],headingSize:62,mode:"square"}
 };
@@ -42,6 +42,12 @@ export function createArtDirectedScene(id){
  const accent=reframe(scene,"accent",s.hero);
  if(accent.dx!==heroDelta.dx||accent.dy!==heroDelta.dy)
   throw Error("Hero/accent origins no longer correspond");
+ const heroScale=s.mode==="cinematic"?1.35:s.mode==="portrait"?1.08:1.12;
+ const hg=must(scene.groups,"hero"),ag=must(scene.groups,"accent");
+ hg.scaleX=(hg.scaleX??1)*heroScale;hg.scaleY=(hg.scaleY??1)*heroScale;
+ ag.scaleX=(ag.scaleX??1)*heroScale;ag.scaleY=(ag.scaleY??1)*heroScale;
+ for(const t of scene.animations.flatMap(a=>a.tracks))if(t.target==="hero"&&["scaleX","scaleY"].includes(t.property))
+  for(const k of t.keyframes)k.value*=heroScale;
  reframe(scene,"heading",s.headline);
  reframe(scene,"detail",s.detail);
  for(const node of scene.shapes){
