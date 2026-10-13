@@ -1,0 +1,49 @@
+name: Constructive scene official-runtime evidence
+on:
+  push:
+    branches: [feat/motion-constructor-next]
+    paths:
+      - 'scripts/constructive-scene-*.mjs'
+      - 'test/constructiveScene*.mjs'
+      - 'samples/constructive-scene/**'
+      - 'docs/CONSTRUCTIVE_SCENE_AGENT.md'
+      - '.github/workflows/constructive-scene-ci.yml'
+  pull_request:
+    branches: [feat/motion-recipe-atlas]
+  workflow_dispatch:
+jobs:
+  produce-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: node --test test/constructiveScene.test.mjs
+      - name: Build and render six distinct scenes via official Rive runtime
+        run: node scripts/constructive-scene-agent.mjs --batch samples/constructive-scene/prompts.json --out test/tmp/constructive-scene --render
+      - name: Encode GIFs from checked official-runtime PNG frames
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          for scene in test/tmp/constructive-scene/*; do
+            test -f "$scene/poster.png"
+            test "$(find "$scene" -maxdepth 1 -name 'frame-*.png' | wc -l)" -eq 25
+            ffmpeg -nostdin -y -loglevel error -framerate 12 -i "$scene/frame-%03d.png" -vf "fps=12,scale=720:-1:flags=lanczos" "$scene/preview.gif"
+            test -s "$scene/preview.gif"
+          done
+          test "$(find test/tmp/constructive-scene -name '*.riv' | wc -l)" -eq 6
+          test "$(find test/tmp/constructive-scene -name 'preview.gif' | wc -l)" -eq 6
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: constructive-six-domain-evidence
+          path: test/tmp/constructive-scene/
+          retention-days: 14
