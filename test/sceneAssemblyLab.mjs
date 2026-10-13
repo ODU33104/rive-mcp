@@ -29,7 +29,7 @@ assert.throws(()=>recomposeSolstice(missing),/missing parent|missing animation t
 
 const {scene,evidence}=makeSecondHandSlotVariant(original);
 assert.equal(evidence.slotId,"watch.subdial.second");
-assert.deepEqual(evidence.domain,undefined); // semantic contracts use domain list not generic category
+assert.deepEqual(evidence.domain,["wristwatch","analog-instrument"]);
 assert.deepEqual(evidence.allowedMotion,["secondsRig.rotation"]);
 assert.equal(scene.groups.length,original.groups.length+1);
 assert.equal(scene.shapes.length,original.shapes.length);
