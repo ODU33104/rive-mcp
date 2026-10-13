@@ -1,0 +1,1843 @@
+{
+  "schema": "motif-discovery-collection/v1",
+  "policy": "original-idea-not-runnable; no third-party source materials",
+  "count": 36,
+  "entries": [
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-editorial-underline",
+      "title": "Editorial Underline",
+      "stage": "discovery-only",
+      "discipline": "editorial",
+      "originalDescription": "An original editorial motion proposal: headline becomes readable; stroke after headline, caption after stroke.",
+      "cause": {
+        "event": "headline becomes readable",
+        "controlledRoles": [
+          "headline",
+          "baseline stroke",
+          "support caption"
+        ],
+        "relativeDependency": "stroke after headline, caption after stroke",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "headline",
+        "secondary": [
+          "baseline stroke",
+          "support caption"
+        ],
+        "energy": "quiet"
+      },
+      "hazards": [
+        "stroke before headline obscures reading",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-editorial-pull-quote",
+      "title": "Editorial Pull Quote",
+      "stage": "discovery-only",
+      "discipline": "editorial",
+      "originalDescription": "An original editorial motion proposal: quote block enters viewport; quote first, author after legibility.",
+      "cause": {
+        "event": "quote block enters viewport",
+        "controlledRoles": [
+          "quote text",
+          "attribution rule",
+          "attribution"
+        ],
+        "relativeDependency": "quote first, author after legibility",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "quote text",
+        "secondary": [
+          "attribution rule",
+          "attribution"
+        ],
+        "energy": "quiet"
+      },
+      "hazards": [
+        "attribution before quote misdirects focus",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-editorial-margin-note",
+      "title": "Editorial Margin Note",
+      "stage": "discovery-only",
+      "discipline": "editorial",
+      "originalDescription": "An original editorial motion proposal: reading focus reaches footnote; margin pin aligns after excerpt settles.",
+      "cause": {
+        "event": "reading focus reaches footnote",
+        "controlledRoles": [
+          "body excerpt",
+          "margin pin",
+          "note"
+        ],
+        "relativeDependency": "margin pin aligns after excerpt settles",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "body excerpt",
+        "secondary": [
+          "margin pin",
+          "note"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "pin over paragraph reduces readability",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-kinetic-numeral-lock",
+      "title": "Kinetic Numeral Lock",
+      "stage": "discovery-only",
+      "discipline": "data",
+      "originalDescription": "An original data motion proposal: metric crosses threshold; number stabilizes before unit emphasis.",
+      "cause": {
+        "event": "metric crosses threshold",
+        "controlledRoles": [
+          "number",
+          "unit",
+          "qualifier"
+        ],
+        "relativeDependency": "number stabilizes before unit emphasis",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "number",
+        "secondary": [
+          "unit",
+          "qualifier"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "rapid scrambling damages data trust",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-chart-axis-then-series",
+      "title": "Chart Axis Then Series",
+      "stage": "discovery-only",
+      "discipline": "data",
+      "originalDescription": "An original data motion proposal: data viewport reveals; axes define frame before series draws.",
+      "cause": {
+        "event": "data viewport reveals",
+        "controlledRoles": [
+          "axes",
+          "series path",
+          "annotation"
+        ],
+        "relativeDependency": "axes define frame before series draws",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "axes",
+        "secondary": [
+          "series path",
+          "annotation"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "unlabeled plot produces false clarity",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-chart-outlier-handoff",
+      "title": "Chart Outlier Handoff",
+      "stage": "discovery-only",
+      "discipline": "data",
+      "originalDescription": "An original data motion proposal: outlier selected; outlier singled before explanation appears.",
+      "cause": {
+        "event": "outlier selected",
+        "controlledRoles": [
+          "series",
+          "outlier marker",
+          "explanation"
+        ],
+        "relativeDependency": "outlier singled before explanation appears",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "series",
+        "secondary": [
+          "outlier marker",
+          "explanation"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "marker could suggest non-existent anomaly",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-progress-segment-proof",
+      "title": "Progress Segment Proof",
+      "stage": "discovery-only",
+      "discipline": "data",
+      "originalDescription": "An original data motion proposal: multi-step work advances; segment fill precedes confirming label.",
+      "cause": {
+        "event": "multi-step work advances",
+        "controlledRoles": [
+          "completed segments",
+          "active segment",
+          "status"
+        ],
+        "relativeDependency": "segment fill precedes confirming label",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "completed segments",
+        "secondary": [
+          "active segment",
+          "status"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "completion cue before actual task success",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-status-heartbeat",
+      "title": "Status Heartbeat",
+      "stage": "discovery-only",
+      "discipline": "interface",
+      "originalDescription": "An original interface motion proposal: pending status observed; ring emanates from status without shifting label.",
+      "cause": {
+        "event": "pending status observed",
+        "controlledRoles": [
+          "status mark",
+          "pulse ring",
+          "time label"
+        ],
+        "relativeDependency": "ring emanates from status without shifting label",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "status mark",
+        "secondary": [
+          "pulse ring",
+          "time label"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "false live claim for stale status",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-toggle-rail-commit",
+      "title": "Toggle Rail Commit",
+      "stage": "discovery-only",
+      "discipline": "interface",
+      "originalDescription": "An original interface motion proposal: toggle pointer released; thumb reaches endpoint before label changes.",
+      "cause": {
+        "event": "toggle pointer released",
+        "controlledRoles": [
+          "thumb",
+          "rail",
+          "semantic label"
+        ],
+        "relativeDependency": "thumb reaches endpoint before label changes",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "thumb",
+        "secondary": [
+          "rail",
+          "semantic label"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "label may suggest committed change too early",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-segmented-tab-handoff",
+      "title": "Segmented Tab Handoff",
+      "stage": "discovery-only",
+      "discipline": "interface",
+      "originalDescription": "An original interface motion proposal: new segment chosen; selection pill aligns before content reveal.",
+      "cause": {
+        "event": "new segment chosen",
+        "controlledRoles": [
+          "selection pill",
+          "content",
+          "tab captions"
+        ],
+        "relativeDependency": "selection pill aligns before content reveal",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "selection pill",
+        "secondary": [
+          "content",
+          "tab captions"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "tab keyboard focus disconnected from visual state",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-toast-focus-stack",
+      "title": "Toast Focus Stack",
+      "stage": "discovery-only",
+      "discipline": "interface",
+      "originalDescription": "An original interface motion proposal: urgent notice arrives; front toast settles before background compression.",
+      "cause": {
+        "event": "urgent notice arrives",
+        "controlledRoles": [
+          "foreground toast",
+          "background stack",
+          "dismiss glyph"
+        ],
+        "relativeDependency": "front toast settles before background compression",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "foreground toast",
+        "secondary": [
+          "background stack",
+          "dismiss glyph"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "unread notices occluded or clipped",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-field-validation-order",
+      "title": "Field Validation Order",
+      "stage": "discovery-only",
+      "discipline": "interface",
+      "originalDescription": "An original interface motion proposal: input validation completes; border change precedes explanatory copy.",
+      "cause": {
+        "event": "input validation completes",
+        "controlledRoles": [
+          "field border",
+          "inline error",
+          "help icon"
+        ],
+        "relativeDependency": "border change precedes explanatory copy",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "field border",
+        "secondary": [
+          "inline error",
+          "help icon"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "error cue ambiguous without text",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-breadcrumb-depth",
+      "title": "Breadcrumb Depth",
+      "stage": "discovery-only",
+      "discipline": "navigation",
+      "originalDescription": "An original navigation motion proposal: navigate to child page; ancestor context stays fixed as active advances.",
+      "cause": {
+        "event": "navigate to child page",
+        "controlledRoles": [
+          "ancestor crumbs",
+          "active crumb",
+          "connector"
+        ],
+        "relativeDependency": "ancestor context stays fixed as active advances",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "ancestor crumbs",
+        "secondary": [
+          "active crumb",
+          "connector"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "movement implies nonexistent location",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-map-pin-distance",
+      "title": "Map Pin Distance",
+      "stage": "discovery-only",
+      "discipline": "navigation",
+      "originalDescription": "An original navigation motion proposal: route destination selected; pin touchdown before distance label.",
+      "cause": {
+        "event": "route destination selected",
+        "controlledRoles": [
+          "map plane",
+          "pin",
+          "distance label"
+        ],
+        "relativeDependency": "pin touchdown before distance label",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "map plane",
+        "secondary": [
+          "pin",
+          "distance label"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "false precision or geographically misleading positioning",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-carousel-focus-rest",
+      "title": "Carousel Focus Rest",
+      "stage": "discovery-only",
+      "discipline": "navigation",
+      "originalDescription": "An original navigation motion proposal: slide selection changes; focus marker follows selected card, caption delayed.",
+      "cause": {
+        "event": "slide selection changes",
+        "controlledRoles": [
+          "cards",
+          "focus marker",
+          "caption"
+        ],
+        "relativeDependency": "focus marker follows selected card, caption delayed",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "cards",
+        "secondary": [
+          "focus marker",
+          "caption"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "ambient motion steals reading time",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-onboarding-task-reveal",
+      "title": "Onboarding Task Reveal",
+      "stage": "discovery-only",
+      "discipline": "education",
+      "originalDescription": "An original education motion proposal: new instruction step begins; example visible before action highlight.",
+      "cause": {
+        "event": "new instruction step begins",
+        "controlledRoles": [
+          "example",
+          "action mark",
+          "instruction"
+        ],
+        "relativeDependency": "example visible before action highlight",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "example",
+        "secondary": [
+          "action mark",
+          "instruction"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "instruction loses referent after transfer",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-quiz-answer-explain",
+      "title": "Quiz Answer Explain",
+      "stage": "discovery-only",
+      "discipline": "education",
+      "originalDescription": "An original education motion proposal: answer submitted; mark follows response, rationale after mark.",
+      "cause": {
+        "event": "answer submitted",
+        "controlledRoles": [
+          "answer tile",
+          "correctness mark",
+          "rationale"
+        ],
+        "relativeDependency": "mark follows response, rationale after mark",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "answer tile",
+        "secondary": [
+          "correctness mark",
+          "rationale"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "reveals answer before learner acts",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-math-proof-emphasis",
+      "title": "Math Proof Emphasis",
+      "stage": "discovery-only",
+      "discipline": "education",
+      "originalDescription": "An original education motion proposal: proof advances a step; premise highlighted before result transition.",
+      "cause": {
+        "event": "proof advances a step",
+        "controlledRoles": [
+          "premise",
+          "operator",
+          "result"
+        ],
+        "relativeDependency": "premise highlighted before result transition",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "premise",
+        "secondary": [
+          "operator",
+          "result"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "decorative movement suggests unsupported inference",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-music-beat-anticipation",
+      "title": "Music Beat Anticipation",
+      "stage": "discovery-only",
+      "discipline": "media",
+      "originalDescription": "An original media motion proposal: playback beat predicted; anticipation offset aligns tick with beat.",
+      "cause": {
+        "event": "playback beat predicted",
+        "controlledRoles": [
+          "beat tick",
+          "playhead",
+          "amplitude bar"
+        ],
+        "relativeDependency": "anticipation offset aligns tick with beat",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "beat tick",
+        "secondary": [
+          "playhead",
+          "amplitude bar"
+        ],
+        "energy": "high"
+      },
+      "hazards": [
+        "beat animation claims audio sync without timing data",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-audio-ducking-cue",
+      "title": "Audio Ducking Cue",
+      "stage": "discovery-only",
+      "discipline": "media",
+      "originalDescription": "An original media motion proposal: speech becomes primary; background reduces before speech focus enters.",
+      "cause": {
+        "event": "speech becomes primary",
+        "controlledRoles": [
+          "background waveform",
+          "speech focus",
+          "volume marker"
+        ],
+        "relativeDependency": "background reduces before speech focus enters",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "background waveform",
+        "secondary": [
+          "speech focus",
+          "volume marker"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "visual ducking not tied to actual audio state",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-chapter-card-release",
+      "title": "Chapter Card Release",
+      "stage": "discovery-only",
+      "discipline": "media",
+      "originalDescription": "An original media motion proposal: chapter transition starts; chapter number settles before title.",
+      "cause": {
+        "event": "chapter transition starts",
+        "controlledRoles": [
+          "chapter number",
+          "title",
+          "edge wipe"
+        ],
+        "relativeDependency": "chapter number settles before title",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "chapter number",
+        "secondary": [
+          "title",
+          "edge wipe"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "wipe masks title on small viewport",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-museum-artifact-orbit",
+      "title": "Museum Artifact Orbit",
+      "stage": "discovery-only",
+      "discipline": "culture",
+      "originalDescription": "An original culture motion proposal: viewer selects exhibit; context ring frames artwork without covering label.",
+      "cause": {
+        "event": "viewer selects exhibit",
+        "controlledRoles": [
+          "artifact silhouette",
+          "context ring",
+          "label"
+        ],
+        "relativeDependency": "context ring frames artwork without covering label",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "artifact silhouette",
+        "secondary": [
+          "context ring",
+          "label"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "imagined geometry must not mimic protected artwork",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-calligraphy-ink-rest",
+      "title": "Calligraphy Ink Rest",
+      "stage": "discovery-only",
+      "discipline": "culture",
+      "originalDescription": "An original culture motion proposal: writer finishes stroke; ink endpoint holds before ambient breathing.",
+      "cause": {
+        "event": "writer finishes stroke",
+        "controlledRoles": [
+          "ink path",
+          "endpoint",
+          "paper texture"
+        ],
+        "relativeDependency": "ink endpoint holds before ambient breathing",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "ink path",
+        "secondary": [
+          "endpoint",
+          "paper texture"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "typographic stroke requires original licensed artwork",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-festival-lantern-arrival",
+      "title": "Festival Lantern Arrival",
+      "stage": "discovery-only",
+      "discipline": "culture",
+      "originalDescription": "An original culture motion proposal: celebration mode chosen; lantern arrives before bounded glow.",
+      "cause": {
+        "event": "celebration mode chosen",
+        "controlledRoles": [
+          "lantern silhouette",
+          "glow",
+          "headline"
+        ],
+        "relativeDependency": "lantern arrives before bounded glow",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "lantern silhouette",
+        "secondary": [
+          "glow",
+          "headline"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "cultural symbol use demands contextual review",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-origami-fold-hint",
+      "title": "Origami Fold Hint",
+      "stage": "discovery-only",
+      "discipline": "craft",
+      "originalDescription": "An original craft motion proposal: next fold step begins; crease highlighted before fold cue.",
+      "cause": {
+        "event": "next fold step begins",
+        "controlledRoles": [
+          "paper panel",
+          "crease",
+          "direction marker"
+        ],
+        "relativeDependency": "crease highlighted before fold cue",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "paper panel",
+        "secondary": [
+          "crease",
+          "direction marker"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "fold not physically possible for target paper",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-ceramic-glaze-sweep",
+      "title": "Ceramic Glaze Sweep",
+      "stage": "discovery-only",
+      "discipline": "craft",
+      "originalDescription": "An original craft motion proposal: object material reveal begins; short gloss after silhouette becomes legible.",
+      "cause": {
+        "event": "object material reveal begins",
+        "controlledRoles": [
+          "vessel silhouette",
+          "gloss band",
+          "material label"
+        ],
+        "relativeDependency": "short gloss after silhouette becomes legible",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "vessel silhouette",
+        "secondary": [
+          "gloss band",
+          "material label"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "gloss implies wrong material or light",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-mechanical-dial-trace",
+      "title": "Mechanical Dial Trace",
+      "stage": "discovery-only",
+      "discipline": "instrument",
+      "originalDescription": "An original instrument motion proposal: instrument powers on; ticks visible before calibrated needle settles.",
+      "cause": {
+        "event": "instrument powers on",
+        "controlledRoles": [
+          "dial",
+          "needle",
+          "calibration ticks"
+        ],
+        "relativeDependency": "ticks visible before calibrated needle settles",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "dial",
+        "secondary": [
+          "needle",
+          "calibration ticks"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "rotating whole dial violates functional meaning",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-instrument-warning-escalation",
+      "title": "Instrument Warning Escalation",
+      "stage": "discovery-only",
+      "discipline": "instrument",
+      "originalDescription": "An original instrument motion proposal: reading exceeds safe range; warning rim follows validated threshold.",
+      "cause": {
+        "event": "reading exceeds safe range",
+        "controlledRoles": [
+          "readout",
+          "warning rim",
+          "response text"
+        ],
+        "relativeDependency": "warning rim follows validated threshold",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "readout",
+        "secondary": [
+          "warning rim",
+          "response text"
+        ],
+        "energy": "high"
+      },
+      "hazards": [
+        "false alarm from animation alone",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-orbital-parameter-compare",
+      "title": "Orbital Parameter Compare",
+      "stage": "discovery-only",
+      "discipline": "science",
+      "originalDescription": "An original science motion proposal: parameter changes; marker follows orbit redraw, legend updates last.",
+      "cause": {
+        "event": "parameter changes",
+        "controlledRoles": [
+          "orbit line",
+          "marker",
+          "legend"
+        ],
+        "relativeDependency": "marker follows orbit redraw, legend updates last",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "orbit line",
+        "secondary": [
+          "marker",
+          "legend"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "fake physical realism without source model",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-fluid-flow-clarity",
+      "title": "Fluid Flow Clarity",
+      "stage": "discovery-only",
+      "discipline": "science",
+      "originalDescription": "An original science motion proposal: flow mode selected; channel fixed, tracer follows calibrated path.",
+      "cause": {
+        "event": "flow mode selected",
+        "controlledRoles": [
+          "channel",
+          "tracer",
+          "boundary"
+        ],
+        "relativeDependency": "channel fixed, tracer follows calibrated path",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "channel",
+        "secondary": [
+          "tracer",
+          "boundary"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "tracer falsely represents simulation",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-parcel-hand-off",
+      "title": "Parcel Hand Off",
+      "stage": "discovery-only",
+      "discipline": "logistics",
+      "originalDescription": "An original logistics motion proposal: package checkpoint confirmed; checkpoint turns before timestamp settles.",
+      "cause": {
+        "event": "package checkpoint confirmed",
+        "controlledRoles": [
+          "parcel card",
+          "route node",
+          "timestamp"
+        ],
+        "relativeDependency": "checkpoint turns before timestamp settles",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "parcel card",
+        "secondary": [
+          "route node",
+          "timestamp"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "timeline may fabricate delivery progress",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-inventory-reservation",
+      "title": "Inventory Reservation",
+      "stage": "discovery-only",
+      "discipline": "commerce",
+      "originalDescription": "An original commerce motion proposal: stock reservation confirmed; hold badge appears after server confirmation.",
+      "cause": {
+        "event": "stock reservation confirmed",
+        "controlledRoles": [
+          "item tile",
+          "hold badge",
+          "expiry"
+        ],
+        "relativeDependency": "hold badge appears after server confirmation",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "item tile",
+        "secondary": [
+          "hold badge",
+          "expiry"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "false confirmed reservation",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-checkout-finality",
+      "title": "Checkout Finality",
+      "stage": "discovery-only",
+      "discipline": "commerce",
+      "originalDescription": "An original commerce motion proposal: payment terminal returns success; summary stays anchored, action after validated success.",
+      "cause": {
+        "event": "payment terminal returns success",
+        "controlledRoles": [
+          "order summary",
+          "success sigil",
+          "receipt action"
+        ],
+        "relativeDependency": "summary stays anchored, action after validated success",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "order summary",
+        "secondary": [
+          "success sigil",
+          "receipt action"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "premature payment success claim",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-watch-material-relief",
+      "title": "Watch Material Relief",
+      "stage": "discovery-only",
+      "discipline": "product",
+      "originalDescription": "An original product motion proposal: watch silhouette settles; highlight follows material arrival.",
+      "cause": {
+        "event": "watch silhouette settles",
+        "controlledRoles": [
+          "watch body",
+          "specular sweep",
+          "model caption"
+        ],
+        "relativeDependency": "highlight follows material arrival",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "watch body",
+        "secondary": [
+          "specular sweep",
+          "model caption"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "glint out of sync with surface or light",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-earbud-pair-response",
+      "title": "Earbud Pair Response",
+      "stage": "discovery-only",
+      "discipline": "product",
+      "originalDescription": "An original product motion proposal: pairing handshake confirmed; both buds stable before arc confirmation.",
+      "cause": {
+        "event": "pairing handshake confirmed",
+        "controlledRoles": [
+          "left bud",
+          "right bud",
+          "connection arc"
+        ],
+        "relativeDependency": "both buds stable before arc confirmation",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "left bud",
+        "secondary": [
+          "right bud",
+          "connection arc"
+        ],
+        "energy": "medium"
+      },
+      "hazards": [
+        "shared motion may imply nonexistent stereo capability",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    },
+    {
+      "schema": "motif-discovery/v1",
+      "id": "idea-camera-focus-lock",
+      "title": "Camera Focus Lock",
+      "stage": "discovery-only",
+      "discipline": "product",
+      "originalDescription": "An original product motion proposal: camera focus reports lock; lens settles then corners align, readout follows.",
+      "cause": {
+        "event": "camera focus reports lock",
+        "controlledRoles": [
+          "lens",
+          "focus corners",
+          "readout"
+        ],
+        "relativeDependency": "lens settles then corners align, readout follows",
+        "manipulation": "timing and visibility of the secondary role"
+      },
+      "geometry": {
+        "status": "unknown",
+        "mustConstruct": "independent editable vector geometry and local attachment"
+      },
+      "visualFunction": {
+        "primary": "lens",
+        "secondary": [
+          "focus corners",
+          "readout"
+        ],
+        "energy": "low"
+      },
+      "hazards": [
+        "focus claim without actual camera signal",
+        "unmeasured composition quality",
+        "reduced-motion behavior not tested"
+      ],
+      "prohibitedTransfer": {
+        "status": "unknown",
+        "domains": []
+      },
+      "transferEvidence": "NOT_EVALUATED",
+      "references": [],
+      "rights": {
+        "originalText": "authored-for-this-project",
+        "workLevelPermissions": "no-external-work-copied",
+        "embeddedAssets": "none-in-description; must re-audit at build"
+      },
+      "evidence": {
+        "rendering": "NOT_EVALUATED",
+        "blindHumanRating": "NOT_EVALUATED",
+        "ablation": "NOT_EVALUATED"
+      }
+    }
+  ]
+}
