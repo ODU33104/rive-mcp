@@ -32,6 +32,13 @@ assert.ok(lensPhoto.shapes.some(s=>s.id.endsWith("aperture-7")));
 assert.ok(lensAstro.shapes.some(s=>s.id.endsWith("focus-groove-35")));
 for(const comp of COMPOSITIONS){
  const {scene,result}=makeComposition(comp);
+ if(comp.style==="porcelain"){
+   for(const suffix of ["heading","brand","numeral"]){
+     const n=scene.texts.find(t=>t.id===suffix||t.id.endsWith("--"+suffix));
+     assert.ok(n,"required high-contrast label "+suffix);
+     assert.equal(n.runs[0].color,STYLES.porcelain.ink,"light-theme text contrast "+suffix);
+   }
+ }
  assert.equal(result.status,"PASS");
  assert.equal(result.worldTransform,"PASS");
  assert.equal(scene.artboard.width,960);
