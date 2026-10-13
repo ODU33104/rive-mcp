@@ -59,12 +59,12 @@ export function createStudioScene(id){
  const shapes=[],texts=[];const add=s=>shapes.push(s),say=t=>texts.push(t);
  add(rect("canvas",360,230,720,460,GRAD(C.bg,C.dark,-50,-60),0));
  add(oval("ambientLight",C.hero[0],C.hero[1],405,345,GRAD(C.glow,C.dark),1,"atmosphere",{opacity:.43}));
- for(let i=0;i<7;i++)add(line("grid-horizontal-"+i,42,67+56*i,684,67+56*i,C.muted,2,"atmosphere",.48,{opacity:.22}));
+ for(let i=0;i<7;i++)add(line("grid-horizontal-"+i,345,67+56*i,684,67+56*i,C.muted,2,"atmosphere",.48,{opacity:.22}));
  add(line("separation",51,100,668,100,C.muted,11,null,.8,{opacity:.42}));
  add(line("baseline",51,405,668,405,C.muted,11,null,.8,{opacity:.46}));
  add(rect("micro-rule",C.copy[0]+31,129,62,2,SOLID(C.accent),60,"heading",1));
  say(text("eyebrow",C.micro,0,-42,320,12,C.accent,800,"heading"));
- say(text("headline",C.title,0,0,382,C.title.length>7?55:70,C.light,801,"heading"));
+ say(text("headline",C.title,0,0,382,C.title.length>=9?51:C.title.length>=7?59:70,C.light,801,"heading"));
  say(text("strapline",C.subtitle,1,92,385,17,C.light,802,"heading"));
  say(text("series","ORIGINAL / MOTION STUDIES",0,7,410,12,C.muted,805,"detail"));
  say(text("descriptor",C.foot,0,35,412,13,C.accent,806,"detail"));
