@@ -14,13 +14,13 @@ const CONCEPTS={
   targets:["camera","lens","optical","カメラ","レンズ","光学"],effectTerms:["refraction","refracted","spectral","プリズム","分光","屈折"],root:{x:-10,y:-6,scale:.75,z:40},
   artifactFamily:"CINEMATIC OPTICAL STUDIO"},
  crystal:{sourceScene:"prism",directionId:"square-prism",effectId:"organic-dew",
-  targets:["prism","crystal","クリスタル","プリズム","結晶"],effectTerms:["glint","droplet","sparkle","specular","光沢","きらめ","反射"],root:{x:0,y:0,scale:.88,z:24},
+  targets:["prism","crystal","クリスタル","プリズム","結晶"],effectTerms:["glint","droplet","sparkle","specular","光沢","きらめ","反射"],root:{x:0,y:0,scale:1.2,z:24},
   artifactFamily:"CRYSTAL MATERIAL STUDY"},
  celestial:{sourceScene:"orbital",directionId:"square-orbital",effectId:"instrument-indices",
   targets:["planet","orbit","celestial","天体","惑星","軌道"],effectTerms:["calibration","instrument","dial","計測","目盛","計器"],root:{x:0,y:0,scale:.95,z:28},
   artifactFamily:"CELESTIAL NAVIGATION"},
  silicon:{sourceScene:"quantum",directionId:"cinematic-quantum",effectId:"system-beacon",
-  targets:["chip","processor","silicon","semiconductor","半導体","チップ","プロセッサ"],effectTerms:["beacon","signal","pulse","telemetry","光点","信号","脈動"],root:{x:0,y:0,scale:1.0,z:48},
+  targets:["chip","processor","silicon","semiconductor","半導体","チップ","プロセッサ"],effectTerms:["beacon","signal","pulse","telemetry","光点","信号","脈動"],root:{x:0,y:0,scale:1.5,z:48},
   artifactFamily:"COMPUTATION DETAIL"}
 };
 export const DIRECTOR_CONCEPTS=Object.freeze(Object.keys(CONCEPTS));
