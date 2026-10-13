@@ -222,6 +222,69 @@ export function createStudioScene(id){
   mkTrack("accent","opacity",[[0,0],[65,0,E],[160,1],[270,1]]),
   mkTrack("footer","opacity",[[0,0],[168,0,E],[231,1],[270,1]])
  ];
+
+ // Scene-specific secondary choreography: actual independent part motions, not only a common hero preset.
+ switch(C.kind){
+  case "earbuds":
+   tracks.push(mkTrack("indicator-led","width",[[0,0],[115,0,"emphasized-decel"],[192,31],[270,31]]));
+   tracks.push(mkTrack("budL-shell","y",[[0,-44],[35,-44,"emphasized-decel"],[133,-19],[270,-19]]));
+   tracks.push(mkTrack("budR-shell","y",[[0,-48],[52,-48,"emphasized-decel"],[153,-19],[270,-19]]));
+   break;
+  case "camera":
+   tracks.push(mkTrack("glass","opacity",[[0,.45],[84,.45,"ease-out"],[160,1],[270,1]]));
+   tracks.push(mkTrack("lens-reflection","opacity",[[0,0],[144,0,"ease-out"],[216,.36],[270,.36]]));
+   tracks.push(mkTrack("aperture","scaleX",[[0,.75],[60,.75,"ease-out"],[176,1],[270,1]]));
+   tracks.push(mkTrack("aperture","scaleY",[[0,.75],[60,.75,"ease-out"],[176,1],[270,1]]));
+   break;
+  case "planet":
+   tracks.push(mkTrack("orbit-arc","trimEnd",[[0,0],[57,0,"emphasized-decel"],[220,.91],[270,.91]]));
+   tracks.push(mkTrack("orbit-arc-fine","rotation",[[0,-34],[140,-22,"linear"],[270,-14]]));
+   tracks.push(mkTrack("planet-cloud","x",[[0,-64],[170,-50,"ease-out"],[270,-50]]));
+   break;
+  case "mascot":
+   tracks.push(mkTrack("left-eye","scaleY",[[0,1],[202,1,"hold"],[209,.07,"linear"],[218,1],[270,1]]));
+   tracks.push(mkTrack("right-eye","scaleY",[[0,1],[202,1,"hold"],[209,.07,"linear"],[218,1],[270,1]]));
+   tracks.push(mkTrack("antenna-star","scaleX",[[0,.7],[102,1.1,"ease-out-back"],[170,1],[270,1]]));
+   tracks.push(mkTrack("antenna-star","scaleY",[[0,.7],[102,1.1,"ease-out-back"],[170,1],[270,1]]));
+   break;
+  case "vinyl":
+   for(let i=0;i<6;i++)tracks.push(mkTrack("meter-"+i,"height",[[0,2],[130+i*5,7+(i%4)*8,"ease-out"],[195,6+i%3*3],[270,7+(i%4)*8]]));
+   tracks.push(mkTrack("needle","opacity",[[0,0],[83,0,"ease-out"],[192,1],[270,1]]));
+   break;
+  case "dashboard":
+   for(let i=0;i<8;i++)tracks.push(mkTrack("side-bars-"+i,"width",[[0,2],[95+i*10,2,"ease-out"],[180+i*8,63-(i%3)*11],[270,63-(i%3)*11]]));
+   tracks.push(mkTrack("graph-beacon","opacity",[[0,0],[140,0,"ease-out"],[210,1],[270,1]]));
+   break;
+  case "book":
+   tracks.push(mkTrack("emboss","opacity",[[0,0],[115,0,"ease-out"],[206,1],[270,1]]));
+   tracks.push(mkTrack("book-mark","opacity",[[0,0],[151,0,"ease-out"],[234,1],[270,1]]));
+   tracks.push(mkTrack("book-spine","scaleX",[[0,.7],[111,.7,"ease-out"],[193,1],[270,1]]));
+   break;
+  case "botanical":
+   tracks.push(mkTrack("left-leaf","rotation",[[0,-14],[108,-14,"ease-out"],[200,3],[270,0]]));
+   tracks.push(mkTrack("right-leaf","rotation",[[0,10],[108,10,"ease-out"],[200,-2],[270,0]]));
+   tracks.push(mkTrack("top-leaf","scaleY",[[0,.74],[80,.74,"emphasized-decel"],[200,1],[270,1]]));
+   break;
+  case "prism":
+   tracks.push(mkTrack("prism-face-c","opacity",[[0,0],[96,0,"ease-out"],[197,1],[270,1]]));
+   for(let i=0;i<8;i++)tracks.push(mkTrack("refraction-"+i,"opacity",[[0,0],[110+i*8,0,"ease-out"],[195+i*6,.78],[270,.78]]));
+   break;
+  case "compass":
+   tracks.push(mkTrack("north-arrow","rotation",[[0,-48],[76,-48,"emphasized-decel"],[205,0],[270,0]]));
+   tracks.push(mkTrack("south-arrow","rotation",[[0,-48],[76,-48,"emphasized-decel"],[205,0],[270,0]]));
+   tracks.push(mkTrack("compass-center","opacity",[[0,0],[124,0,"ease-out"],[211,1],[270,1]]));
+   break;
+  case "monogram":
+   tracks.push(mkTrack("letter-z","scaleX",[[0,.45],[90,.45,"ease-out-back"],[184,1.07],[225,1],[270,1]]));
+   tracks.push(mkTrack("letter-z","scaleY",[[0,.45],[90,.45,"ease-out-back"],[184,1.07],[225,1],[270,1]]));
+   tracks.push(mkTrack("poster-ring","opacity",[[0,.1],[128,.1,"ease-out"],[215,.8],[270,.8]]));
+   break;
+  case "circuit":
+   tracks.push(mkTrack("core-inner","scaleX",[[0,.44],[103,.44,"ease-out-back"],[188,1.08],[245,1],[270,1]]));
+   tracks.push(mkTrack("core-inner","scaleY",[[0,.44],[103,.44,"ease-out-back"],[188,1.08],[245,1],[270,1]]));
+   for(let i=0;i<8;i++)tracks.push(mkTrack("trace-"+i,"opacity",[[0,0],[100+i*7,0,"ease-out"],[205+i*5,.7],[270,.7]]));
+   break;
+ }
  // Parent existence, render hierarchy and animation lanes remain fully editable.
  return {artboard:{name:"Studio_"+id,width:W,height:H},
   fonts:[{id:"inter",bytes:new Uint8Array(FONT)}],
