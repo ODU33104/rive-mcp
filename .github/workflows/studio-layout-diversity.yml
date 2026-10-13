@@ -1,0 +1,52 @@
+name: Studio Art Direction Diversity
+on:
+  pull_request:
+    paths:
+      - 'scripts/studio-direction-experiments.mjs'
+      - 'test/studioDirection.mjs'
+      - 'docs/STUDIO_LAYOUT_DIVERSITY.md'
+      - '.github/workflows/studio-layout-diversity.yml'
+jobs:
+  real-art-directed-rive:
+    name: Studio direction ${{ matrix.scene }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        scene: [portrait-archive, portrait-botanica, portrait-luma, cinematic-spectra, cinematic-bassline, cinematic-quantum, square-prism, square-orbital]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Validate 8 composition grammars and native Rive identity
+        run: node test/studioDirection.mjs
+      - name: Pinned Chromium for genuine official Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Render art-direction variant as real editable RIVE and 37 PNG frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/studio-direction-experiments.mjs "${{ matrix.scene }}" "test/tmp/studio-direction/${{ matrix.scene }}" --render
+      - name: Encode actual native-runtime animation as GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/studio-direction/${{ matrix.scene }}"
+          /usr/bin/ffmpeg -hide_banner -loglevel error -y -framerate 10 -i frame-%03d.png -filter_complex "[0:v]scale=620:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[pal];[b][pal]paletteuse=dither=bayer:bayer_scale=3" -loop 0 "${{ matrix.scene }}.gif"
+          test "$(stat -c%s "${{ matrix.scene }}.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: art-direction-${{ matrix.scene }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/studio-direction/${{ matrix.scene }}/*.riv
+            test/tmp/studio-direction/${{ matrix.scene }}/*.gif
+            test/tmp/studio-direction/${{ matrix.scene }}/*-poster.png
+            test/tmp/studio-direction/${{ matrix.scene }}/*.json
