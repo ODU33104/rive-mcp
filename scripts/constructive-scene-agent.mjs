@@ -144,9 +144,9 @@ function builder(plan){
       enter("budL",d.energy==="high"?-92:-42,14);
       enter("budR",d.energy==="high"?-102:-44,26);
     }
-    if(d.mode==="open"&&!d.constraints.onlyCase)
+    if(d.mode==="open"&&!d.constraints.onlyCase&&!d.constraints.noSpin)
       tracks.push(track("lidRig","rotation",[[0,-9],[84,-9],[135,-23,ease],[F,-23]]));
-    if(d.mode==="open"&&d.constraints.onlyCase)
+    if(d.mode==="open"&&d.constraints.onlyCase&&!d.constraints.noSpin)
       tracks.push(track("lidRig","rotation",[[0,-9],[84,-9],[135,-23,ease],[F,-23]]));
     if(d.geometry.facets===5){
       for(let i=-2;i<=2;i++)line("caseMachining"+(i+2),
@@ -334,9 +334,10 @@ async function cli(args){
   const outflag=args.indexOf("--out"),directory=resolve(outflag<0?
     "test/tmp/constructive-scene":args[outflag+1]);
   const batch=args.indexOf("--batch"),render=args.includes("--render");
+  const positional=args.filter((a,i)=>!a.startsWith("--")&&
+    !(outflag>=0&&i===outflag+1)&&!(batch>=0&&i===batch+1));
   const items=batch>=0?JSON.parse(readFileSync(resolve(args[batch+1]),"utf8")):
-    [{id:"single",prompt:args.filter(a=>!a.startsWith("--")&&
-      a!==args[outflag+1]&&a!==args[batch+1])[0]??""}];
+    [{id:"single",prompt:positional.join(" ")}];
   let failures=0;
   for(const item of items){
     try{
