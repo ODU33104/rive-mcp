@@ -277,7 +277,8 @@
       "placement": {
         "x": 0,
         "y": 0,
-        "scale": 1
+        "scale": 1,
+        "zOffset": 35
       },
       "route": "own-sourced-effect-transfer",
       "aestheticClaim": "NOT_EVALUATED"
@@ -301,7 +302,8 @@
       "placement": {
         "x": 0,
         "y": 0,
-        "scale": 1
+        "scale": 1,
+        "zOffset": 20
       },
       "route": "own-sourced-effect-transfer",
       "aestheticClaim": "NOT_EVALUATED"
