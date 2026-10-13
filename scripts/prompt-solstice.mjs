@@ -25,7 +25,7 @@ export function planSolsticePrompt(prompt){
  if(second)return {status:"ABSTAIN",reason:"seconds hand mentioned without exclusive motion scope"};
  if(noBounce)return {status:"ABSTAIN",reason:"authored launch contains easing that may overshoot; cannot honor no-bounce"};
  if(wantsLaunch){
-  return {status:"PLANNED",route:"scene-edit",variant:"original",
+  return {status:"PLANNED",route:"finished-scene",variant:"original",
    hard:[...(noConfetti?["no-confetti"]:[])],scope:"SOLSTICE analog watch",quality:"NOT_BLIND_RATED"};
  }
  return {status:"ABSTAIN",reason:"no supported watch motion style specified"};
