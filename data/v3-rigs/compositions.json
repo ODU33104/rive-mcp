@@ -99,31 +99,24 @@
         {
           "rig": "celestial-atlas",
           "domain": "astronomy",
-          "x": 187,
-          "y": 288,
+          "x": 192,
+          "y": 292,
           "scale": 1.02
         },
         {
           "rig": "optical-lens",
           "domain": "astronomy",
-          "x": 472,
+          "x": 480,
           "y": 287,
           "scale": 1,
           "rotation": -6
         },
         {
-          "rig": "botanical-form",
-          "domain": "botany",
-          "x": 762,
-          "y": 286,
-          "scale": 1.02
-        },
-        {
-          "rig": "abstract-emote",
-          "domain": "illustration",
-          "x": 375,
-          "y": 454,
-          "scale": 0.46
+          "rig": "satellite-dish",
+          "domain": "radio-astronomy",
+          "x": 760,
+          "y": 296,
+          "scale": 1.01
         }
       ],
       "artDirection": "star-chart"
