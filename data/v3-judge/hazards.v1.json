@@ -1,0 +1,223 @@
+{
+  "schema": "v3-judge-hazards/v1",
+  "frozenAt": "2026-10-14",
+  "policy": "Destructive adversarial test cases; NOT claims that a semantic image classifier exists. UNKNOWN is not a pass. Real-runtime proof is independent of synthetic test fixtures.",
+  "cases": [
+    {
+      "id": "hazard-01",
+      "genre": "product",
+      "kind": "collision",
+      "description": "Earbud hull intrudes into headline safety area",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-02",
+      "genre": "editorial",
+      "kind": "collision",
+      "description": "Large display type collides with author line",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-03",
+      "genre": "interface",
+      "kind": "collision",
+      "description": "Toast blocks primary confirmation control",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-04",
+      "genre": "scientific",
+      "kind": "collision",
+      "description": "Gauge labels collide with central numeric readout",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-05",
+      "genre": "product",
+      "kind": "crop",
+      "description": "Lens outer ring clipped by artboard edge",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-06",
+      "genre": "character",
+      "kind": "crop",
+      "description": "Fox tail accidentally clipped on right",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-07",
+      "genre": "ambient",
+      "kind": "crop",
+      "description": "Visible starfield extends outside prescribed masked area",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-08",
+      "genre": "editorial",
+      "kind": "text-clipping",
+      "description": "Japanese final glyph trimmed by text box",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-09",
+      "genre": "interface",
+      "kind": "text-clipping",
+      "description": "Retry button label overflows its clip",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-10",
+      "genre": "scientific",
+      "kind": "text-clipping",
+      "description": "Azimuth unit text trimmed",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-11",
+      "genre": "scientific",
+      "kind": "pivot-8px",
+      "description": "Watch hand pivot moves exactly eight pixels",
+      "evidenceClass": "synthetic-world-transform",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-12",
+      "genre": "character",
+      "kind": "pivot-8px",
+      "description": "Mascot eyeball anchor displaced eight pixels",
+      "evidenceClass": "synthetic-world-transform",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-13",
+      "genre": "product",
+      "kind": "pivot-8px",
+      "description": "Case lid hinge displaced eight pixels",
+      "evidenceClass": "synthetic-world-transform",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-14",
+      "genre": "product",
+      "kind": "forbidden-motion",
+      "description": "Product case moves despite a case-only-open contract",
+      "evidenceClass": "authored-track",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-15",
+      "genre": "interface",
+      "kind": "forbidden-motion",
+      "description": "Sidebar animates although only selected tab should move",
+      "evidenceClass": "authored-track",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-16",
+      "genre": "scientific",
+      "kind": "forbidden-motion",
+      "description": "Reference scale rotates with pointer",
+      "evidenceClass": "authored-track",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-17",
+      "genre": "product",
+      "kind": "silhouette-swap",
+      "description": "Earbud subject replaced by unrelated clock ring",
+      "evidenceClass": "independent-subject-inventory",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-18",
+      "genre": "scientific",
+      "kind": "silhouette-swap",
+      "description": "Telescope optic replaced by perfume silhouette",
+      "evidenceClass": "independent-subject-inventory",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-19",
+      "genre": "interface",
+      "kind": "pointless-confetti",
+      "description": "Confetti triggered before payment completion",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-20",
+      "genre": "editorial",
+      "kind": "pointless-confetti",
+      "description": "Confetti added to solemn museum title",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "FAIL_OR_UNKNOWN",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-21",
+      "genre": "product",
+      "kind": "invisible-fx",
+      "description": "Lens sparkle has no visible pixel impact",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "UNKNOWN_OR_FAIL",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-22",
+      "genre": "ambient",
+      "kind": "invisible-fx",
+      "description": "Ambient light layer is fully occluded",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "UNKNOWN_OR_FAIL",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-23",
+      "genre": "character",
+      "kind": "ugly-fx",
+      "description": "Large jittering burst destroys mascot legibility despite massive pixel changes",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "UNKNOWN_OR_FAIL",
+      "humanAesthetics": "NOT_EVALUATED"
+    },
+    {
+      "id": "hazard-24",
+      "genre": "product",
+      "kind": "ugly-fx",
+      "description": "Chromatic FX overwhelms product silhouette despite high frame differences",
+      "evidenceClass": "measured-runtime-required",
+      "expectedGate": "UNKNOWN_OR_FAIL",
+      "humanAesthetics": "NOT_EVALUATED"
+    }
+  ]
+}
