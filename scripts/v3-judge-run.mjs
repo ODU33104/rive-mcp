@@ -52,7 +52,7 @@ export async function runTournament({input=null,gold=false,out="test/tmp/v3-judg
         source:{path:repoPath(a.source),hash:fileDigest(a.source)},
         riv:{path:null,hash:null},gif:null,png:[],
         assets:(a.assets||[]).map(x=>({...x,hash:fileDigest(x.path)})),
-        rights:a.rights??null,budget:a.budget??null,
+        rights:a.rights??null,budget:a.budget??null,durationSeconds:a.durationSeconds??null,
         startedAt,elapsedMs:null,
         versions:{node:process.version,package:pkg.version,
           riveCanvasAdvanced:pkg.dependencies["@rive-app/canvas-advanced"],revision:process.env.GITHUB_SHA||"UNPINNED"},
@@ -163,6 +163,8 @@ export async function runTournament({input=null,gold=false,out="test/tmp/v3-judg
       if(record.fallbackFrom)record.restrictions.push(status(UNKNOWN,"fallback success not attributed to requested route"));
       if(!record.holdoutMembership)record.restrictions.push(status(UNKNOWN,"reference or external prompt; excluded from frozen holdout metrics"));
       if(!a.constraints||Object.keys(a.constraints).length===0)record.restrictions.push(status(UNKNOWN,"semantic constraints missing"));
+      if(a.interactionsRequested===true&&!a.interactionReview?.evidencePath)
+        record.restrictions.push(status(UNKNOWN,"unsupported or unobserved requested interaction"));
       record.objectiveStopGate=stopGate(record);
       record.candidateGate=record.objectiveStopGate.status;
       record.aestheticQuality="NOT_EVALUATED";
