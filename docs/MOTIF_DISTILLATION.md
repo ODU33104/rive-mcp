@@ -12,10 +12,12 @@ npm run build
 node scripts/motif-distill-catalog.mjs --write
 node scripts/motif-distill-catalog.mjs --check
 node test/motifDistill.mjs
+# After creating trial files, edit each scene.json and recompile that source:
+# node scripts/motif-distill-ablate.mjs --compile-scene test/tmp/motif-distillation/instrument--detail-after-hero--control/scene.json edited.riv
 RIVE_MCP_CHROME=/path/to/chromium node scripts/motif-distill-ablate.mjs test/tmp/motif-distillation --render --gif
 ~~~
 
-Generated inventory is under data/motion-motifs/catalog-analyses.v1.json (all 60 original recipe analyses), with data/motion-motifs/discovery.v1.json (36 original concepts). The ablation evidence report, 12 editable native .riv scenes, official runtime PNGs and GIF previews are placed in test/tmp/motif-distillation; CI uploads them.
+Generated inventory is under data/motion-motifs/catalog-analyses.v1.json (all 60 original recipe analyses), with data/motion-motifs/discovery.v1.json (36 original concepts). The ablation evidence report, 12 native .riv binaries with editable source SceneSpec JSON sidecars, official runtime PNGs and GIF previews are placed in test/tmp/motif-distillation; CI uploads them.
 
 ## Source-derived fact versus hypothesis
 
@@ -35,7 +37,7 @@ Each control–ablation pair retains every native vector shape and every propert
 | material-glint | Specular highlight pulse suppressed | Glint opacity at frame 61 |
 | shadow-follows-object | Shadow x-position frozen while hero moves | Maximum x-offset residual, artboard px |
 
-The source traces measure the intervention. When runtime capture is enabled, paired PNG frames are also compared by SHA-256; with FFmpeg available the evidence report records changed-pixel counts and mean absolute RGBA-channel differences. Zero visual difference makes the trial fail. These measures prove an observable picture difference, **not** improved visual beauty, comprehension or mathematical aesthetic causation. Rive runtime PNGs and GIFs are inspection witnesses, not human preference evidence. Human blinded ratings are **NOT_EVALUATED**. The binary Rive structure contains editable shapes, groups, animations and a state machine, not screenshot-only stand-ins.
+The source traces measure the intervention. When runtime capture is enabled, paired PNG frames are also compared by SHA-256; with FFmpeg available the evidence report records changed-pixel counts and mean absolute RGBA-channel differences. Zero visual difference makes the trial fail. These measures prove an observable picture difference, **not** improved visual beauty, comprehension or mathematical aesthetic causation. Rive runtime PNGs and GIFs are inspection witnesses, not human preference evidence. Human blinded ratings are **NOT_EVALUATED**. The binaries contain native Rive shapes, groups, animations and a state machine, not screenshot-only stand-ins. The corresponding SceneSpec JSON is editable, and the --compile-scene command recompiles edits into a new native .riv. Import and manual editability inside the official Rive Editor itself have NOT been independently confirmed; .riv is not interchangeable with editable .rev source.
 
 ## Strict promotion gate
 
