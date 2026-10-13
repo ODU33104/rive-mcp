@@ -112,6 +112,10 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
           }
           if(artboards.length===1){
             record.binaryStructural=evaluate(decoded.scene,a.constraints||{},a.observations||{});
+            const coverageIncomplete=Object.values(decoded.coverage.skipped||{}).some(n=>n>0)||
+              (decoded.coverage.warnings||[]).length>0;
+            if(coverageIncomplete&&record.binaryStructural.status===PASS)
+              record.binaryStructural=status(UNKNOWN,"binary decoder coverage incomplete; positive claims not certified");
             if(record.binaryStructural.status===FAIL)record.structural=record.binaryStructural;
             else if(record.structural.status===PASS&&record.binaryStructural.status!==PASS)
               record.structural=status(UNKNOWN,"binary property reconstruction not sufficient to confirm source assertion");
