@@ -34,9 +34,9 @@ const blank=structuredClone(all[0]);
 assert.equal(promotionDecision(blank,"cross-domain-tested").allowed,false);
 const hashes="a".repeat(64);
 const fixture={id:"synthetic",stage:"discovery-only",
- provenance:{sourceSha256:hashes,sourceRights:{reviewed:true,status:"self-authored",
+ provenance:{sourceSha256:hashes,sourceRights:{reviewed:true,status:"self-authored",evidenceSha256:hashes,
   grants:{adapt:true,render:true,embed:true,redistribute:true}},
-  embeddedAssets:[{sha256:hashes,licenseReviewed:false,grants:{embed:true,redistribute:true}}]},
+  embeddedAssets:[{sha256:hashes,rightsEvidenceSha256:hashes,licenseReviewed:false,grants:{embed:true,redistribute:true}}]},
  geometry:{status:"verified",editableSourcePath:"synthetic.rml"},
  causal:{interventions:[{remove:"glint"}]}};
 assert.match(promotionDecision(fixture,"buildable").errors.join(" "),/rights/);
@@ -49,9 +49,14 @@ built.renderEvidence={riveSha256:hashes,runtimeVersion:"2.42.1",inspectPassed:tr
  frames:[{sha256:hashes},{sha256:hashes}]};
 const rendered=promote(built,"rendered");
 rendered.transferTrials=["instrument","parcel-card"].map(domain=>({domain,verified:true,
- ablationEffect:{measured:true},blindHumanRating:{status:"NOT_EVALUATED",n:0}}));
+ ablationEffect:{measured:true,absoluteDifference:1},controlRivSha256:hashes,ablationRivSha256:hashes,
+ blindHumanRating:{status:"NOT_EVALUATED",ballots:[]}}));
 assert.equal(promotionDecision(rendered,"cross-domain-tested").allowed,false);
-rendered.transferTrials.forEach(t=>{t.blindHumanRating={status:"EVALUATED",n:3};});
+rendered.transferTrials.forEach(t=>{t.blindHumanRating={
+ status:"EVALUATED",blinded:true,protocolSha256:hashes,ballotEvidenceSha256:hashes,
+ ballots:[{raterPseudonym:"r1",choice:"control"},
+  {raterPseudonym:"r2",choice:"control"},
+  {raterPseudonym:"r3",choice:"ablation"}]};});
 assert.equal(promotionDecision(rendered,"cross-domain-tested").allowed,true);
 assert.equal(promote(rendered,"cross-domain-tested").stage,"cross-domain-tested");
 
