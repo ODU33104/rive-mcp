@@ -137,6 +137,8 @@ function builder(id,opts){
    ellipse("lens-outer",0,0,178,178,gradient(t.metal,t.ink));
    ellipse("lens-rim",0,0,162,162,solid(t.surface));
    ellipse("glass",0,0,134,134,gradient(t.ink,t.subtle));
+   ellipse("glass-mask",0,0,130,130,null);
+   ellipse("optic-bloom",-31,-28,106,81,solid(t.glint),{opacity:.15,clipBy:"glass-mask"});
    for(let i=0;i<36;i++){let a=i*Math.PI/18;const u=polar(78,a),v=polar(83,a);line("focus-groove-"+i,u.x,u.y,v.x,v.y,t.glint,1);}
    g("focus",0,0);
    for(let i=0;i<8;i++){
