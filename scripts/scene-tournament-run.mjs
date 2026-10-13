@@ -65,7 +65,8 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
         startedAt,elapsedMs:null,
         versions:{node:process.version,package:pkg.version,
           riveCanvasAdvanced:pkg.dependencies["@rive-app/canvas-advanced"],revision:process.env.GITHUB_SHA||"UNPINNED"},
-        actual:{nodes:null,tracks:null,editableStructure:UNKNOWN,renderer:"@rive-app/canvas-advanced via Chromium"},
+        actual:{nodes:null,tracks:null,sourceClaims:null,binaryTrackAgreement:UNKNOWN,decompileCoverage:null,editableStructure:UNKNOWN,renderer:"@rive-app/canvas-advanced via Chromium"},
+        binaryStructural:status(UNKNOWN,"binary not independently decoded"),
         render:status(UNKNOWN,"not run"),structural:status(UNKNOWN,"scene spec not supplied"),
         semantic:status(UNKNOWN,"no independently verified semantic object-class mapping"),
         editability:status(UNKNOWN,"editable in official Rive Editor not measured"),
@@ -89,10 +90,36 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
         record.riv={path:relative(dir,rivFile),hash:digest(bytes)};
         if(scene){
           const nodes=[...(scene.groups||[]),...(scene.shapes||[]),...(scene.texts||[])];
-          record.actual.nodes=nodes.map(n=>({id:n.id,parent:n.parent||null,type:n.type||(n.runs?"text":"group")}));
-          record.actual.tracks=(scene.animations||[]).flatMap(x=>x.tracks||[]).map(t=>({target:t.target,property:t.property,keyframes:t.keyframes}));
-          record.actual.editableStructure={shapes:(scene.shapes||[]).length,texts:(scene.texts||[]).length,tracks:record.actual.tracks.length};
+          const claims=(scene.animations||[]).flatMap(x=>x.tracks||[]).map(t=>({target:t.target,property:t.property,keyframes:t.keyframes}));
+          record.actual.sourceClaims={nodes:nodes.map(n=>({id:n.id,parent:n.parent||null,type:n.type||(n.runs?"text":"group")})),tracks:claims};
+          record.actual.editableStructure={shapes:(scene.shapes||[]).length,texts:(scene.texts||[]).length,tracks:claims.length,verifiedInEditor:false};
           record.structural=evaluate(scene,a.constraints||{},a.observations||{});
+        }
+        try {
+          // Read actual property tracks back from .riv. Authored SceneSpec is only a claim.
+          const {decompileRiv}=await import("../dist/rivDecompile.js");
+          const decoded=decompileRiv(new Uint8Array(bytes));
+          const artboards=decoded.scene.artboards||[decoded.scene];
+          const binaryTracks=artboards.flatMap(ab=>ab.animations||[]).flatMap(an=>an.tracks||[]);
+          record.actual.tracks=binaryTracks.map(t=>({target:t.target,property:t.property,keyframes:t.keyframes}));
+          record.actual.nodes=artboards.flatMap(ab=>[...(ab.groups||[]),...(ab.shapes||[]),...(ab.texts||[])]).map(n=>({id:n.id,parent:n.parent||null,type:n.type||(n.runs?"text":"group")}));
+          record.actual.decompileCoverage=decoded.coverage;
+          if(record.actual.sourceClaims){
+            const signatures=new Set(binaryTracks.map(t=>t.target+"."+t.property));
+            const expected=record.actual.sourceClaims.tracks.map(t=>t.target+"."+t.property);
+            record.actual.binaryTrackAgreement=expected.every(k=>signatures.has(k))&&expected.length===binaryTracks.length?
+              "SIGNATURES_MATCH_VALUES_NOT_CERTIFIED":"UNKNOWN_OR_MISMATCH";
+          }
+          if(artboards.length===1){
+            record.binaryStructural=evaluate(decoded.scene,a.constraints||{},a.observations||{});
+            if(record.binaryStructural.status===FAIL)record.structural=record.binaryStructural;
+            else if(record.structural.status===PASS&&record.binaryStructural.status!==PASS)
+              record.structural=status(UNKNOWN,"binary property reconstruction not sufficient to confirm source assertion");
+          }
+        }catch(decompileError){
+          record.actual.decompileError=String(decompileError);
+          if(record.structural.status===PASS)
+            record.structural=status(UNKNOWN,"source authored constraints not linked to independently extracted binary");
         }
         const verifiedReview=(claim)=>claim?.status===PASS&&claim.reviewer&&claim.evidencePath&&
           existsSync(abs(claim.evidencePath))&&claim.reviewedSourceSha256===record.riv.hash;
