@@ -4,6 +4,9 @@ on:
     paths:
       - 'scripts/effect-visual-impact.mjs'
       - 'test/effectVisualImpact.mjs'
+      - 'test/effectQualityGate.mjs'
+      - 'scripts/effect-quality-gate.mjs'
+      - 'data/effect-quality/**'
       - 'docs/EFFECT_VISUAL_IMPACT.md'
       - '.github/workflows/effect-visual-impact.yml'
 jobs:
@@ -25,7 +28,10 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Test impact classifier and insufficient evidence handling
-        run: node test/effectVisualImpact.mjs
+        run: |
+          node test/effectVisualImpact.mjs
+          node test/effectQualityGate.mjs
+          node scripts/effect-quality-gate.mjs
       - name: Install Chromium matching native Rive Canvas runtime
         run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Pixel area checks across five timeline positions
