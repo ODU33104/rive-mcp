@@ -78,8 +78,18 @@ export function pivotCheck(scene,c){
   return result(PASS,"world pivots coincide on specified frames",{diffs});
 }
 function tracks(scene,target){return (scene.animations||[]).flatMap(a=>a.tracks||[]).filter(t=>t.target===target)}
+function descendants(scene,id){
+  const found=inventory(scene).found,children=new Set([id]);
+  for(const node of found.values()){
+    let parent=node.parent,visited=new Set();
+    while(parent&&!visited.has(parent)){if(parent===id){children.add(node.id);break;}
+      visited.add(parent);parent=found.get(parent)?.parent;}
+  }
+  return children;
+}
 export function motionCheck(scene,c,observations={}){
-  const ts=tracks(scene,c.target),eps=c.epsilon??0.001;
+  const scope=(c.kind==="only-x"||c.kind==="forbid-motion")?descendants(scene,c.target):new Set([c.target]);
+  const ts=(scene.animations||[]).flatMap(a=>a.tracks||[]).filter(t=>scope.has(t.target)),eps=c.epsilon??0.001;
   if(!inventory(scene).found.has(c.target))return result(UNKNOWN,"target absent");
   if(c.kind==="forbid-rotation"||c.kind==="forbid-motion"||c.kind==="only-x"){
     const blocked=c.kind==="forbid-rotation"?["rotation"]:
@@ -100,7 +110,9 @@ export function motionCheck(scene,c,observations={}){
       return observations.coverage==="continuous-bounded"?result(PASS,"bounded continuous trace verified"):
         result(UNKNOWN,"samples cannot exclude unobserved extrema");
     }
-    const t=ts.find(t=>t.property===(c.property||"x"));
+    const candidates=tracks(scene,c.target).filter(t=>t.property===(c.property||"x"));
+    if(candidates.length>1)return result(UNKNOWN,"multiple animations/layers require actual composed trajectory");
+    const t=candidates[0];
     if(!t?.keyframes?.length)return result(UNKNOWN,"no track or measured trajectory");
     const values=t.keyframes.map(k=>k.value),lo=Math.min(values[0],values.at(-1))-eps,hi=Math.max(values[0],values.at(-1))+eps;
     if(values.some(v=>v<lo||v>hi))return result(FAIL,"keyframe overshoot",{values});
