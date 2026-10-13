@@ -1,0 +1,42 @@
+{
+  "schema": "v3-flagship-source-v1",
+  "scope": "Original authored native Rive vector source",
+  "branches": {
+    "implementation": "parallel/flagship-scenes-v3-20261014",
+    "base": "feat/motion-showcase-multigenre"
+  },
+  "scenes": [
+    {
+      "id": "vessel",
+      "work": "MORROW / The Shape of Silence",
+      "genre": "Sculptural product",
+      "source": "scripts/v3-flagship-scenes.mjs",
+      "artifact": "vessel.riv"
+    },
+    {
+      "id": "interstice",
+      "work": "INTERSTICE / Cut Through Space",
+      "genre": "Kinetic typography",
+      "source": "scripts/v3-flagship-scenes.mjs",
+      "artifact": "interstice.riv"
+    },
+    {
+      "id": "tidal",
+      "work": "TIDAL / Bathymetric Field Notes",
+      "genre": "Fictional spatial survey",
+      "source": "scripts/v3-flagship-scenes.mjs",
+      "artifact": "tidal.riv"
+    }
+  ],
+  "rights": {
+    "geometry": "all self-authored in repository",
+    "thirdPartyMedia": [],
+    "embeddedFont": "assets/inter.ttf",
+    "fontPolicy": "root LICENSE: Inter font SIL Open Font License 1.1",
+    "separateUpstreamFontNoticeVerified": false
+  },
+  "humanBlindAestheticReview": "NOT_EVALUATED",
+  "personalVisualInspection": "NOT_EVALUATED",
+  "riveEditorClickThrough": "NOT_EVALUATED",
+  "releaseGate": "Inspect official-runtime PNG/GIF at every selected phase; reject materially defective pieces"
+}
