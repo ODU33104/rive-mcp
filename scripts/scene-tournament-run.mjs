@@ -17,6 +17,7 @@ const status=(status,reason)=>({status,reason});
 function rightsCheck(rights={},assets=[]){
   const issues=[];
   if(!rights.sourceEvidence)issues.push("source permission evidence missing");
+  if(rights.assetsDeclaredComplete!==true)issues.push("embedded asset list completeness unverified");
   for(const operation of ["inspect","render","adapt","embed","redistribute"])
     if(rights.operations?.[operation]!=="allow")issues.push(operation+" not explicitly allowed");
   for(const asset of assets)
@@ -52,6 +53,7 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
   const host=new RiveHost(PAGE_SCRIPT);let runtimeFailed=false;
   try{
     for(const a of attempts){
+      const startedAt=new Date().toISOString(),startedNs=process.hrtime.bigint();
       const missing=completeness(a);
       const record={id:a.id||"UNKNOWN",promptId:a.promptId??null,
         holdoutMembership:ids.has(a.promptId),route:a.route??null,
@@ -60,6 +62,7 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
         riv:{path:null,hash:null},gif:null,png:[],
         assets:(a.assets||[]).map(x=>({...x,hash:fileDigest(x.path)})),
         rights:a.rights??null,budget:a.budget??null,
+        startedAt,elapsedMs:null,
         versions:{node:process.version,package:pkg.version,
           riveCanvasAdvanced:pkg.dependencies["@rive-app/canvas-advanced"],revision:process.env.GITHUB_SHA||"UNPINNED"},
         actual:{nodes:null,tracks:null,editableStructure:UNKNOWN,renderer:"@rive-app/canvas-advanced via Chromium"},
@@ -91,6 +94,10 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
           record.actual.editableStructure={shapes:(scene.shapes||[]).length,texts:(scene.texts||[]).length,tracks:record.actual.tracks.length};
           record.structural=evaluate(scene,a.constraints||{},a.observations||{});
         }
+        const verifiedReview=(claim)=>claim?.status===PASS&&claim.reviewer&&claim.evidencePath&&
+          existsSync(abs(claim.evidencePath))&&claim.reviewedSourceSha256===record.riv.hash;
+        if(verifiedReview(a.semanticReview))record.semantic=status(PASS,"source-hash-pinned reviewer evidence supplied; reviewer independence not authenticated");
+        if(verifiedReview(a.editorReview))record.editability=status(PASS,"source-hash-pinned editor evidence supplied; UI editability not automatically proven");
         const observed=await host.inspect(bytes);
         record.actual.runtimeInspect={artboards:observed.artboards?.map(b=>({name:b.name,animations:b.animations?.map(x=>x.name),
           stateMachines:b.stateMachines?.map(x=>x.name)}))||[]};
@@ -116,6 +123,7 @@ export async function runTournament({input=null,gold=false,out="test/tmp/scene-t
         record.semantic.status===PASS&&record.editability.status===PASS&&record.licensing.status===PASS&&
         record.restrictions.every(r=>r.status===PASS)?PASS:
         [record.render,record.structural,record.licensing,...record.restrictions].some(x=>x.status===FAIL)?FAIL:UNKNOWN;
+      record.elapsedMs=Number(process.hrtime.bigint()-startedNs)/1e6;
       audits.push(record);
     }
   }finally{await host.close();}
