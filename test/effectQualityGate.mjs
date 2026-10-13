@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import {classifyForPromotion,validatedObservedCatalog} from "../scripts/effect-quality-gate.mjs";
+const obs=validatedObservedCatalog();
+assert.equal(obs.rendered,8);
+assert.equal(obs.technicallyVisible,6);
+assert.equal(obs.quarantined,2);
+assert.deepEqual(obs.rejected.sort(),["fx-quantum","fx-vesper"]);
+assert.equal(obs.productionReady,0);
+assert.equal(obs.aestheticIndependentRatings,0);
+assert.equal(classifyForPromotion({id:"fake-glow",maxChangedPercent:0,gate:"VISIBLY_APPLIED"}).stage,"quarantine-insufficient-effect");
+assert.equal(classifyForPromotion({id:"blur",maxChangedPercent:25,gate:"INSUFFICIENT_PIXEL_EVIDENCE"}).stage,"quarantine-insufficient-effect");
+assert.equal(classifyForPromotion({id:"real",maxChangedPercent:.08,gate:"VISIBLY_APPLIED"}).stage,"technical-visual-candidate");
+assert.throws(()=>classifyForPromotion({id:"x",maxChangedPercent:Infinity}),/Invalid/);
+console.log("effect quality gate PASS, 2 of 8 weak transfers quarantined; 0 production/aesthetic promotions");
