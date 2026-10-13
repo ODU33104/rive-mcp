@@ -225,6 +225,8 @@ function builder(id,opts){
     {parent:"letter",cornerRadius:1});
    label("brand","VELOCITY",-126,-8,252,35,t.glint,{parent:"letter"});
    line("underline",-117,39,117,39,t.accent,2,{parent:"letter"});
+   line("slash-left",-118,50,-103,63,t.accent,2,{parent:"letter"});
+   line("slash-right",103,50,118,63,t.accent,2,{parent:"letter"});
    label("submark","KINETIC  /  STUDIO",-120,47,240,12,t.subtle);
    break;
  }
