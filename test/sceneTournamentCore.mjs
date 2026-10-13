@@ -55,7 +55,8 @@ assert.equal(visualCheck(base,{kind:"text-overflow",target:"headline"},{headline
   visibleClipBounds:{x:30,y:30,width:100,height:25}
 }}).status,FAIL,"synthetic measured-glyph fixture");
 assert.equal(evaluate(pivotTamper,{pivots:[p]}).status,FAIL);
-const common={promptId:"hard-negative-001",holdoutMembership:true,budget:{model:"same",candidates:2,repairs:1,tokenCap:2000},
+const common={promptId:"hard-negative-001",holdoutMembership:true,budget:{model:"same",candidates:2,repairs:1,tokenCap:2000,wallTimeCapMs:1000},
+ source:{hash:"source-a"},riv:{hash:"binary-a"},rights:{assetsDeclaredComplete:true},
  assets:[{path:"art.svg",hash:"sha256-a",rights:"allow"}],render:{status:PASS},png:[{path:"a.png"}],fallbackFrom:null};
 const a={...common,id:"a",route:"A"},b={...common,id:"b",route:"B"};
 assert.equal(comparability(a,b).status,"COMPARABLE_ON_DECLARED_CONTROLS");
