@@ -1,0 +1,42 @@
+[
+  {
+    "id": "earbuds-calm",
+    "prompt": "高級イヤホンケースを静かに開いて見せる、左右並び、バウンスなし",
+    "domain": "earbuds"
+  },
+  {
+    "id": "earbuds-facets",
+    "prompt": "technical earbuds and charging case floating open, diagonal composition, energetic reveal",
+    "domain": "earbuds"
+  },
+  {
+    "id": "instrument-steady",
+    "prompt": "精密な軌道計器を中央に。回転させない、静かな動き",
+    "domain": "instrument"
+  },
+  {
+    "id": "instrument-scan",
+    "prompt": "technical orbital instrumentation, oscilloscope scan, high energy, split layout",
+    "domain": "instrument"
+  },
+  {
+    "id": "poster-grid",
+    "prompt": "ミニマルなタイポグラフィポスター、グリッド配置、落ち着いたアニメーション",
+    "domain": "poster"
+  },
+  {
+    "id": "poster-modular",
+    "prompt": "bold typographic poster, energetic modular bands and diagonal composition, no bounce",
+    "domain": "poster"
+  },
+  {
+    "id": "transit-loop",
+    "prompt": "地下鉄路線図を環状線で8駅、斜め構図、落ち着いたアニメーション",
+    "domain": "transit"
+  },
+  {
+    "id": "transit-linear",
+    "prompt": "urban transit diagram with 6 stations, split layout, high energy linear route",
+    "domain": "transit"
+  }
+]
