@@ -90,8 +90,9 @@ function builder(plan){
   const slot=(role,id,parent,anchor,members)=>{
     slots.push({type:"rig-slot/v1",role,rigId:id,parentId:parent??null,
       anchor:{...anchor},members:[...members]});};
-  const text=(id,s,x,y,size,color,width=360,align="left")=>{
+  const text=(id,s,x,y,size,color,width=360,align="left",parent=null)=>{
     scene.texts.push({id,x,y,width,z:800+scene.texts.length,align,
+      ...(parent?{parent}:{}),
       runs:[{text:s,font:"inter",fontSize:size,color}]});};
   rect("canvas",450,280,900,560,solid(ink),null);
   ell("ambient",600,270,620,430,grad(surface,ink,-220,-100,240,150),null,{opacity:0.92});
@@ -202,7 +203,7 @@ function builder(plan){
       {stroke:{color:accent,thickness:1},opacity:.66});
     const n=d.geometry.bands;
     for(let i=0;i<n;i++){
-      const dy=-141+i*(d.mode==="grid"?46:67);
+      const dy=-145+i*(d.mode==="grid"?32:42);
       group("bandRig"+i,0,dy,"typeBlockRig");
       const w=(d.mode==="grid"?255:276)-(i%3)*34;
       const x=d.layout==="diagonal"?(i%2?23:-23):0;
@@ -220,6 +221,10 @@ function builder(plan){
         [i*8, d.energy==="high"?(i%2?125:-125):-62],
         [92+i*6,0,ease],[F,0]]));
     }
+    // Editable typographic hierarchy inside the poster, not only decorative bars.
+    rect("posterDivider",0,71,278,1,solid(accent),"typeBlockRig",{opacity:.7});
+    text("posterTitle",d.mode==="grid"?"GRID":"SHIFT",-133,89,58,light,268,"left","typeBlockRig");
+    text("posterMeta",d.mode==="grid"?"SYSTEM / 07":"MODULAR / 05",-129,157,12,accent,220,"left","typeBlockRig");
     ell("posterDisc",130,153,30,30,solid(accent),"typeBlockRig");
     slot("poster.composition","typeBlockRig",null,{x:cx,y:cy},
       ["posterPanel","posterDisc"]);
