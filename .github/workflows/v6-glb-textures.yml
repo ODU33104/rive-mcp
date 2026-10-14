@@ -1,0 +1,109 @@
+name: V6 Original glTF PBR Texture Restoration and Native Rive A/B
+on:
+  pull_request:
+    paths:
+      - 'scripts/v6-*.mjs'
+      - 'scripts/v6-authentic-4map.wgsl'
+      - 'test/v6OriginalPBR.mjs'
+      - 'docs/V6_AUTHENTIC_GLTF_TEXTURES.md'
+      - '.github/workflows/v6-glb-textures.yml'
+jobs:
+  first-party-textured-rive:
+    name: Four real maps + controlled ablation ${{ matrix.direction }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        direction: [midnight, glacier, museum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install native GPU, first-party Rive CLI and original-image decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgles2 libx11-6 libgl1 libxkbcommon0 libglib2.0-0 ffmpeg
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 https://releases.rive.app/cli/install.sh -o /tmp/rive-cli.sh
+          bash /tmp/rive-cli.sh
+          "$HOME/.rive/bin/rive" --version
+      - name: Acquire unmodified source GLB and per-model CC0 rights
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/tmp/v6-source
+          base="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/WaterBottle"
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 "$base/LICENSE.md" -o test/tmp/v6-source/LICENSE.md
+          grep -q CC0-1.0 test/tmp/v6-source/LICENSE.md
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 "$base/metadata.json" -o test/tmp/v6-source/metadata.json
+          node -e 'const m=require("./test/tmp/v6-source/metadata.json");if(!m.legal?.some(x=>x.spdx==="CC0-1.0"))process.exit(1)'
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 "$base/glTF-Binary/WaterBottle.glb" -o test/tmp/v6-source/WaterBottle.glb
+          echo "b337e526fd6a162013c2984aeec163f5fbb4f717252724dfc3f3458bd51df94b  test/tmp/v6-source/WaterBottle.glb" | sha256sum -c -
+      - name: Import 4 authentic original images, UV, tangent, geometry and create matching A/B projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/v5-real-glb-mesh.mjs test/tmp/v6-source/WaterBottle.glb test/tmp/v6-legacy
+          node test/v6OriginalPBR.mjs test/tmp/v6-source/WaterBottle.glb test/tmp/v6-legacy test/tmp/v6-textures test/tmp/v6-scenes
+          mkdir -p "test/tmp/v6-output/${{ matrix.direction }}"
+          cp test/tmp/v6-textures/texture-provenance.json "test/tmp/v6-output/${{ matrix.direction }}/texture-provenance.json"
+      - name: First-party compiler proves authentic texture and neutral map Rive GPU binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          for type in textured flat; do
+            project="test/tmp/v6-scenes/${{ matrix.direction }}-$type"
+            cp assets/inter.ttf "$project/InterFont.bin"
+            "$cli" "$project" --verify --format=json > "test/tmp/v6-output/${{ matrix.direction }}/verify-$type.json"
+            "$cli" "$project" --once --format=json > "test/tmp/v6-output/${{ matrix.direction }}/build-$type.json"
+            "$cli" inspect "$project" --summary > "test/tmp/v6-output/${{ matrix.direction }}/inspect-$type.json"
+            test -s "$project/build/real_waterbottle_${{ matrix.direction }}.riv"
+          done
+          "$cli" --version > "test/tmp/v6-output/${{ matrix.direction }}/rive-version.txt"
+      - name: Compare real and neutral textures with same code, camera, mesh, and time
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          o="test/tmp/v6-output/${{ matrix.direction }}"
+          for type in textured flat; do
+            p="test/tmp/v6-scenes/${{ matrix.direction }}-$type"
+            "$cli" "$p" --screenshot="$o/$type-early.png" --viewport=960x600 --advance=0.6s
+            "$cli" "$p" --screenshot="$o/$type-late.png" --viewport=960x600 --advance=2.8s
+          done
+          node scripts/v6-original-pbr-ablation.mjs "${{ matrix.direction }}" "test/tmp/v6-scenes/${{ matrix.direction }}-textured" "test/tmp/v6-scenes/${{ matrix.direction }}-flat" "$o"
+      - name: Convert 31 real native GPU screenshots to animated 3D Rive GIF
+        shell: bash
+        run: |
+          set -euo pipefail
+          p="test/tmp/v6-scenes/${{ matrix.direction }}-textured"
+          o="test/tmp/v6-output/${{ matrix.direction }}"
+          node scripts/v5-real-gpu-sequence.mjs "$p" "$o" "$HOME/.rive/bin/rive"
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 8 -i "$o/native-frame-%03d.png" -vf "scale=768:480:flags=lanczos" -loop 0 "$o/genuine-4map.gif"
+          test "$(stat -c%s "$o/genuine-4map.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v6-real-4map-pbr-${{ matrix.direction }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/v6-source/LICENSE.md
+            test/tmp/v6-source/metadata.json
+            test/tmp/v6-scenes/${{ matrix.direction }}-textured/main.luau
+            test/tmp/v6-scenes/${{ matrix.direction }}-textured/RealModel.wgsl
+            test/tmp/v6-scenes/${{ matrix.direction }}-textured/material-evidence.json
+            test/tmp/v6-scenes/${{ matrix.direction }}-textured/build/*.riv
+            test/tmp/v6-scenes/${{ matrix.direction }}-flat/material-evidence.json
+            test/tmp/v6-scenes/${{ matrix.direction }}-flat/build/*.riv
+            test/tmp/v6-output/${{ matrix.direction }}/*.png
+            test/tmp/v6-output/${{ matrix.direction }}/*.gif
+            test/tmp/v6-output/${{ matrix.direction }}/*.json
+            test/tmp/v6-output/${{ matrix.direction }}/*.txt
