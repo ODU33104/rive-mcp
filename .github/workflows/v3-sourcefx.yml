@@ -1,0 +1,74 @@
+name: V3 Licensed Source FX Native Evidence
+on:
+  push:
+    branches:
+      - 'parallel/third-party-effects-v3-20261014'
+    paths:
+      - 'scripts/v3-sourcefx-*.mjs'
+      - 'test/v3SourceFx*.mjs'
+      - 'data/v3-sourcefx/**'
+      - 'docs/V3_REAL_FX_REUSE.md'
+      - '.github/workflows/v3-sourcefx.yml'
+  pull_request:
+    paths:
+      - 'scripts/v3-sourcefx-*.mjs'
+      - 'test/v3SourceFx*.mjs'
+      - 'data/v3-sourcefx/**'
+      - 'docs/V3_REAL_FX_REUSE.md'
+      - '.github/workflows/v3-sourcefx.yml'
+permissions:
+  contents: read
+jobs:
+  native-sourcefx:
+    name: Source FX ${{ matrix.source_id }} — official Canvas
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        source_id:
+          - sam-puff
+          - sam-three-dots
+          - sam-ball-triangle
+          - utk-3-dots-bounce
+          - utk-bars-fade
+          - utk-blocks-wave
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Source rights, SHA, geometry, timing and editable Rive serializer tests
+        run: node test/v3SourceFxCore.mjs
+      - name: Install official native Rive Canvas runtime Chromium host
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Real native Rive before/after PNG and original SVG frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/v3-sourcefx-port.mjs "${{ matrix.source_id }}" "test/tmp/v3-sourcefx/${{ matrix.source_id }}" --render
+      - name: Produce official Rive and original-SVG GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/v3-sourcefx/${{ matrix.source_id }}"
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 10 -i frame-%03d.png -vf scale=640:-1:flags=lanczos -loop 0 official-native-rive.gif
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 5 -i source-original-%02d.png -loop 0 original-author-smil.gif
+          test "$(stat -c%s official-native-rive.gif)" -gt 10000
+          test "$(stat -c%s original-author-smil.gif)" -gt 1000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-sourcefx-${{ matrix.source_id }}-native-proof
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            test/tmp/v3-sourcefx/${{ matrix.source_id }}/*.riv
+            test/tmp/v3-sourcefx/${{ matrix.source_id }}/*.svg
+            test/tmp/v3-sourcefx/${{ matrix.source_id }}/*.json
+            test/tmp/v3-sourcefx/${{ matrix.source_id }}/*.png
+            test/tmp/v3-sourcefx/${{ matrix.source_id }}/*.gif
