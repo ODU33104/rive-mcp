@@ -230,6 +230,7 @@ export function materializeRealModel(id,sourceDir,destination){
  writeFileSync(join(out,"main.luau"),o.script);
  writeFileSync(join(out,"RealModel.wgsl"),o.shader);
  writeFileSync(join(out,"WaterBottleMesh.bin"),o.mesh);
+ writeFileSync(join(out,"fonts.rml"),`<Rive version="1" kind="fragment"><FontAsset file="Inter.ttf" name="Inter" id="0:103"/></Rive>\n`);
  writeFileSync(join(out,"source-licence.json"),JSON.stringify(o.receipt,null,2)+"\n");
  return {dir:out,receipt:o.receipt};
 }
