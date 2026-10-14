@@ -16,7 +16,7 @@ export async function compareSix({output="test/tmp/v3-construct/comparison.json"
     const plan=planConstructiveScene(f.prompt);
     // Time plan + writer in the same process. Rendering is checked separately by CI receipts.
     const res=plan.status==="PLANNED"
-      ? await writeConstructiveScene(f.prompt,join(dirname(resolve(output)),"benchmark-build",f.id+".riv"))
+      ? await writeConstructiveScene(f.prompt,join(resolve("test/tmp/v3-benchmark"),f.id+".riv"))
       : null;
     const buildMs=Math.round((performance.now()-t0)*100)/100;
     const adapted=planSolsticePrompt(f.prompt);
