@@ -44,7 +44,7 @@ function transformSourceVessel(scene){
  const object=find(g,"object");
  // Artist-directed transition from centred illustration to asymmetric luxury
  // object study. All existing Y/scale keyframes are transformed as well.
- object.x=643;
+ object.x=675;
  for(const tr of anim.tracks){
   if(tr.target==="object"&&tr.property==="y")
    for(const k of tr.keyframes)k.value-=35;
@@ -53,27 +53,27 @@ function transformSourceVessel(scene){
  }
  object.y=345;object.scaleX=1.15;object.scaleY=1.15;
  const pool=find(s,"warm-pool");
- Object.assign(pool,{x:632,y:320,width:635,height:505,opacity:.63,
-  fill:RADIAL("#42716E","#061219",0,0,320,20)});
+ Object.assign(pool,{x:667,y:316,width:600,height:483,opacity:.31,
+  fill:RADIAL("#345D5B","#0A1B20",0,0,295,10)});
  const fall=find(s,"falloff");
- fall.x=640;fall.y=549;fall.width=408;fall.opacity=.64;
+ fall.x=674;fall.y=549;fall.width=374;fall.opacity=.60;
  find(s,"cyclorama").fill=LINEAR("#18292C","#04090D",-450,-290,470,380);
  const glass=find(s,"outer-wall");
- glass.fill=RADIAL("#98D8C8","#102833",-45,-78,148,95);
- glass.opacity=.94;
+ glass.fill=RADIAL("#76B0A6","#102833",-45,-78,148,95);
+ glass.opacity=.88;
  find(s,"inner-well").fill=LINEAR("#406D6B","#0B212C",-110,-140,105,140);
- find(s,"inner-well").opacity=.69;
+ find(s,"inner-well").opacity=.56;
  find(s,"inner-matte").fill=RADIAL("#0C2830","#08151E",0,-25,108,125);
  find(s,"liquid-volume").fill=LINEAR("#B0D2B0","#133D49",-105,-112,100,153);
  find(s,"meniscus").fill=LINEAR("#DFE6C3","#366F6D",-85,-10,90,18);
  find(s,"refracted-left").fill=LINEAR("#D1F4D9","#346F77",-132,-150,45,120);
  find(s,"refracted-right").fill=LINEAR("#F2F8D8","#174E65",90,-155,125,130);
- find(s,"refracted-right").opacity=.55;
- find(s,"cap-face").fill=LINEAR("#F6E8CB","#8E937B",-65,-45,74,58);
- find(s,"cap-shell").fill=LINEAR("#F5E2B9","#625C4E",-81,-58,87,60);
+ find(s,"refracted-right").opacity=.40;
+ find(s,"cap-face").fill=LINEAR("#DECCA8","#74786B",-65,-45,74,58);
+ find(s,"cap-shell").fill=LINEAR("#E2CCA7","#544F45",-81,-58,87,60);
  const header=find(texts,"product-title");
  Object.assign(header,{x:63,y:170,width:460});
- header.runs[0].fontSize=95;
+ header.runs[0].fontSize=83;
  header.runs[0].color="#F4EAD6";
  const sub=find(texts,"product-title-2");
  Object.assign(sub,{x:68,y:300,width:390});
@@ -89,18 +89,18 @@ function transformSourceVessel(scene){
  addedLine(s,"editorial-horizon","editorial-axis",[[69,531],[326,531]],"#638B7D",8,.65,{opacity:.56});
  addedLine(s,"hero-index-rule","editorial-axis",[[788,147],[890,147]],"#B5AE92",8,.65,{opacity:.52});
  addedOval(s,"left-studio-haze","editorial-axis",304,331,375,335,
-  RADIAL("#274B4E","#09151C",0,0,188,0),3,{opacity:.26,blendMode:"screen"});
+  RADIAL("#1D4245","#09151C",0,0,188,0),3,{opacity:.08,blendMode:"screen"});
  // Fully native Rive screen composites over existing authored glass masks.
- addedOval(s,"backlight-aurora","editorial-axis",646,299,440,476,
-  RADIAL("#729F8D","#07141A",0,0,208,15),4,{opacity:.44,blendMode:"screen"});
+ addedOval(s,"backlight-aurora","editorial-axis",675,292,440,476,
+  RADIAL("#5F857B","#0B1920",0,0,208,15),4,{opacity:.26,blendMode:"screen"});
  // Refracted highlights are parented to the actual source authored glass rig.
  // Clip remains source 'vesselMask': existing body owns its silhouette.
  addedOval(s,"interior-cold-glint","glass",-42,-48,156,310,
   RADIAL("#E9FFE0","#27626B",-20,-45,111,70),18,
-  {opacity:.23,clipBy:"vesselMask",blendMode:"screen"});
+  {opacity:.12,clipBy:"vesselMask",blendMode:"screen"});
  addedOval(s,"amber-caustic-core","fluid",36,55,215,222,
   RADIAL("#E9DFAC","#326D69",30,0,110,45),22,
-  {opacity:.22,clipBy:"vesselMask",blendMode:"screen"});
+  {opacity:.11,clipBy:"vesselMask",blendMode:"screen"});
  addedRect(s,"shoulder-reflection","glass",-40,-132,20,107,
   LINEAR("#ECFFF2","#356A72",-13,-50,13,60),27,
   {rotation:12,opacity:.36,clipBy:"vesselMask",blendMode:"screen"});
@@ -123,11 +123,11 @@ function transformSourceVessel(scene){
  // Source geometry keeps all strokes and face/brand glyphs separately editable.
  // No feather here: the current Canvas runtime does not promise Rive Renderer blur.
  // Controlled material light timing: no spectacle unrelated to the product.
- track(anim,"backlight-aurora","opacity",[[0,.04],[55,.08],[154,.39,"ease-in-out"],[245,.44],[300,.44]]);
- track(anim,"interior-cold-glint","opacity",[[0,0],[93,0],[160,.33,"ease-in-out"],[250,.23],[300,.23]]);
+ track(anim,"backlight-aurora","opacity",[[0,.03],[55,.05],[154,.20,"ease-in-out"],[245,.26],[300,.26]]);
+ track(anim,"interior-cold-glint","opacity",[[0,0],[93,0],[160,.16,"ease-in-out"],[250,.12],[300,.12]]);
  track(anim,"shoulder-reflection","opacity",[[0,0],[75,0],[183,.39],[279,.36],[300,.36]]);
  track(anim,"soft-reflect-right","opacity",[[0,0],[130,0],[235,.25],[300,.24]]);
- track(anim,"amber-caustic-core","opacity",[[0,0],[99,0],[195,.24],[300,.22]]);
+ track(anim,"amber-caustic-core","opacity",[[0,0],[99,0],[195,.13],[300,.11]]);
  track(anim,"editorial-axis","opacity",[[0,.2],[128,.55],[264,1],[300,1]]);
  return {sourceOriginalNodes:scene.shapes.length,nonFXMaterialLayers:25,
   artDirection:"asymmetric typographic negative space, sculpted edge light, clipped optical caustics"};
