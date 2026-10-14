@@ -26,18 +26,19 @@ function parse(b){
 }
 function numbers(doc,data,index,kind){
  const a=doc.accessors[index],v=a&&doc.bufferViews[a.bufferView];
- if(!a||!v||a.sparse||v.buffer!==0||a.type!==(kind==="uv"?"VEC2":"SCALAR"))
+ if(!a||!v||a.sparse||v.buffer!==0||a.type!==(kind==="uv"?"VEC2":kind==="tangent"?"VEC4":"SCALAR"))
   throw Error("Unsupported original GLB accessor");
- const component=kind==="uv"?5126:a.componentType;
- if(a.componentType!==component||(![5121,5123,5125].includes(component)&&kind!=="uv"))
+ const component=kind==="uv"||kind==="tangent"?5126:a.componentType;
+ if(a.componentType!==component||(![5121,5123,5125].includes(component)&&kind!=="uv"&&kind!=="tangent"))
   throw Error("Unsupported GLB accessor numeric type");
- const size=kind==="uv"?8:component===5121?1:component===5123?2:4;
+ const size=kind==="uv"?8:kind==="tangent"?16:component===5121?1:component===5123?2:4;
  const step=v.byteStride??size,start=(v.byteOffset??0)+(a.byteOffset??0);
  if(start+(a.count-1)*step+size>data.length)throw Error("GLB attribute range out of file");
  return i=>{
   if(i<0||i>=a.count||!Number.isInteger(i))throw Error("GLB vertex out of range");
   const pos=start+i*step;
   return kind==="uv"?[data.readFloatLE(pos),data.readFloatLE(pos+4)]:
+   kind==="tangent"?[0,4,8,12].map(k=>data.readFloatLE(pos+k)):
    size===1?data.readUInt8(pos):size===2?data.readUInt16LE(pos):data.readUInt32LE(pos);
  };
 }
@@ -75,35 +76,44 @@ export function sourceTexturedMesh(original,doc,data){
  const roots=doc.scenes[doc.scene??0]?.nodes;
  if(roots?.length!==1)throw Error("UV importer must not guess multi-root GLB order");
  const n=doc.nodes[roots[0]],mesh=doc.meshes[n?.mesh];
- if(!mesh||mesh.primitives.length!==1||n.children?.length)throw Error("Multi-primitive asset needs separate importer");
+ if(!mesh||mesh.primitives.length!==1||n.children?.length)throw Error("Complex glTF hierarchy unverified");
+ if(n.matrix||n.scale?.some(x=>Math.abs(x-1)>1e-6))
+  throw Error("Source-authored tangent transform requires verified rigid node transform");
+ const q=n.rotation??[0,0,0,1];
+ if(q.length!==4||Math.abs(Math.hypot(...q)-1)>1e-4)throw Error("Malformed original glTF rotation");
+ const rotate=(v)=>{
+  const axis=q.slice(0,3);
+  const t=cross(axis,v).map(x=>x*2);
+  const crossT=cross(axis,t);
+  return v.map((x,k)=>x+q[3]*t[k]+crossT[k]);
+ };
  const p=mesh.primitives[0];
- if(p.attributes?.TEXCOORD_0===undefined||p.attributes?.COLOR_0!==undefined)
-  throw Error("Missing source UV0/unsupported source vertex colors");
+ if(p.attributes?.TEXCOORD_0===undefined||p.attributes?.TANGENT===undefined||
+  p.attributes?.COLOR_0!==undefined)throw Error("Missing authored glTF UV0/tangent/unsupported vertex colors");
  const uv=numbers(doc,data,p.attributes.TEXCOORD_0,"uv");
+ const originalTangent=numbers(doc,data,p.attributes.TANGENT,"tangent");
  const indices=p.indices===undefined?null:numbers(doc,data,p.indices,"index");
  const src=original.data,vertexCount=src.length/48;
- if(!Number.isInteger(vertexCount)||vertexCount%3||vertexCount<300)
-  throw Error("Bad authentic source vertex count");
+ if(!Number.isInteger(vertexCount)||vertexCount%3||vertexCount<300||
+  (p.indices!==undefined&&doc.accessors[p.indices].count!==vertexCount))
+  throw Error("Source triangle order or original vertex count mismatch");
  const expanded=Buffer.alloc(vertexCount*72);
  const get=(i,offset)=>[0,4,8].map(k=>src.readFloatLE(i*48+offset+k));
  let min=[Infinity,Infinity],max=[-Infinity,-Infinity];
- for(let i=0;i<vertexCount;i+=3){
-  const points=Array.from({length:3},(_,k)=>get(i+k,0));
-  const coords=Array.from({length:3},(_,k)=>uv(indices?indices(i+k):i+k));
-  const d1=minus(coords[1],coords[0]),d2=minus(coords[2],coords[0]),det=d1[0]*d2[1]-d1[1]*d2[0];
-  if(Math.abs(det)<1e-8)throw Error("Original UV triangle degenerate");
-  const e1=minus(points[1],points[0]),e2=minus(points[2],points[0]);
-  const t=e1.map((x,j)=>(x*d2[1]-e2[j]*d1[1])/det),b=e1.map((x,j)=>(e2[j]*d1[0]-x*d2[0])/det);
-  for(let k=0;k<3;k++){
-   const ix=i+k,nrm=unit(get(ix,12));
-   const tangent=unit(t.map((v,j)=>v-nrm[j]*dot(nrm,t)));
-   const sign=dot(cross(nrm,tangent),b)<0?-1:1;
-   coords[k].forEach((v,j)=>{min[j]=Math.min(min[j],v);max[j]=Math.max(max[j],v);});
-   src.copy(expanded,ix*72,ix*48,ix*48+48);
-   [...coords[k],...tangent,sign].forEach((v,j)=>expanded.writeFloatLE(v,ix*72+48+j*4));
-  }
+ for(let i=0;i<vertexCount;i++){
+  const sourceIndex=indices?indices(i):i;
+  const coords=uv(sourceIndex),t=originalTangent(sourceIndex);
+  if(!coords.every(Number.isFinite)||!t.every(Number.isFinite)||Math.abs(Math.abs(t[3])-1)>1e-4)
+   throw Error("Original GLB authored tangent or UV malformed");
+  const nrm=unit(get(i,12)),rotated=rotate(t.slice(0,3));
+  const tangent=unit(rotated.map((v,j)=>v-nrm[j]*dot(nrm,rotated)));
+  coords.forEach((v,j)=>{min[j]=Math.min(min[j],v);max[j]=Math.max(max[j],v);});
+  src.copy(expanded,i*72,i*48,i*48+48);
+  [...coords,...tangent,t[3]].forEach((v,j)=>expanded.writeFloatLE(v,i*72+48+j*4));
  }
- return {bytes:expanded,bounds:{min,max},stride:72,vertexCount,triangleCount:vertexCount/3};
+ return {bytes:expanded,bounds:{min,max},stride:72,
+  tangentSource:"actual original GLB TANGENT accessor, rigid-node-rotated (not fabricated from degenerate UV triangles)",
+  vertexCount,triangleCount:vertexCount/3};
 }
 export function importRealGLTFTextures(source,destination,{maxEdge=1024}={}){
  const glb=Buffer.from(source);
