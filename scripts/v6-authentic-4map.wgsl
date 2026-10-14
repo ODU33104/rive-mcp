@@ -69,7 +69,7 @@ fn toLinear(color:vec3<f32>)->vec3<f32>{
  let F=f0+(vec3<f32>(1.0)-f0)*pow(1.0-vh,5.0);
  let alpha=rough*rough;
  let a2=alpha*alpha;
- let d=nh*nh*(a2-1.0)+1.0;
+ let d=nh*nh*(a2 - 1.0)+1.0;
  let D=a2/(3.14159*d*d+0.00001);
  let k=(rough+1.0)*(rough+1.0)/8.0;
  let gV=nv/(nv*(1.0-k)+k);
