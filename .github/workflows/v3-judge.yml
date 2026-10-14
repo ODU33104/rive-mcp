@@ -1,0 +1,93 @@
+name: V3 Independent Blind Visual Judge
+on:
+  push:
+    branches: ['parallel/visual-judge-v3-20261014']
+    paths:
+      - 'scripts/v3-judge-*.mjs'
+      - 'test/v3Judge*.mjs'
+      - 'data/v3-judge/**'
+      - 'docs/V3_BLIND_VISUAL_SELECTION.md'
+      - '.github/workflows/v3-judge.yml'
+  pull_request:
+    branches: ['feat/motion-recipe-atlas']
+    paths:
+      - 'scripts/v3-judge-*.mjs'
+      - 'test/v3Judge*.mjs'
+      - 'data/v3-judge/**'
+      - 'docs/V3_BLIND_VISUAL_SELECTION.md'
+      - '.github/workflows/v3-judge.yml'
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: 'Optional tracked attempts JSON; absent means reference adversary'
+        default: ''
+        required: false
+jobs:
+  audit-and-build-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      V3_JUDGE_MANIFEST: ${{ github.event.inputs.manifest || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install real browser runtime and GIF encoder
+        run: |
+          node node_modules/playwright-core/cli.js install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Negative-only corpus, geometric and rights gates
+        run: node test/v3JudgeCore.mjs
+      - name: Real compiled editable Rive and real pixel tamper regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RIVE_MCP_CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          test -x "$RIVE_MCP_CHROME"
+          node test/v3JudgeRuntime.mjs
+      - name: Generate native Rive, official-runtime PNGs and GIF; audit permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RIVE_MCP_CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          if [[ -n "$V3_JUDGE_MANIFEST" ]]; then
+            node scripts/v3-judge-run.mjs --input "$V3_JUDGE_MANIFEST" --out test/tmp/v3-judge
+          else
+            node scripts/v3-judge-run.mjs --gold --out test/tmp/v3-judge
+          fi
+          test -s test/tmp/v3-judge/audit.json
+          test "$(find test/tmp/v3-judge -maxdepth 1 -name '*.riv' | wc -l)" -ge 1
+          test "$(find test/tmp/v3-judge -maxdepth 1 -name '*.gif' | wc -l)" -ge 1
+          test "$(find test/tmp/v3-judge -maxdepth 1 -name '*.png' | wc -l)" -ge 2
+      - name: Independently anonymized blind-ready review pack and unmatched experiment report
+        run: |
+          node scripts/v3-judge-pack.mjs --audit test/tmp/v3-judge/audit.json
+          test -s test/tmp/v3-judge/review-pack/review.html
+          test -s test/tmp/v3-judge/review-pack/human-ratings-blank.csv
+          test -s test/tmp/v3-judge/sealed-blind-key.json
+          test ! -e test/tmp/v3-judge/review-pack/sealed-blind-key.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-judge-anonymous-review-for-independent-humans
+          path: test/tmp/v3-judge/review-pack/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-judge-official-runtime-and-source-audit-NOT-blind
+          path: |
+            test/tmp/v3-judge/audit.json
+            test/tmp/v3-judge/*.riv
+            test/tmp/v3-judge/*.png
+            test/tmp/v3-judge/*.gif
+            test/tmp/v3-judge/art-*.riv
+            test/tmp/v3-judge/sealed-blind-key.json
+          if-no-files-found: warn
