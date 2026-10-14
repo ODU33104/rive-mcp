@@ -82,6 +82,16 @@ test("transit network connects the requested number of stations",()=>{
     assert.equal(scene.shapes.filter(s=>/^routeLine\d+$/.test(s.id)).length,edgeCount);
   }
 });
+test("reverse staging swaps hero/editorial zones and keeps semantic anchors",()=>{
+  const p=planConstructiveScene("bold typographic poster with reverse layout text on the right");
+  assert.equal(p.status,"PLANNED");
+  assert.equal(p.design.layout,"reverse");
+  const {scene,verifiedSlots}=makeConstructiveScene(p);
+  const rig=scene.groups.find(g=>g.id==="typeBlockRig");
+  const headline=scene.texts.find(t=>t.id==="headline");
+  assert.ok(rig.x<400 && headline.x>500);
+  assert.ok(verifiedSlots.every(x=>Number.isFinite(x.pivotWorld.x)));
+});
 test("real binary writer emits editable RIVE and a receipt, not a pretend success",async()=>{
   const dir=fileURLToPath(new URL("../test/tmp/v3-construct-smoke/",import.meta.url));
   const {output,evidence}=await writeConstructiveScene(accepted[0].prompt,dir+"smoke.riv");
