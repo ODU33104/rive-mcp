@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 --fail --location --retry 3 https://releases.rive.app/cli/install.sh -o /tmp/rive-official-install.sh
-          sh /tmp/rive-official-install.sh
+          bash /tmp/rive-official-install.sh
           echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
           "$HOME/.rive/bin/rive" --version
           "$HOME/.rive/bin/rive" analytics off || true
