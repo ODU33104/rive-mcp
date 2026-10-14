@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/v5-real-glb-mesh.mjs test/tmp/v5-source/WaterBottle.glb test/tmp/v5-packed
-          node test/v5RealModel.mjs --source test/tmp/v5-source/WaterBottle.glb test/tmp/v5-packed test/tmp/v5-projects
+          node test/v5RealModel.mjs test/tmp/v5-source/WaterBottle.glb test/tmp/v5-packed test/tmp/v5-projects
       - name: Install first-party Rive CLI and native EGL/GLES GPU dependencies
         shell: bash
         run: |
