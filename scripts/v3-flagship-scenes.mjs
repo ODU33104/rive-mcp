@@ -35,10 +35,7 @@ function author(id){
     rect("cyclorama",480,300,960,600,grad("#14232C","#050A10",-500,-290,420,340),0);
     oval("warm-pool",486,355,690,430,grad("#38554E","#0A141B"),1,null,{opacity:.32});
     oval("falloff",480,558,480,38,solid("#01060C"),2,null,{opacity:.56});
-    for(let i=0;i<9;i++){
-      const x=283+i*44;
-      stroke("light-ray-"+i,[[x,127],[x-55,542]],"#7A9F99",.5,3,null,{opacity:.012+Math.abs(i-4)*.002});
-    }
+    // Avoid decorative full-height light streaks: lighting must belong to the glass itself.
     group("object",477,380,{opacity:1,scaleX:1,scaleY:1});
     group("glass",0,0,{parent:"object"});
     group("fluid",0,0,{parent:"object",opacity:1});
@@ -76,7 +73,7 @@ function author(id){
     text("brand-etch","M O R R O W",-45,-27,105,14,IVORY,49,"etched","center");
     text("batch-etch","E A U  /  0 1",-48,0,109,10,MOSS,49,"etched","center");
     stroke("bottle-engrave",[[-42,29],[42,29]],METAL,1,51,"etched",{trim:{start:0,end:1},opacity:.65});
-    text("product-title","MORROW",65,18,834,113,IVORY,70,"heroWord");
+    text("product-title","MORROW",65,23,834,86,IVORY,70,"heroWord");
     text("product-title-2","THE SHAPE OF SILENCE",70,135,343,22,MOSS,71,"heroWord");
     text("product-small","ATELIER / OLFACTORY STUDY",68,15,460,12,METAL,72,"folio");
     text("product-number","01 — 03",774,40,130,13,METAL,72,"folio","right");
@@ -87,7 +84,7 @@ function author(id){
     lane("object","y",[[0,447],[65,416,"emphasized-decel"],[164,371,"ease-out"],[238,380,"ease-in-out"],[300,380]]);
     lane("object","scaleX",[[0,.87],[120,1.035,"emphasized-decel"],[212,1],[300,1]]);
     lane("object","scaleY",[[0,.87],[120,1.035,"emphasized-decel"],[212,1],[300,1]]);
-    fade("glass",10,106);lane("cap","y",[[0,-290],[58,-290,"hold"],[159,-218,"emphasized-decel"],[227,-212],[300,-212]]);
+    lane("glass","opacity",[[0,.12],[10,.12],[106,1],[300,1]]);lane("cap","y",[[0,-290],[58,-290,"hold"],[159,-218,"emphasized-decel"],[227,-212],[300,-212]]);
     fade("cap",32,85);
     lane("fluid","y",[[0,135],[67,135,"hold"],[207,0,"emphasized-decel"],[300,0]]);
     lane("fluid","opacity",[[0,.03],[85,.03],[218,1,"ease-out"],[300,1]]);
@@ -95,7 +92,7 @@ function author(id){
     lane("moving-caustic","opacity",[[0,0],[96,0],[163,.28],[249,.08],[300,0]]);
     lane("glass-left-rim","trimEnd",[[0,0],[44,0],[184,1,"emphasized-decel"],[300,1]]);
     lane("right-glisten","trimEnd",[[0,0],[126,0],[266,1,"emphasized-decel"],[300,1]]);
-    fade("etched",130,254);fade("heroWord",33,135);fade("productCaption",203,280);
+    fade("etched",130,254);lane("heroWord","opacity",[[0,.45],[33,.45],[135,1],[300,1]]);fade("productCaption",203,280);
     lane("heroWord","x",[[0,-32],[102,-32],[201,0,"emphasized-decel"],[300,0]]);
     lane("falloff","scaleX",[[0,.7],[148,.86],[247,1],[300,1]]);
     sceneMeta.nativeReveal=["vesselMask: original vector clip geometry on fluid/refraction","glass-left-rim: native TrimPath reveal"];
@@ -139,7 +136,7 @@ function author(id){
     stroke("baseline-rule",[[78,540],[850,540]],BLACK,1.2,17,"rules",{trim:{start:0,end:1}});
     oval("index-dot",806,496,10,10,solid(RED),65,"annotation");
     // Type takes turns *cutting* into the composition. Deliberate inter-word conflict.
-    fade("wordA",0,80);lane("wordA","x",[[0,-180],[68,-180,"hold"],[137,0,"emphasized-decel"],[300,0]]);
+    lane("wordA","opacity",[[0,.30],[80,1],[300,1]]);lane("wordA","x",[[0,-54],[68,-54,"hold"],[137,0,"emphasized-decel"],[300,0]]);
     lane("wordA","y",[[0,30],[127,7],[184,0],[300,0]]);
     fade("wordB",63,151);lane("wordB","x",[[0,160],[74,160],[165,-12,"emphasized-decel"],[230,0],[300,0]]);
     fade("wordC",140,229);lane("wordC","y",[[0,115],[143,115],[243,-14,"emphasized-decel"],[282,0],[300,0]]);
@@ -212,7 +209,7 @@ function author(id){
     lane("terrain","rotation",[[0,-4],[126,0,"ease-in-out"],[247,2,"ease-in-out"],[300,0]]);
     lane("terrain","scaleX",[[0,.84],[157,1.016,"emphasized-decel"],[265,1],[300,1]]);
     lane("terrain","scaleY",[[0,.84],[157,1.016,"emphasized-decel"],[265,1],[300,1]]);
-    fade("terrain",7,74);
+    lane("terrain","opacity",[[0,.20],[74,1],[300,1]]);
     for(let i=0;i<8;i++)lane("contour-"+i,"trimEnd",[[0,0],[27+i*12,0],[166+i*13,1,"emphasized-decel"],[300,1]]);
     lane("sonar-arc","trimEnd",[[0,0],[108,0],[261,.78,"ease-in-out"],[300,.86]]);
     lane("transect","trimEnd",[[0,0],[66,0],[217,1,"emphasized-decel"],[300,1]]);
@@ -220,7 +217,7 @@ function author(id){
     lane("cross-x","trimEnd",[[0,0],[101,0],[178,1],[300,1]]);
     lane("cross-y","trimEnd",[[0,0],[119,0],[194,1],[300,1]]);
     lane("markers","rotation",[[0,-8],[165,5,"emphasized-decel"],[300,0]]);
-    fade("markers",88,217);fade("readout",161,264);fade("labels",12,108);
+    fade("markers",88,217);fade("readout",161,264);lane("labels","opacity",[[0,.7],[108,1],[300,1]]);
     lane("grid","opacity",[[0,0],[39,.2],[135,.8],[300,1]]);
     sceneMeta.nativeReveal=["contour-0..7 independently animated native TrimPath","sonar-arc partial circular native TrimPath sweep"];
     sceneMeta.animatedFamilies=["bathymetric contours","topography scale and drift","sonar beam sweep","transect draw","buoy station markers","grid exposure","readout and labels"];
