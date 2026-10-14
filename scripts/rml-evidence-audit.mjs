@@ -6,7 +6,7 @@ import {inflateSync} from "node:zlib";
 import {createHash} from "node:crypto";
 const sha=b=>createHash("sha256").update(b).digest("hex");
 const pngHeader=Buffer.from("89504e470d0a1a0a","hex");
-function rgbaPNG(src){
+export function rgbaPNG(src){
  const bytes=Buffer.isBuffer(src)?src:readFileSync(src);
  if(!bytes.subarray(0,8).equals(pngHeader))throw Error("Invalid actual PNG signature");
  let off=8,width=0,height=0,bpp=0,interlace=0,depth=0;
