@@ -1,0 +1,57 @@
+name: Causal Motif Distillation
+on:
+  pull_request:
+    paths:
+      - 'scripts/motif-distill-*.mjs'
+      - 'data/motion-motifs/**'
+      - 'test/motifDistill*.mjs'
+      - 'docs/MOTIF_DISTILLATION.md'
+      - '.github/workflows/motif-distillation-ci.yml'
+  push:
+    branches:
+      - feat/motion-causal-distillation
+    paths:
+      - 'scripts/motif-distill-*.mjs'
+      - 'data/motion-motifs/**'
+      - 'test/motifDistill*.mjs'
+      - 'docs/MOTIF_DISTILLATION.md'
+      - '.github/workflows/motif-distillation-ci.yml'
+jobs:
+  causal-motif-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Derive all 60 catalog records
+        run: |
+          node scripts/motif-distill-catalog.mjs --write
+          node scripts/motif-distill-catalog.mjs --check
+      - name: Fail-closed evidence tests and original native sources
+        run: node test/motifDistill.mjs
+      - name: Install Chromium matching pinned runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Install GIF encoder
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Native Rive output and official runtime PNG / GIF evidence
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          test -x "$CHROME"
+          command -v ffmpeg
+          RIVE_MCP_CHROME="$CHROME" node scripts/motif-distill-ablate.mjs test/tmp/motif-distillation --render --gif
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: causal-motif-discovery-and-runtime-evidence
+          path: |
+            data/motion-motifs/catalog-analyses.v1.json
+            data/motion-motifs/discovery.v1.json
+            test/tmp/motif-distillation/
+          if-no-files-found: warn
+          retention-days: 14
