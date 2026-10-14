@@ -1,0 +1,69 @@
+name: Scene Tournament Independent Evidence
+on:
+  pull_request:
+    paths:
+      - 'scripts/scene-tournament-*.mjs'
+      - 'test/sceneTournament*.mjs'
+      - 'data/motion-eval/**'
+      - 'docs/SCENE_TOURNAMENT.md'
+      - '.github/workflows/scene-tournament-ci.yml'
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: 'Optional tracked scene tournament attempt manifest (repository-relative path)'
+        required: false
+        default: ''
+jobs:
+  verify-and-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      TOURNAMENT_MANIFEST: ${{ inputs.manifest || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install browser for actual official-runtime rendering
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Verify corpus, transform/motion adversaries, comparability
+        run: node test/sceneTournamentCore.mjs
+      - name: Real vector tamper regression (not a stub PNG)
+        shell: bash
+        run: |
+          export RIVE_MCP_CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core";process.stdout.write(chromium.executablePath())')"
+          test -x "$RIVE_MCP_CHROME"
+          node test/sceneTournamentRuntime.mjs
+      - name: Ingest provided Rive scenes or reference SOLSTICE
+        shell: bash
+        run: |
+          export RIVE_MCP_CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core";process.stdout.write(chromium.executablePath())')"
+          if [ -n "$TOURNAMENT_MANIFEST" ]; then
+            node scripts/scene-tournament-run.mjs --input "$TOURNAMENT_MANIFEST" --out test/tmp/scene-tournament
+          else
+            node scripts/scene-tournament-run.mjs --gold --out test/tmp/scene-tournament
+          fi
+          test -s test/tmp/scene-tournament/audit.json
+          find test/tmp/scene-tournament -name '*-frame-00.png' -size +0c | grep -q .
+      - name: Build blind-ready contact sheet and empty scoring forms
+        run: node scripts/scene-tournament-pack.mjs --audit test/tmp/scene-tournament/audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scene-tournament-blind-ready-review
+          path: test/tmp/scene-tournament/review-pack/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scene-tournament-runtime-audit-not-blinded
+          path: |
+            test/tmp/scene-tournament/audit.json
+            test/tmp/scene-tournament/*.riv
+            test/tmp/scene-tournament/*.png
+          if-no-files-found: warn
