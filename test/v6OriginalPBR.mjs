@@ -34,7 +34,7 @@ for(const id of ["midnight","glacier","museum"]){
  assert.match(s,/textureSample\(ormMap/);
  const luau=readFileSync(full.dir+"/main.luau","utf8");
  assert.match(luau,/GPUTexture.new/);
- assert.match(luau,/GPUTexture.*upload/);
+ assert.match(luau,/:upload\(/);
  assert.match(luau,/PbrEmissive/);
  assert.match(luau,/stride=72/);
  assert.match(luau,/slot=6,format="float32x4"/);
