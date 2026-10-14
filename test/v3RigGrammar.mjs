@@ -66,7 +66,7 @@ for(const comp of COMPOSITIONS){
  const brokenClip=structuredClone({...scene,fonts:undefined});
  if(brokenClip.shapes.some(s=>s.clipBy)){
    brokenClip.shapes.find(s=>s.clipBy).clipBy="not-real";
-   assert.throws(()=>validateRigScene(brokenClip,result.bindingContracts),/missing clip source/);
+   assert.throws(()=>validateRigScene(brokenClip,result.bindingContracts),/missing clip source|incorrect clipping mask/);
  }
  const binary=createRiv(scene);
  assert.equal(Buffer.from(binary.bytes).subarray(0,4).toString("ascii"),"RIVE");
