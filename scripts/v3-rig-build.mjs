@@ -197,7 +197,8 @@ export function makeComposition(c){
    animations:[{name:"Reveal",duration:180,fps:60,loop:"oneShot",tracks:animationTracks},...responsive],
    stateMachine:{name:"RigShowcase",inputs,states,transitions,listeners}};
  const validation=validateRigScene(scene,manifests);
- if(validation.clips< (c.id==="observatory"?0:1))throw Error("clip coverage missing");
+ const clipExpected=manifests.reduce((n,m)=>n+m.attachments.clipBindings.length,0);
+ if(validation.clips!==clipExpected)throw Error("clip binding coverage changed");
  // Matrix witness tests full parent world transform: translation + uniform scale + rotation.
  const idx=new Map([...groups,...shapes,...texts].map(n=>[n.id,n]));
  for(const [root,witness] of Object.entries(expected)){
