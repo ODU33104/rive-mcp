@@ -22,7 +22,13 @@ for(const t of data){
  assert.ok(main.x>=600&&main.x<700,"centralized poster layout must be broken");
  assert.ok(Math.abs(main.y-345)<1e-6);
  const label=scene.texts.find(t=>t.id==="product-title");
- assert.ok(label.y>140&&label.x<100&&label.runs[0].fontSize>=90);
+ assert.ok(label.y>140&&label.x<100&&label.runs[0].fontSize>=80);
+ const actualVisibleGap=(main.x-134*1.15)-
+   (label.x+label.runs[0].fontSize*4.85);
+ assert.ok(actualVisibleGap>=45,
+  "visual-QA failure: large title collides with object silhouette: "+actualVisibleGap);
+ assert.ok(scene.shapes.find(s=>s.id==="warm-pool").opacity<.4,
+  "source-specific radial light must not form a large flat color circle");
  const track=scene.animations[0].tracks.find(t=>t.target==="object"&&t.property==="scaleX");
  assert.equal(track.keyframes.at(-1).value,1.15);
  const ids=new Set([...scene.groups,...scene.shapes,...scene.texts].map(x=>x.id));
