@@ -99,8 +99,9 @@ function init(self:ModelStage, context:Context):boolean
  end
  self.mesh=GPUBuffer.new({size=blob.size,usage="vertex",data=blob.data})
  local u=buffer.create(16)
- self.camera=GPUBuffer.new({size=16,usage="uniform",data=u})
- self.depth=GPUTexture.new({width=960,height=600,format="depth24plus",renderTarget=true})
+ local cameraBuffer=GPUBuffer.new({size=16,usage="uniform",data=u})
+ self.camera=cameraBuffer
+ self.depth=GPUTexture.new({width=960,height=600,format="depth32float",renderTarget=true})
  self.pipeline=GPUPipeline.new({
   vertex=shader,fragment=shader,
   vertexLayout={{stride=48,stepMode="vertex",attributes={
@@ -111,14 +112,14 @@ function init(self:ModelStage, context:Context):boolean
    {slot=4,format="float32",offset=40},
   }}},
   topology="triangle-list",
-  depthStencil={format="depth24plus",compare="less",write=true},
+  depthStencil={format="depth32float",compare="less",write=true},
   colorTargets={{format=self.canvas.format}},
  })
  if not self.pipeline then
   error("Actual CC0 mesh pipeline failed to compile")
  end
  local layout=self.pipeline:getBindGroupLayout(0)
- self.bindings=GPUBindGroup.new({layout=layout,ubos={{slot=0,buffer=self.camera}}})
+ self.bindings=GPUBindGroup.new({layout=layout,ubos={{slot=0,buffer=cameraBuffer}}})
  print("REAL_CC0_GLB_GPU_TRIANGLES",self.points/3)
  return true
 end
@@ -128,7 +129,7 @@ function resize(self:ModelStage,size:Vector)
   local width=math.max(1,math.floor(size.x))
   local height=math.max(1,math.floor(size.y))
   self.canvas:resize(width,height)
-  self.depth=GPUTexture.new({width=width,height=height,format="depth24plus",renderTarget=true})
+  self.depth=GPUTexture.new({width=width,height=height,format="depth32float",renderTarget=true})
  end
 end
 function advance(self:ModelStage,seconds:number):boolean
