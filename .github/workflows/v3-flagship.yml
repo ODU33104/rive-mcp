@@ -1,0 +1,82 @@
+name: V3 Flagship — native Rive evidence
+on:
+  push:
+    branches:
+      - parallel/flagship-scenes-v3-20261014
+    paths:
+      - 'scripts/v3-flagship-*.mjs'
+      - 'test/v3Flagship*.mjs'
+      - 'samples/v3-flagship/**'
+      - 'docs/V3_FLAGSHIP_ART_DIRECTION.md'
+      - '.github/workflows/v3-flagship.yml'
+  pull_request:
+    branches:
+      - feat/motion-showcase-multigenre
+    paths:
+      - 'scripts/v3-flagship-*.mjs'
+      - 'test/v3Flagship*.mjs'
+      - 'samples/v3-flagship/**'
+      - 'docs/V3_FLAGSHIP_ART_DIRECTION.md'
+      - '.github/workflows/v3-flagship.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-flagship-evidence:
+    name: Native ${{ matrix.scene }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        scene: [vessel, interstice, tidal]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify deterministic geometry, rights declarations and native .riv
+        run: node test/v3FlagshipScenes.mjs "${{ matrix.scene }}"
+      - name: Install browser for official Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Native Rive inspect + ninety official runtime frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/v3-flagship-render.mjs "${{ matrix.scene }}" "test/tmp/v3-flagship/${{ matrix.scene }}"
+      - name: Install ffmpeg for native-frame proof encoding
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Native-frame contact sheet and animation GIF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/tmp/v3-flagship/contact
+          cd "test/tmp/v3-flagship/${{ matrix.scene }}"
+          i=0
+          for frame in 000 012 024 036 048 060 072 089; do
+            cp "frame-${frame}.png" "../contact/tile-$(printf '%02d' "$i").png"
+            i=$((i+1))
+          done
+          ffmpeg -hide_banner -loglevel error -y -framerate 1 -i ../contact/tile-%02d.png \
+            -vf "scale=480:300:flags=lanczos,tile=4x2" -frames:v 1 "contact-sheet.png"
+          ffmpeg -hide_banner -loglevel error -y -framerate 18 -i frame-%03d.png \
+            -filter_complex "[0:v]fps=12,scale=640:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3" \
+            -loop 0 "${{ matrix.scene }}.gif"
+          test "$(stat -c%s "contact-sheet.png")" -gt 10000
+          test "$(stat -c%s "${{ matrix.scene }}.gif")" -gt 10000
+      - name: Upload native program, all frames and provenance
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flagship-${{ matrix.scene }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            test/tmp/v3-flagship/${{ matrix.scene }}/*.riv
+            test/tmp/v3-flagship/${{ matrix.scene }}/*.gif
+            test/tmp/v3-flagship/${{ matrix.scene }}/*.png
+            test/tmp/v3-flagship/${{ matrix.scene }}/evidence.json
