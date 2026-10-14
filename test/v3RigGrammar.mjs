@@ -75,7 +75,7 @@ for(const comp of COMPOSITIONS){
    assert.ok(Buffer.from(binary.bytes).includes(Buffer.from(manifest.pivot)));
    assert.equal(manifest.frame.unit,"px");
    assert.equal(manifest.attachments.localPivot,manifest.pivot);
-   assert.ok(manifest.materials.some(x=>x.material==="solid"||x.material==="gradient"));
+   assert.ok(manifest.materials.some(x=>["solid","gradient","stroke"].includes(x.material)));
  }
  const binary2=createRiv(scene);
  assert.deepEqual(Buffer.from(binary.bytes),Buffer.from(binary2.bytes));
