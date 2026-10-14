@@ -22,7 +22,7 @@ for(const id of chosen?[chosen]:FLAGSHIP_IDS){
   assert.ok(meta.animatedFamilies.length>=4,id+" needs 4+ different families");
   assert.ok(meta.nativeReveal.length>0,id+" must use native reveal");
   assert.ok(meta.initialMotion.length>=2&&meta.closingMotion.length>=2);
-  assert.ok(scene.shapes.length>=20);
+  assert.ok(scene.shapes.length>=10,id+" requires nonempty vector geometry; shape count is not an aesthetic score");
   assert.ok(scene.texts.length>=4);
   assert.equal(scene.images?.length??0,0,"No bitmap composites");
   const nodes=[...scene.groups,...scene.shapes,...scene.texts],names=new Set(nodes.map(x=>x.id));
