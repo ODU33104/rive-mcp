@@ -301,7 +301,7 @@ export async function renderSourceFx(id,outdir){
   if(new Set(sourceOriginalHashes).size<3)
    throw Error("Original source playback not visibly animated across five sampled frames");
   const report={...v.evidence,officialRuntime:"PASS",officialRuntimePackage:"@rive-app/canvas-advanced",
-    actualNativePNGFrames:46,impactAtFiveTimes:diffs,sourceBrowserOriginalCapture:true,sourceOriginalFrameHashes,
+    actualNativePNGFrames:46,impactAtFiveTimes:diffs,sourceBrowserOriginalCapture:true,sourceOriginalFrameHashes:sourceOriginalHashes,
     performance:{impactChecksWallMs:Math.round(performance.now()-start),nativeFrameSequenceWallMs:Math.round(durationMs),
       nativeFrames:46,outputRivBytes:v.after.length,outputRivSha256:hash(v.after),benchmarkEnvironment:"GitHub Actions ephemeral Ubuntu runner, wall-clock only"},
     originalAssetPolicy:"SVG source captured in browser; not represented as original Rive program",
