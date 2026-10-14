@@ -1,0 +1,95 @@
+name: V5 Real Rights-Cleared CC0 GLB in Rive GPU Canvas
+on:
+  pull_request:
+    paths:
+      - 'scripts/v5-real-glb-mesh.mjs'
+      - 'scripts/v5-rive-real-model-scene.mjs'
+      - 'scripts/v5-real-gpu-audit.mjs'
+      - 'test/v5RealModel.mjs'
+      - 'docs/V5_REAL_3D_MODEL_STUDIO.md'
+      - '.github/workflows/v5-real-glb-gpu.yml'
+jobs:
+  real-source-model:
+    name: Real WaterBottle ${{ matrix.direction }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        direction: [midnight, glacier, museum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Acquire actual commit-pinned third-party GLB and CC0 license (no generated lookalikes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/tmp/v5-source
+          origin="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/WaterBottle"
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 "$origin/LICENSE.md" -o test/tmp/v5-source/ORIGINAL_LICENSE.md
+          grep -q 'CC0-1.0' test/tmp/v5-source/ORIGINAL_LICENSE.md
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 "$origin/metadata.json" -o test/tmp/v5-source/ORIGINAL_METADATA.json
+          node -e 'const x=require("./test/tmp/v5-source/ORIGINAL_METADATA.json");if(!x.legal?.some(z=>z.spdx==="CC0-1.0"))process.exit(1)'
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 "$origin/glTF-Binary/WaterBottle.glb" -o test/tmp/v5-source/WaterBottle.glb
+          test "$(stat -c %s test/tmp/v5-source/WaterBottle.glb)" -gt 10000
+      - name: Parse real GLB geometry, inspect CC0 provenance and generate 3 original authored GPU projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/v5-real-glb-mesh.mjs test/tmp/v5-source/WaterBottle.glb test/tmp/v5-packed
+          node test/v5RealModel.mjs --source test/tmp/v5-source/WaterBottle.glb test/tmp/v5-packed test/tmp/v5-projects
+      - name: Install first-party Rive CLI and native EGL/GLES GPU dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgles2 libx11-6 libgl1 libxkbcommon0 libglib2.0-0
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 https://releases.rive.app/cli/install.sh -o /tmp/rive-install.sh
+          bash /tmp/rive-install.sh
+          "$HOME/.rive/bin/rive" --version
+      - name: Official Rive CLI must compile & inspect the actual CC0 3D triangle pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          p="test/tmp/v5-projects/${{ matrix.direction }}"
+          o="test/tmp/v5-output/${{ matrix.direction }}"
+          mkdir -p "$o"
+          cp test/tmp/v5-packed/mesh-manifest.json "$o/mesh-manifest.json"
+          "$cli" "$p" --verify --format=json > "$o/verify.json"
+          "$cli" "$p" --once --format=json > "$o/build.json"
+          "$cli" inspect "$p" --summary > "$o/inspect.json"
+          "$cli" --version > "$o/rive-version.txt"
+          test -s "$p/build/real_waterbottle_${{ matrix.direction }}.riv"
+      - name: Official native GPU framebuffer 3D actual model/animation proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          p="test/tmp/v5-projects/${{ matrix.direction }}"
+          o="test/tmp/v5-output/${{ matrix.direction }}"
+          "$cli" "$p" --screenshot="$o/early.png" --viewport=960x600 --advance=0.6s
+          "$cli" "$p" --screenshot="$o/late.png" --viewport=960x600 --advance=2.8s
+          node scripts/v5-real-gpu-audit.mjs "${{ matrix.direction }}" "$p" "$o"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v5-native-real-cc0-glb-${{ matrix.direction }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/v5-source/ORIGINAL_LICENSE.md
+            test/tmp/v5-source/ORIGINAL_METADATA.json
+            test/tmp/v5-projects/${{ matrix.direction }}/main.luau
+            test/tmp/v5-projects/${{ matrix.direction }}/RealModel.wgsl
+            test/tmp/v5-projects/${{ matrix.direction }}/rive.yaml
+            test/tmp/v5-projects/${{ matrix.direction }}/source-licence.json
+            test/tmp/v5-projects/${{ matrix.direction }}/build/*.riv
+            test/tmp/v5-output/${{ matrix.direction }}/*.png
+            test/tmp/v5-output/${{ matrix.direction }}/*.json
+            test/tmp/v5-output/${{ matrix.direction }}/*.txt
