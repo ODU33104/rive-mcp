@@ -68,7 +68,7 @@ export function makeTexturedRive(id,legacyMesh,legacyManifest,dir,{flat=false}={
  for(const [name,value] of Object.entries({LIGHT_TINT_R:c.accent[0],LIGHT_TINT_G:c.accent[1],
    LIGHT_TINT_B:c.accent[2],NORMAL_SCALE:factor.normalScale,
    AO_STRENGTH:factor.occlusionStrength,EMISSIVE_FACTOR:Math.max(...factor.emissiveFactor)}))
-  shader=shader.replaceAll(name,String(value));
+  shader=shader.replaceAll(name,Number(value).toFixed(6));
  const receipt={schema:"v6-original-glTF-4-textures-native-Rive/v1",direction:id,
   modelSourceSha256:provenance.sourceSha256,sourceUVGeometrySHA256:sha(mesh),
   sourceTriangles:provenance.triangleCount,images:provenance.images,
