@@ -24,7 +24,8 @@ export function buildRMLStyleframe(kind){
  const c=themes[kind];if(!c)throw Error("Unsupported direct RML styleframe: "+kind);
  const lines=[
   '<Rive version="1" kind="fragment">',
-  ' <Artboard id="0:2" name="Director" width="900" height="540" defaultStateMachineId="0:7">',
+  ' <Artboard id="0:2" name="Director" width="900" height="540" styleId="0:40" defaultStateMachineId="0:7">',
+  '  <LayoutComponentStyle id="0:40" name="DirectorLayout"/>',
   '  <Fill name="Backdrop">',
   '   <SolidColor name="Ink" colorValue="'+c.bg+'"/>',
   '  </Fill>'
