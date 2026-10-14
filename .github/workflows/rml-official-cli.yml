@@ -1,0 +1,113 @@
+name: Official Rive CLI RML Authoring Proof
+on:
+  pull_request:
+    paths:
+      - 'scripts/rml-direct-authoring.mjs'
+      - 'scripts/rml-evidence-audit.mjs'
+      - 'scripts/rml-styleframe-review.mjs'
+      - 'test/rmlDirectAuthoring.mjs'
+      - 'docs/OFFICIAL_RML_CLI_PATH.md'
+      - '.github/workflows/rml-official-cli.yml'
+jobs:
+  official-rml-native:
+    name: Rive CLI original ${{ matrix.styleframe }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        styleframe: [halo, origin, signal]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Original RML source contracts and materialization
+        run: node test/rmlDirectAuthoring.mjs test/tmp/official-rml
+      - name: Install official first-party CLI (no account or publisher token)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgles2 libx11-6 libgl1 libxkbcommon0 libglib2.0-0
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 https://releases.rive.app/cli/install.sh -o /tmp/rive-official-install.sh
+          bash /tmp/rive-official-install.sh
+          echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
+          "$HOME/.rive/bin/rive" --version
+          "$HOME/.rive/bin/rive" analytics off || true
+      - name: Inspect official built-in RML and script sample contracts
+        if: matrix.styleframe == 'halo'
+        shell: bash
+        run: |
+          set -euo pipefail
+          samples="$("$HOME/.rive/bin/rive" samples --path)"
+          echo "Official Rive samples path: $samples"
+          find "$samples/hello_rive" "$samples/rml_triangle" -maxdepth 3 -type f | sort | head -30
+          for f in "$samples/hello_rive/scene.rml" "$samples/hello_rive/main.luau" "$samples/rml_triangle/scene.rml"; do
+            if test -f "$f"; then
+              echo "===== $f ====="
+              sed -n '1,160p' "$f"
+            fi
+          done
+      - name: Compile through Rive official RML parser and inspect the original scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI="$HOME/.rive/bin/rive"
+          project="test/tmp/official-rml/${{ matrix.styleframe }}"
+          mkdir -p "test/tmp/official-rml-proof/${{ matrix.styleframe }}"
+          "$CLI" "$project" --verify --format=json > "test/tmp/official-rml-proof/${{ matrix.styleframe }}/verify.json"
+          "$CLI" "$project" --once --format=json > "test/tmp/official-rml-proof/${{ matrix.styleframe }}/build.json"
+          "$CLI" inspect "$project" --summary > "test/tmp/official-rml-proof/${{ matrix.styleframe }}/inspect.json"
+          "$CLI" --version > "test/tmp/official-rml-proof/${{ matrix.styleframe }}/rive-version.txt"
+          test -s "$project/build/rml_${{ matrix.styleframe }}.riv"
+      - name: Three honest official-native raster screenshots at different animation times
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI="$HOME/.rive/bin/rive"
+          project="test/tmp/official-rml/${{ matrix.styleframe }}"
+          out="test/tmp/official-rml-proof/${{ matrix.styleframe }}"
+          "$CLI" "$project" --screenshot="$out/t0.png" --viewport=900x540 --advance=0.4s
+          "$CLI" "$project" --screenshot="$out/t1.png" --viewport=900x540 --advance=1.2s
+          "$CLI" "$project" --screenshot="$out/t2.png" --viewport=900x540 --advance=2.0s
+          node scripts/rml-evidence-audit.mjs "${{ matrix.styleframe }}" "$project" "$out"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-rml-${{ matrix.styleframe }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/official-rml/${{ matrix.styleframe }}/scene.rml
+            test/tmp/official-rml/${{ matrix.styleframe }}/rive.yaml
+            test/tmp/official-rml/${{ matrix.styleframe }}/build/*.riv
+            test/tmp/official-rml-proof/${{ matrix.styleframe }}/*.png
+            test/tmp/official-rml-proof/${{ matrix.styleframe }}/*.json
+            test/tmp/official-rml-proof/${{ matrix.styleframe }}/*.txt
+
+  group-styleframe-evidence:
+    needs: official-rml-native
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: official-rml-*
+          merge-multiple: true
+          path: test/tmp/official-rml-aggregated
+      - name: Compare real RML rendered styleframes, block unreviewed visual promotions
+        run: node scripts/rml-styleframe-review.mjs test/tmp/official-rml-aggregated test/tmp/official-rml-styleframes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: official-rml-styleframe-review
+          path: test/tmp/official-rml-styleframes/
+          if-no-files-found: error

@@ -1,0 +1,1050 @@
+{
+  "schemaVersion": 1,
+  "description": "Curated bilingual query set. Includes late-added stress slice; not a blinded generalization estimate.",
+  "cases": [
+    {
+      "prompt": "控えめで高級感のある成功演出。弾ませない",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal",
+        "sticker-pop"
+      ],
+      "rationale": "Success feedback; ban bounce and reward spectacle."
+    },
+    {
+      "prompt": "派手すぎない完了の合図を短めに",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Negated flashiness for completed action."
+    },
+    {
+      "prompt": "タスクが終わったらチェックを気持ちよく出したい",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Task completion, not a prize."
+    },
+    {
+      "prompt": "成功を大げさに祝って、ポイント獲得を目立たせたい",
+      "acceptableTopIds": [
+        "reward-reveal"
+      ],
+      "forbiddenTopIds": [
+        "success-burst"
+      ],
+      "rationale": "Earned points deserve reward emphasis."
+    },
+    {
+      "prompt": "ご褒美のバッジが勢いよく出る演出",
+      "acceptableTopIds": [
+        "reward-reveal"
+      ],
+      "forbiddenTopIds": [
+        "editorial-headline"
+      ],
+      "rationale": "Reward emphasis, not typography."
+    },
+    {
+      "prompt": "達成した記念に楽しい報酬アニメを入れたい",
+      "acceptableTopIds": [
+        "reward-reveal"
+      ],
+      "forbiddenTopIds": [
+        "success-burst"
+      ],
+      "rationale": "Achievement prize rather than generic success."
+    },
+    {
+      "prompt": "派手な演出はなし。成功したことだけさりげなく伝える",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Explicitly excludes high-energy reward."
+    },
+    {
+      "prompt": "完了後の反応は必要だが、飛び跳ねる感じは避けたい",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal",
+        "sticker-pop"
+      ],
+      "rationale": "Affirm completion while rejecting bounce."
+    },
+    {
+      "prompt": "Create a quiet, luxury success confirmation. No bouncing.",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal",
+        "sticker-pop"
+      ],
+      "rationale": "English negation on a success cue."
+    },
+    {
+      "prompt": "A subtle checkmark to show the upload completed",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Checkmark confirmation rather than achievement."
+    },
+    {
+      "prompt": "Celebrate earning a reward with bold playful motion",
+      "acceptableTopIds": [
+        "reward-reveal"
+      ],
+      "forbiddenTopIds": [
+        "success-burst"
+      ],
+      "rationale": "Strong reward intent."
+    },
+    {
+      "prompt": "Not flashy: just a premium success cue",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Explicit high-energy prohibition."
+    },
+    {
+      "prompt": "Give the win a lively trophy-like reveal for the achievement",
+      "acceptableTopIds": [
+        "reward-reveal"
+      ],
+      "forbiddenTopIds": [
+        "progress-fill"
+      ],
+      "rationale": "Achievement not progress."
+    },
+    {
+      "prompt": "A clean editorial headline entrance for our article",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Text-led introduction."
+    },
+    {
+      "prompt": "雑誌の見出しを上品にフェードさせる",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Editorial typography, not depth."
+    },
+    {
+      "prompt": "余白を活かした静かなタイトル登場",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Restrained title appearance."
+    },
+    {
+      "prompt": "Launch headline: no childish pop effects",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Headline bans playful motion."
+    },
+    {
+      "prompt": "洗練された商品紹介をゆっくり見せたい",
+      "acceptableTopIds": [
+        "premium-product-intro"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Premium product presentation."
+    },
+    {
+      "prompt": "新作製品を映画の予告編みたいに見せる",
+      "acceptableTopIds": [
+        "premium-product-intro",
+        "hero-depth"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Product and cinematic hero both viable."
+    },
+    {
+      "prompt": "Show a luxury product reveal, no cartoon bounce",
+      "acceptableTopIds": [
+        "premium-product-intro"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Premium product, anti-bounce."
+    },
+    {
+      "prompt": "Minimal product launch animation that feels expensive",
+      "acceptableTopIds": [
+        "premium-product-intro"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Low-energy product intro."
+    },
+    {
+      "prompt": "奥行きのあるヒーロー画像で新商品を登場させる",
+      "acceptableTopIds": [
+        "hero-depth"
+      ],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Explicit hero depth."
+    },
+    {
+      "prompt": "Use parallax depth to introduce the hero artwork",
+      "acceptableTopIds": [
+        "hero-depth"
+      ],
+      "forbiddenTopIds": [
+        "editorial-headline"
+      ],
+      "rationale": "Parallax layering, not just heading."
+    },
+    {
+      "prompt": "シネマティックな製品ヒーローをゆったり出したい",
+      "acceptableTopIds": [
+        "hero-depth",
+        "premium-product-intro"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Both hero and product entrance plausible."
+    },
+    {
+      "prompt": "ステッカーが弾けるように楽しく登場する",
+      "acceptableTopIds": [
+        "sticker-pop"
+      ],
+      "forbiddenTopIds": [
+        "editorial-headline"
+      ],
+      "rationale": "Energetic sticker entrance."
+    },
+    {
+      "prompt": "Cute playful pop as the little badge appears",
+      "acceptableTopIds": [
+        "sticker-pop"
+      ],
+      "forbiddenTopIds": [
+        "premium-product-intro"
+      ],
+      "rationale": "Cute pop, not product marketing."
+    },
+    {
+      "prompt": "ボタンを押した瞬間に気持ちよい反応を返す",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "toast-arrive"
+      ],
+      "rationale": "Control press, not toast."
+    },
+    {
+      "prompt": "Tap the button with a quick premium response",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Press feedback."
+    },
+    {
+      "prompt": "軽くタップしても派手には弾ませないボタン反応",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop",
+        "reward-reveal"
+      ],
+      "rationale": "Restrained response on button."
+    },
+    {
+      "prompt": "On click, make the control acknowledge input instantly",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "focus-ring"
+      ],
+      "rationale": "Click feedback not field focus."
+    },
+    {
+      "prompt": "読み込み中を静かに知らせる、小さな呼吸のような動き",
+      "acceptableTopIds": [
+        "loading-breathe"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Subtle indefinite loader."
+    },
+    {
+      "prompt": "Make the loading icon gently pulse while waiting",
+      "acceptableTopIds": [
+        "loading-breathe"
+      ],
+      "forbiddenTopIds": [
+        "progress-fill"
+      ],
+      "rationale": "Indefinite pulse not progress bar."
+    },
+    {
+      "prompt": "ロード中のマークは跳ねないでゆっくり脈動",
+      "acceptableTopIds": [
+        "loading-breathe"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Looping loader without bounce."
+    },
+    {
+      "prompt": "A calm spinner during data fetching",
+      "acceptableTopIds": [
+        "loading-breathe"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Loading request, not reward."
+    },
+    {
+      "prompt": "アップロードの進み具合を棒グラフみたいに表示",
+      "acceptableTopIds": [
+        "progress-fill"
+      ],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Measured progress, not spinner."
+    },
+    {
+      "prompt": "Show upload progress filling smoothly, not an endless spinner",
+      "acceptableTopIds": [
+        "progress-fill"
+      ],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Bar specified, spinner excluded."
+    },
+    {
+      "prompt": "進捗ゲージをシンプルに伸ばす",
+      "acceptableTopIds": [
+        "progress-fill"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Progress fill."
+    },
+    {
+      "prompt": "プログレスバーが最後まで進んで完了を見せる",
+      "acceptableTopIds": [
+        "progress-fill",
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Multi-purpose progress and completion."
+    },
+    {
+      "prompt": "Onboarding cards appear in a staggered sequence",
+      "acceptableTopIds": [
+        "card-deck"
+      ],
+      "forbiddenTopIds": [
+        "soft-onboarding"
+      ],
+      "rationale": "Staggered card entrance."
+    },
+    {
+      "prompt": "3枚のカードが順番に並ぶ歓迎画面",
+      "acceptableTopIds": [
+        "card-deck"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Sequenced cards for welcome."
+    },
+    {
+      "prompt": "First-run guide: stagger the cards instead of a giant bounce",
+      "acceptableTopIds": [
+        "card-deck"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Card staggering without exaggerated bounce."
+    },
+    {
+      "prompt": "やさしいオンボーディングで新規ユーザーを迎える",
+      "acceptableTopIds": [
+        "soft-onboarding"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Gentle welcome."
+    },
+    {
+      "prompt": "Welcome new users with a calm introductory illustration",
+      "acceptableTopIds": [
+        "soft-onboarding"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Onboarding illustration."
+    },
+    {
+      "prompt": "説明画面を上質にゆっくり登場させたい",
+      "acceptableTopIds": [
+        "soft-onboarding",
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Explanatory screen or typography."
+    },
+    {
+      "prompt": "通知トーストを控えめに出して消えるように",
+      "acceptableTopIds": [
+        "toast-arrive"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Toast notification."
+    },
+    {
+      "prompt": "A small toast notice that arrives without fanfare",
+      "acceptableTopIds": [
+        "toast-arrive"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Quiet toast notification."
+    },
+    {
+      "prompt": "新しい通知を画面の端にそっと表示",
+      "acceptableTopIds": [
+        "toast-arrive"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Small notice at edge."
+    },
+    {
+      "prompt": "フォームにエラーがある時、軽く揺らして気づかせたい",
+      "acceptableTopIds": [
+        "error-nudge"
+      ],
+      "forbiddenTopIds": [
+        "focus-ring"
+      ],
+      "rationale": "Input invalid rather than focused."
+    },
+    {
+      "prompt": "Shake the invalid field and show an error hint",
+      "acceptableTopIds": [
+        "error-nudge"
+      ],
+      "forbiddenTopIds": [
+        "press-release"
+      ],
+      "rationale": "Error nudge."
+    },
+    {
+      "prompt": "失敗した入力をわかりやすく警告する",
+      "acceptableTopIds": [
+        "error-nudge"
+      ],
+      "forbiddenTopIds": [
+        "success-burst"
+      ],
+      "rationale": "Input error, not success."
+    },
+    {
+      "prompt": "Toggle the settings switch cleanly with no fireworks",
+      "acceptableTopIds": [
+        "toggle-sweep"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Switch motion, restrained energy."
+    },
+    {
+      "prompt": "トグルを機械的にパチッと切り替えたい",
+      "acceptableTopIds": [
+        "toggle-sweep"
+      ],
+      "forbiddenTopIds": [
+        "navigation-swap"
+      ],
+      "rationale": "Control toggle, not page change."
+    },
+    {
+      "prompt": "小さなスイッチを押してオンオフを示す",
+      "acceptableTopIds": [
+        "toggle-sweep"
+      ],
+      "forbiddenTopIds": [
+        "navigation-swap"
+      ],
+      "rationale": "On/off control."
+    },
+    {
+      "prompt": "画面遷移を静かに、前のページを退場させて次を出す",
+      "acceptableTopIds": [
+        "navigation-swap"
+      ],
+      "forbiddenTopIds": [
+        "toggle-sweep"
+      ],
+      "rationale": "Page layers, not toggle."
+    },
+    {
+      "prompt": "Navigate between pages with a smooth premium transition",
+      "acceptableTopIds": [
+        "navigation-swap"
+      ],
+      "forbiddenTopIds": [
+        "toggle-sweep"
+      ],
+      "rationale": "Navigation change."
+    },
+    {
+      "prompt": "次のページへの切り替えを上品に見せたい",
+      "acceptableTopIds": [
+        "navigation-swap"
+      ],
+      "forbiddenTopIds": [
+        "toggle-sweep"
+      ],
+      "rationale": "Page change."
+    },
+    {
+      "prompt": "挨拶するキャラクターが手を振って登場",
+      "acceptableTopIds": [
+        "character-wave"
+      ],
+      "forbiddenTopIds": [
+        "ambient-float"
+      ],
+      "rationale": "Character articulation."
+    },
+    {
+      "prompt": "Mascot waves hello in the welcome screen",
+      "acceptableTopIds": [
+        "character-wave"
+      ],
+      "forbiddenTopIds": [
+        "soft-onboarding"
+      ],
+      "rationale": "Wave from mascot."
+    },
+    {
+      "prompt": "Make the character greet the player, lively but not explosive",
+      "acceptableTopIds": [
+        "character-wave"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Character greeting, not reward."
+    },
+    {
+      "prompt": "入力欄にフォーカスした瞬間、枠をそっと強調",
+      "acceptableTopIds": [
+        "focus-ring"
+      ],
+      "forbiddenTopIds": [
+        "press-release"
+      ],
+      "rationale": "Input focus ring."
+    },
+    {
+      "prompt": "Highlight the text field focus without moving the page",
+      "acceptableTopIds": [
+        "focus-ring"
+      ],
+      "forbiddenTopIds": [
+        "navigation-swap"
+      ],
+      "rationale": "Field focus, not screen transition."
+    },
+    {
+      "prompt": "フォームのフィールドを選んだら静かに光らせる",
+      "acceptableTopIds": [
+        "focus-ring"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Field selection."
+    },
+    {
+      "prompt": "背景にふわっと漂う形を置きたい",
+      "acceptableTopIds": [
+        "ambient-float"
+      ],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Background ambient loop."
+    },
+    {
+      "prompt": "A quiet ambient float behind the UI, endlessly looping",
+      "acceptableTopIds": [
+        "ambient-float"
+      ],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Idle looping ambient motif."
+    },
+    {
+      "prompt": "目立たせず背景モチーフをゆらゆらさせる",
+      "acceptableTopIds": [
+        "ambient-float"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Non-intrusive background."
+    },
+    {
+      "prompt": "I want a gentle idle animation for the background motif",
+      "acceptableTopIds": [
+        "ambient-float"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Ambient idle, not pop."
+    },
+    {
+      "prompt": "夕飯の献立を考えてほしい",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "success-burst"
+      ],
+      "rationale": "Cooking request, unrelated to motion."
+    },
+    {
+      "prompt": "Translate this paragraph from Japanese to English",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "editorial-headline"
+      ],
+      "rationale": "Translation, not animation."
+    },
+    {
+      "prompt": "静かで上品な感じにして",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "editorial-headline",
+        "premium-product-intro"
+      ],
+      "rationale": "Style without a goal or object."
+    },
+    {
+      "prompt": "Not flashy, not loud, not energetic",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Only negative style constraints."
+    },
+    {
+      "prompt": "Create a 3D fluid simulation with volumetric smoke",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "3D fluid beyond catalog transforms."
+    },
+    {
+      "prompt": "サウンドに同期した3Dパーティクル爆発を生成",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "3D sound-synced particles unsupported."
+    },
+    {
+      "prompt": "Make an advanced physics-driven cloth simulation",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "ambient-float"
+      ],
+      "rationale": "Cloth physics unsupported."
+    },
+    {
+      "prompt": "ボタンを押したときの音を作って",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "press-release"
+      ],
+      "rationale": "Sound request, not motion."
+    },
+    {
+      "prompt": "高級すぎず、派手すぎず、控えめすぎない",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "premium-product-intro",
+        "reward-reveal"
+      ],
+      "rationale": "Only exclusions and no goal."
+    },
+    {
+      "prompt": "Please explain what parallax means",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Asks for definition not animation."
+    },
+    {
+      "prompt": "通知は表示せず、成功だけ知らせたい",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "toast-arrive"
+      ],
+      "rationale": "Negates toast and affirms success."
+    },
+    {
+      "prompt": "Without a toast, confirm that saving succeeded",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "toast-arrive"
+      ],
+      "rationale": "English contrastive no-toast success."
+    },
+    {
+      "prompt": "Do not show an error animation, just a quiet loading state",
+      "acceptableTopIds": [
+        "loading-breathe"
+      ],
+      "forbiddenTopIds": [
+        "error-nudge"
+      ],
+      "rationale": "Prohibits error motion; requests loading."
+    },
+    {
+      "prompt": "エラーではなく、入力中のフォーカス演出をお願い",
+      "acceptableTopIds": [
+        "focus-ring"
+      ],
+      "forbiddenTopIds": [
+        "error-nudge"
+      ],
+      "rationale": "Focus instead of error."
+    },
+    {
+      "prompt": "No reward celebration; just show progress",
+      "acceptableTopIds": [
+        "progress-fill"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Negated reward vs positive progress."
+    },
+    {
+      "prompt": "A premium headline entrance, not a flashy sticker",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "sticker-pop"
+      ],
+      "rationale": "Headline with rejected sticker."
+    },
+    {
+      "prompt": "派手じゃないけど、かわいいマスコットの挨拶",
+      "acceptableTopIds": [
+        "character-wave"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Cute mascot but not flashy."
+    },
+    {
+      "prompt": "Not too quiet, make the sticker pop",
+      "acceptableTopIds": [
+        "sticker-pop"
+      ],
+      "forbiddenTopIds": [
+        "editorial-headline"
+      ],
+      "rationale": "Negated restraint; positive sticker."
+    },
+    {
+      "prompt": "ロードではなく、進捗のバーをきっちり示して",
+      "acceptableTopIds": [
+        "progress-fill"
+      ],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Progress bar vs indefinite loader."
+    },
+    {
+      "prompt": "入力のフォーカスではなく、クリックの反応だけ欲しい",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "focus-ring"
+      ],
+      "rationale": "Input focus explicitly negated."
+    },
+    {
+      "prompt": "通知が必要なのではなく、保存完了を控えめに伝えたい",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "toast-arrive"
+      ],
+      "rationale": "Save confirmation rather than notification."
+    },
+    {
+      "prompt": "No poppy confetti, show completion cleanly",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "No confetti; completion cue."
+    },
+    {
+      "prompt": "Not just loading: give me a proper progress bar",
+      "acceptableTopIds": [
+        "progress-fill"
+      ],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Progress, not indefinite loading."
+    },
+    {
+      "prompt": "柔らかいだけではなく、タップした瞬間に変化してほしい",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "ambient-float"
+      ],
+      "rationale": "Direct tap reaction."
+    },
+    {
+      "prompt": "表紙をめくるような文字の登場",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Typographic entrance metaphor."
+    },
+    {
+      "prompt": "深呼吸するような待機状態をずっと表示",
+      "acceptableTopIds": [
+        "loading-breathe"
+      ],
+      "forbiddenTopIds": [
+        "progress-fill"
+      ],
+      "rationale": "Waiting state loops."
+    },
+    {
+      "prompt": "新製品を紹介するけれど奥行きはいらない",
+      "acceptableTopIds": [
+        "premium-product-intro"
+      ],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Product intro without depth."
+    },
+    {
+      "prompt": "An elegant page swap without the toggle control",
+      "acceptableTopIds": [
+        "navigation-swap"
+      ],
+      "forbiddenTopIds": [
+        "toggle-sweep"
+      ],
+      "rationale": "Page change, no toggle."
+    },
+    {
+      "prompt": "Please avoid showing any notification; only warn for invalid entry",
+      "acceptableTopIds": [
+        "error-nudge"
+      ],
+      "forbiddenTopIds": [
+        "toast-arrive"
+      ],
+      "rationale": "Invalid-entry warning not notification."
+    },
+    {
+      "prompt": "背景は動かさず、タイトルだけ静かに登場させる",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "ambient-float"
+      ],
+      "rationale": "Animated headline, background static."
+    },
+    {
+      "prompt": "No boring simple motion: make the points reward feel celebratory",
+      "acceptableTopIds": [
+        "reward-reveal"
+      ],
+      "forbiddenTopIds": [
+        "success-burst"
+      ],
+      "rationale": "Lively points reward."
+    },
+    {
+      "prompt": "The word loading is on screen; animate the headline, not the loader",
+      "acceptableTopIds": [
+        "editorial-headline"
+      ],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Quoted loader distractor."
+    },
+    {
+      "prompt": "成功したが、ご褒美はなし。静かなチェックを示す",
+      "acceptableTopIds": [
+        "success-burst"
+      ],
+      "forbiddenTopIds": [
+        "reward-reveal"
+      ],
+      "rationale": "Reject reward and show success."
+    },
+    {
+      "prompt": "カートに商品を追加した時、さりげなくボタンが反応",
+      "acceptableTopIds": [
+        "press-release"
+      ],
+      "forbiddenTopIds": [
+        "premium-product-intro"
+      ],
+      "rationale": "Control feedback, not product intro."
+    },
+    {
+      "prompt": "ヘルプボタンの下で通知ではなく入力エラーを出す",
+      "acceptableTopIds": [
+        "error-nudge"
+      ],
+      "forbiddenTopIds": [
+        "toast-arrive"
+      ],
+      "rationale": "Error vs notification."
+    },
+    {
+      "prompt": "I need motion that reacts when the switch is pressed, not screen navigation",
+      "acceptableTopIds": [
+        "toggle-sweep"
+      ],
+      "forbiddenTopIds": [
+        "navigation-swap"
+      ],
+      "rationale": "Toggle control vs navigation."
+    },
+    {
+      "prompt": "I'd like a cinematic toast notification, not a product hero",
+      "acceptableTopIds": [
+        "toast-arrive"
+      ],
+      "forbiddenTopIds": [
+        "hero-depth"
+      ],
+      "rationale": "Toast despite cinematic style."
+    },
+    {
+      "prompt": "3D skeletal character walking cycle with dynamic cloth",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "character-wave"
+      ],
+      "rationale": "Skeletal walk and cloth unsupported."
+    },
+    {
+      "prompt": "Use a Lottie network spinner that changes color based on API latency",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "loading-breathe"
+      ],
+      "rationale": "Data-driven Lottie color not in recipe."
+    },
+    {
+      "prompt": "Show me the JSON schema for animation specs, no animation needed",
+      "acceptableTopIds": [],
+      "forbiddenTopIds": [
+        "editorial-headline"
+      ],
+      "rationale": "Documentation request, no choreography."
+    }
+  ]
+}

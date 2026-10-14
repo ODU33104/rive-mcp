@@ -1,0 +1,63 @@
+name: Licensed External Rive Character Source + Native Runtime
+on:
+  pull_request:
+    paths:
+      - 'data/external-rive-sources/**'
+      - 'scripts/external-kabi-admission.mjs'
+      - 'test/externalKabiAdmission.mjs'
+      - 'docs/EXTERNAL_RIVE_SOURCE_ADMISSION.md'
+      - '.github/workflows/external-rive-source-ci.yml'
+jobs:
+  ingest-real-third-party-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check external-source policy without downloading
+        run: node test/externalKabiAdmission.mjs
+      - name: Download actual licensed original .riv + editable model + CC-BY license
+        shell: bash
+        run: |
+          mkdir -p test/tmp/external-kabi/source
+          COMMIT='7dee2abc2320fcc72f08c7064214ba9df84687f5'
+          ROOT="https://raw.githubusercontent.com/bryllim/kabi-mascot/$COMMIT"
+          curl --fail --location --show-error --retry 3 "$ROOT/dist/kabi.riv" -o test/tmp/external-kabi/source/kabi.riv
+          curl --fail --location --show-error --retry 3 "$ROOT/dist/kabi.model.json" -o test/tmp/external-kabi/source/kabi.model.json
+          curl --fail --location --show-error --retry 3 "$ROOT/LICENSE" -o test/tmp/external-kabi/source/LICENSE
+          test "$(stat -c%s test/tmp/external-kabi/source/kabi.riv)" -gt 5000
+          sha256sum test/tmp/external-kabi/source/*
+          node test/externalKabiAdmission.mjs test/tmp/external-kabi/source
+      - name: Set up pinned headless Chrome
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Real official Rive state machine and rendered pose frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/external-kabi-admission.mjs test/tmp/external-kabi/source test/tmp/external-kabi/output
+      - name: GIF from authentic original Rive runtime frames
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          for pose in idle celebrate thinking boxing; do
+            cd "$GITHUB_WORKSPACE/test/tmp/external-kabi/output/$pose"
+            /usr/bin/ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 10 -i frame-%03d.png -vf "scale=450:-1:flags=lanczos" "../$pose.gif"
+            test "$(stat -c%s "../$pose.gif")" -gt 20000
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: licensed-kabi-original-rive-and-editable-source-evidence
+          path: |
+            test/tmp/external-kabi/source/kabi.riv
+            test/tmp/external-kabi/source/kabi.model.json
+            test/tmp/external-kabi/source/LICENSE
+            test/tmp/external-kabi/output/*.gif
+            test/tmp/external-kabi/output/*.json
+            test/tmp/external-kabi/output/*/*-poster.png
+          if-no-files-found: warn

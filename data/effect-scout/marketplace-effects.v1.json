@@ -1,0 +1,1157 @@
+{
+  "schema": "rive-effect-scout/v1",
+  "researchedAt": "2026-10-13",
+  "intent": "external FX references first; acquire licensed actual artifacts before claiming reuse",
+  "count": 42,
+  "stagePolicy": {
+    "discovery": "link-and-work-license-evidence only",
+    "acquired": "original editable source downloaded under documented terms and hashes recorded",
+    "inspectable": "Rive authoring/artboard/animation/asset dependencies inspected with compatible official tooling",
+    "portable": "components adapted/imported without incorrect semantics, attribution and dependencies retained",
+    "rendered": "real .riv from adapted component drawn in pinned official Rive runtime",
+    "production": "matched style/domain + verified permissions + performance + visual approval"
+  },
+  "caveats": [
+    "Rive page-level CC BY label is NOT clearance of all embedded fonts/images/brands/scripts or commercial redistribution.",
+    "Authoring project .rev or RML must be obtained separately; a downloaded .riv may not be generically mergable into another .riv.",
+    "Rive vector feathering may require a WebGL2 Rive renderer; our pinned canvas runtime cannot automatically validate the effect.",
+    "A web screenshot/GIF is not an editable effect; do not count link-only entries as ready-to-use assets.",
+    "No third-party files, screenshots or code were copied by this catalog."
+  ],
+  "entries": [
+    {
+      "id": "particle-library",
+      "title": "Particle Librar",
+      "author": "TeamRive",
+      "sourceUrl": "https://www.rive.app/marketplace/28062-53012-particle-librar/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "particles",
+        "mechanism": "node-script",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "particle-emitter",
+      "title": "Particle Emitter",
+      "author": "jing123",
+      "sourceUrl": "https://rive.app/marketplace/23128-43773-particle-emitter/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "particles",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "particle-globe",
+      "title": "Interactive Particle Globe",
+      "author": "sm_motion",
+      "sourceUrl": "https://rive.app/marketplace/26161-48888-interactive-particle-globe/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "particles",
+        "mechanism": "script+viewmodel",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "particles-button",
+      "title": "Particles",
+      "author": "luizl-XTBCX",
+      "sourceUrl": "https://rive.app/marketplace/23241-43528-particles/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "particles",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "falling-coffee",
+      "title": "Falling Coffee Particles",
+      "author": "tiagoh-PXD7M",
+      "sourceUrl": "https://rive.app/marketplace/26074-48716-falling-coffee-particles/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "particles",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "electric-button",
+      "title": "Electric Button",
+      "author": "alekseykosygin",
+      "sourceUrl": "https://rive.app/marketplace/26114-48986-electric-button/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "electricity",
+        "mechanism": "script",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "dynamic-particle-follow",
+      "title": "Dynamic Particle Follow Path",
+      "author": "dev-M3GH8",
+      "sourceUrl": "https://rive.app/marketplace/22854-42724-dynamic-particle-follow-path/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "trails",
+        "mechanism": "follow-path",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "spark-check",
+      "title": "Success Check",
+      "author": "guidorosso",
+      "sourceUrl": "https://rive.app/marketplace/1029-2009-success-check/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "sparkle",
+        "mechanism": "trim-path",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "star-rating",
+      "title": "Rating animation",
+      "author": "JcToon",
+      "sourceUrl": "https://rive.app/marketplace/405-6776-rating-animation/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "sparkle",
+        "mechanism": "trim-path",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "particle-loader",
+      "title": "Particle Loader",
+      "author": "creativechaos",
+      "sourceUrl": "https://rive.app/community/files/2363-4711-particle-loader/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "particles",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "hero-icons",
+      "title": "Hero Icons",
+      "author": "sofia-rey",
+      "sourceUrl": "https://www.rive.app/marketplace/25721-48025-hero-icons/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "sparkle",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "glow-animation",
+      "title": "Glow Animation",
+      "author": "shwetansk2210",
+      "sourceUrl": "https://rive.app/marketplace/19170-36064-glow-animation/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "unknown",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "circular-glow",
+      "title": "Circular glow loading",
+      "author": "aslamcreates",
+      "sourceUrl": "https://rive.app/marketplace/24913-46518-circular-glow-loading/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "feather",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNSUPPORTED_OR_UNCONFIRMED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "glow-interaction",
+      "title": "Glow",
+      "author": "mariusmatt9",
+      "sourceUrl": "https://rive.app/marketplace/10271-19612-glow/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "state-machine",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "glowing-hover",
+      "title": "Glowing Hover Button",
+      "author": "rajaravi.in",
+      "sourceUrl": "https://rive.app/marketplace/20107-37825-glowing-hover-button/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "hover",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "hover-glow",
+      "title": "Hover & Glow",
+      "author": "Parashrautela70",
+      "sourceUrl": "https://rive.app/marketplace/23328-43680-hover-and-glow/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "state-machine",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "glowing-card",
+      "title": "Glowing card",
+      "author": "ggyongy",
+      "sourceUrl": "https://rive.app/marketplace/17689-33179-glowing-card/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "hover",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "card-glow",
+      "title": "Card with glow",
+      "author": "pixel-point",
+      "sourceUrl": "https://rive.app/marketplace/6861-13190-card-with-glow/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "hover",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "glowing-button",
+      "title": "Glowing Button Interaction",
+      "author": "joelgeorge60",
+      "sourceUrl": "https://rive.app/marketplace/19235-36172-glowing-button-interaction-hover-and-press-test/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "state-machine",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "interactive-hero",
+      "title": "Interactive Site Hero",
+      "author": "OC_UI",
+      "sourceUrl": "https://www.rive.app/marketplace/23510-44003-interactive-site-hero/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "pointer",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "ghost-glow",
+      "title": "Ghost Glow",
+      "author": "yuji_s_rive",
+      "sourceUrl": "https://rive.app/marketplace/16940-31835-ghost-glow/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glow",
+        "mechanism": "feather",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNSUPPORTED_OR_UNCONFIRMED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "liquid-download",
+      "title": "Liquid Download",
+      "author": "guidorosso",
+      "sourceUrl": "https://rive.app/marketplace/1030-2020-liquid-download/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "liquid",
+        "mechanism": "layered-state-machine",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "liquid-effect",
+      "title": "Liquid effect",
+      "author": "drawsgood",
+      "sourceUrl": "https://rive.app/marketplace/4794-9680-liquid-effect/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "liquid",
+        "mechanism": "gradient",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "liquid-glass-javier",
+      "title": "Liquid Glass",
+      "author": "JΛVIΞR",
+      "sourceUrl": "https://rive.app/marketplace/20904-39287-liquid-glass/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glass",
+        "mechanism": "unknown",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "liquid-glass-matthew",
+      "title": "Liquid Glass",
+      "author": "matthew.jedrzejewskI",
+      "sourceUrl": "https://rive.app/marketplace/25684-47968-liquid-glass/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glass",
+        "mechanism": "unknown",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "frosted-glass",
+      "title": "Frosted Glass",
+      "author": "workannasin",
+      "sourceUrl": "https://rive.app/marketplace/24296-45376-frosted-glass/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glass",
+        "mechanism": "unknown",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "frosted-aberration",
+      "title": "Frosted glass test",
+      "author": "orchestrated",
+      "sourceUrl": "https://rive.app/marketplace/18008-33812-frosted-glass-test/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glass",
+        "mechanism": "unknown",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "iridescence",
+      "title": "Ultra-Lightweight Vector Iridescence",
+      "author": "stavrospante.sp",
+      "sourceUrl": "https://rive.app/marketplace/27227-51418-ultra-lightweight-vector-iridescence-no-shaders/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "iridescence",
+        "mechanism": "gradient-blend",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "glass-infographics",
+      "title": "Liquid Glass Infographics",
+      "author": "moveset_lucas",
+      "sourceUrl": "https://rive.app/marketplace/23615-44274-liquid-glass-infographics/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "glass",
+        "mechanism": "state-machine",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "liquid-nav",
+      "title": "Liquid UI nav bar",
+      "author": "shwetansk2210",
+      "sourceUrl": "https://www.rive.app/marketplace/22140-41480-liquid-ui-nav-bar/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "liquid",
+        "mechanism": "state-machine",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "waterdrop",
+      "title": "WaterDrop Wave",
+      "author": "anilsorgit",
+      "sourceUrl": "https://rive.app/marketplace/19011-35769-waterdrop-wave/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "wave",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "wave-effect",
+      "title": "Wave effect",
+      "author": "pkoik_SM",
+      "sourceUrl": "https://rive.app/marketplace/27862-52651-wave-effect/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "wave",
+        "mechanism": "no-shaders",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "procedural-background",
+      "title": "Procedural background 02",
+      "author": "blender_dac",
+      "sourceUrl": "https://rive.app/marketplace/26353-49316-procedural-background-02/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "procedural",
+        "mechanism": "script+feather",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNSUPPORTED_OR_UNCONFIRMED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "lines-dots",
+      "title": "Procedural lines and dots generator",
+      "author": "blender_dac",
+      "sourceUrl": "https://rive.app/marketplace/26348-49298-procedural-lines-and-dots-generator/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "procedural",
+        "mechanism": "script",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "lines-glow",
+      "title": "Lines glow animation",
+      "author": "Sandyuiuxstudio",
+      "sourceUrl": "https://rive.app/marketplace/7085-13594-lines-glow-animation/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "trails",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "wave-lines",
+      "title": "wave animation effect",
+      "author": "Sandyuiuxstudio",
+      "sourceUrl": "https://rive.app/marketplace/7086-13595-wave-animation-effect/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "wave",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "sound-wave",
+      "title": "Sound wave",
+      "author": "tejasgajjala",
+      "sourceUrl": "https://rive.app/marketplace/21257-39941-sound-wave/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "audio-wave",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "pixel-audio",
+      "title": "Pixel audio wave",
+      "author": "pkoik_SM",
+      "sourceUrl": "https://rive.app/marketplace/21113-39738-pixel-audio-wave/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "audio-wave",
+        "mechanism": "data-input",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "liquid-ui",
+      "title": "Liquid UI",
+      "author": "Novikoff",
+      "sourceUrl": "https://rive.app/marketplace/20977-39444-liquid-ui/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "liquid",
+        "mechanism": "unknown",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "prism-shimmer",
+      "title": "Melange",
+      "author": "tamzid",
+      "sourceUrl": "https://rive.app/marketplace/14696-27740-melange/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "shimmer",
+        "mechanism": "interaction",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "interactive-orb",
+      "title": "Interactive Orb Hover Animation",
+      "author": "ensa",
+      "sourceUrl": "https://rive.app/marketplace/23636-44185-interactive-orb-hover-animation/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "distortion",
+        "mechanism": "hover",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    },
+    {
+      "id": "flame-spark",
+      "title": "Flame and Spark",
+      "author": "JcToon",
+      "sourceUrl": "https://www.rive.app/marketplace/186-341-flame-and-spark/",
+      "rights": {
+        "workLevelLabel": "CC BY (listed on source page; version/terms require confirmation at acquisition)",
+        "embeddedAssetClearance": "UNKNOWN",
+        "sourceCodeRights": "NOT_REVIEWED",
+        "redistribution": "BLOCKED_UNTIL_REVIEW"
+      },
+      "effect": {
+        "category": "sparkle",
+        "mechanism": "timeline",
+        "visualBehavior": "INSPECT_SOURCE_AFTER_ACQUISITION"
+      },
+      "backend": {
+        "riveRenderer": "CHECK",
+        "canvasRuntime": "UNVERIFIED",
+        "editorComponentImport": "MANUAL_WORKFLOW_PENDING"
+      },
+      "stage": "reference-only",
+      "downloadedAssetHash": null,
+      "importedComponentIds": [],
+      "runtimeEvidence": "NOT_RUN",
+      "note": "Verified public work page; no underlying editable source fetched."
+    }
+  ]
+}

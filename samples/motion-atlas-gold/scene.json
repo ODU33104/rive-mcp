@@ -1,0 +1,38 @@
+{
+  "schema": "motion-atlas-gold/v1",
+  "prompt": "Create a cinematic, editorial launch reveal for an original premium mechanical wristwatch called SOLSTICE. Use a deep midnight backdrop, warm champagne metal, exquisite restrained typography, watchmaking details, a gliding optical orbit and a deliberately staged 4.5-second entrance. Make it a single editable Rive scene, not a slideshow.",
+  "artboard": {
+    "name": "SolsticeChronograph",
+    "width": 720,
+    "height": 460
+  },
+  "palette": {
+    "midnight": "#07121B",
+    "shadow": "#050C14",
+    "deepBlue": "#152F3B",
+    "grid": "#23404A",
+    "aqua": "#407A7C",
+    "champagne": "#DBB77B",
+    "goldLight": "#F8E5BD",
+    "goldDark": "#826445",
+    "porcelain": "#FAF4E7",
+    "muted": "#9BADA9",
+    "dial": "#0A1924",
+    "dialEdge": "#1C3540"
+  },
+  "copy": {
+    "brand": "S O L S T I C E",
+    "edition": "N° 01  /  ATELIER SERIES",
+    "heading1": "TIME,",
+    "heading2": "REDEFINED.",
+    "subheading": "A STUDY IN QUIET PRECISION",
+    "details": "AUTOMATIC  /  39 MM  /  5 ATM",
+    "bottomLeft": "CRAFTED FOR THE IN-BETWEEN",
+    "bottomRight": "01  —  26",
+    "dial": "SOLSTICE",
+    "dialFooter": "AUTOMATIC"
+  },
+  "durationFrames": 270,
+  "fps": 60,
+  "creator": "Original vector composition and choreography authored for ODU33104/rive-mcp; no imported external image, clip, artwork, or animation."
+}

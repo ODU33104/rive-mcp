@@ -1,0 +1,29 @@
+name: Motion Storyboard Composer
+on:
+  pull_request:
+    paths:
+      - 'scripts/motion-storyboard.mjs'
+      - 'test/motionStoryboard.mjs'
+      - 'scripts/motion-recipe.mjs'
+      - 'data/motion-recipes/catalog.v1.json'
+      - '.github/workflows/motion-storyboard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/motion-storyboard.mjs'
+      - 'test/motionStoryboard.mjs'
+      - '.github/workflows/motion-storyboard.yml'
+jobs:
+  storyboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node test/motionRecipe.mjs
+      - run: node test/motionStoryboard.mjs

@@ -1,0 +1,41 @@
+name: Motion Recipe Atlas
+on:
+  pull_request:
+    paths:
+      - 'data/motion-recipes/**'
+      - 'scripts/motion-recipe.mjs'
+      - 'scripts/build-motion-atlas-demo.mjs'
+      - 'test/motionRecipe.mjs'
+      - 'test/motionAtlasDemo.mjs'
+      - '.github/workflows/motion-recipe-atlas.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'data/motion-recipes/**'
+      - 'scripts/motion-recipe.mjs'
+      - 'scripts/build-motion-atlas-demo.mjs'
+      - 'test/motionRecipe.mjs'
+      - 'test/motionAtlasDemo.mjs'
+jobs:
+  motion-atlas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/motion-recipe.mjs validate
+      - run: node test/motionRecipe.mjs
+      - run: node test/motionAtlasDemo.mjs
+      - run: node scripts/build-motion-atlas-demo.mjs "高級な商品紹介を上品に" test/tmp/motion-atlas/product.riv
+      - run: node scripts/build-motion-atlas-demo.mjs "成功を祝う演出" test/tmp/motion-atlas/success.riv
+      - run: node scripts/build-motion-atlas-demo.mjs "洗練されたタイトルの登場演出" test/tmp/motion-atlas/editorial.riv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: motion-atlas-riv-demos
+          path: test/tmp/motion-atlas/*.riv
+          if-no-files-found: error

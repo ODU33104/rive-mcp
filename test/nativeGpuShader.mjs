@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import {gpuSourceFixture,writeGPUFixture} from "../scripts/native-rml-gpu-shader.mjs";
+const s=gpuSourceFixture();
+assert.match(s.wgsl,/@vertex fn vs_main/);
+assert.match(s.wgsl,/@fragment fn fs_main/);
+assert.match(s.luau,/context:gpuCanvas/);
+assert.match(s.luau,/context:shader\("PrismMaterial"\)/);
+assert.match(s.luau,/GPUPipeline.new/);
+assert.match(s.luau,/pass:draw\(3\)/);
+assert.match(s.luau,/renderer:drawImage/);
+assert.match(s.luau,/function advance/);
+assert.ok(s.receipt.shaderHash.length===64);
+assert.equal(s.receipt.actualCompiledShader,"REQUIRES_CLI_EVIDENCE");
+assert.equal(s.receipt.trueWebRuntimeShaderPlayback,"REQUIRES_SIGNED_PUBLISH");
+assert.equal(s.receipt.aesthetic,"NOT_EVALUATED");
+if(process.argv[2])assert.equal(writeGPUFixture(process.argv[2]).receipt.shaderHash,s.receipt.shaderHash);
+console.log("PASS: actual original Rive WGSL+Luau GPUCanvas source, with publication and quality disclaimers");

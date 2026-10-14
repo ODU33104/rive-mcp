@@ -1,0 +1,36 @@
+name: WebGL2 Rive Renderer & GPU Canvas Opt-In Probe
+on:
+  pull_request:
+    paths:
+      - 'scripts/webgl2-gpu-probe.mjs'
+      - 'test/webgl2GpuProbe.mjs'
+      - 'docs/WEBGL2_GPU_CANVAS_GATE.md'
+      - '.github/workflows/gpu-webgl2-probe.yml'
+jobs:
+  webgl2-runtime-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install pinned official WebGL2 renderer for this isolated probe
+        run: npm install --no-save --ignore-scripts --package-lock=false @rive-app/webgl2@2.44.2
+      - name: Check GPU renderer backend and instance flags
+        run: node test/webgl2GpuProbe.mjs
+      - name: Install matching Chromium with WebGL2 software rendering
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Probe actual first-party Rive renderer from browser and capture four frames
+        run: node scripts/webgl2-gpu-probe.mjs test/tmp/gpu-webgl2-probe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-rive-webgl2-gpu-optin-smoke
+          path: |
+            test/tmp/gpu-webgl2-probe/*.png
+            test/tmp/gpu-webgl2-probe/*.json
+          if-no-files-found: warn
