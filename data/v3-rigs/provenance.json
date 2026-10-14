@@ -1,0 +1,64 @@
+{
+  "schema": "v3-rig-provenance/v1",
+  "policy": "Fail closed; source code original to this repository, no remote third-party art downloaded.",
+  "source": {
+    "name": "PR #65 original editable visual rigs",
+    "branchRef": "refs/pull/65/head",
+    "commit": "c2d681a04a181b2b106479203e7d6875d42c08ef",
+    "workRights": "project-authored original code; independent rights audit NOT_EVALUATED",
+    "embeddedAssets": [],
+    "licenseStatus": "original"
+  },
+  "additions": [
+    {
+      "id": "mechanical-metronome",
+      "authorship": "original new programmatic vector geometry",
+      "workRights": "original",
+      "embeddedAssets": []
+    },
+    {
+      "id": "pendant-lamp",
+      "authorship": "original new programmatic vector geometry",
+      "workRights": "original",
+      "embeddedAssets": []
+    },
+    {
+      "id": "satellite-dish",
+      "authorship": "original new programmatic vector geometry",
+      "workRights": "original",
+      "embeddedAssets": []
+    },
+    {
+      "id": "windmill",
+      "authorship": "original new programmatic vector geometry",
+      "workRights": "original",
+      "embeddedAssets": []
+    },
+    {
+      "id": "paper-kite",
+      "authorship": "original new programmatic vector geometry",
+      "workRights": "original",
+      "embeddedAssets": []
+    }
+  ],
+  "font": {
+    "path": "assets/inter.ttf",
+    "license": "SIL Open Font License 1.1",
+    "witness": "repository LICENSE section 4",
+    "grantReview": "project assertion, not independent legal conclusion"
+  },
+  "externalSourceAdmission": {
+    "requires": [
+      "workLicense",
+      "embeddedAssetLicense",
+      "attribution",
+      "permission"
+    ],
+    "default": "BLOCKED"
+  },
+  "aesthetics": {
+    "humanBlindReview": "NOT_EVALUATED",
+    "editorParity": "NOT_EVALUATED",
+    "uninspectedNativeRenders": "NOT_EVALUATED"
+  }
+}

@@ -1,0 +1,77 @@
+name: V3 Rigs — Native Rive and Official Runtime Evidence
+on:
+  push:
+    branches: ['parallel/rig-grammar-v3-20261014']
+    paths:
+      - 'scripts/v3-rig-*.mjs'
+      - 'test/v3Rig*.mjs'
+      - 'data/v3-rigs/**'
+      - 'docs/V3_RIG_BEHAVIOR_GRAMMAR.md'
+      - '.github/workflows/v3-rigs.yml'
+  pull_request:
+    paths:
+      - 'scripts/v3-rig-*.mjs'
+      - 'test/v3Rig*.mjs'
+      - 'data/v3-rigs/**'
+      - 'docs/V3_RIG_BEHAVIOR_GRAMMAR.md'
+      - '.github/workflows/v3-rigs.yml'
+jobs:
+  native-official-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned packages, compile Rive binary writer
+        run: |
+          npm ci
+          npm run build
+      - name: Test semantic source contracts and native file roundtrip witnesses
+        run: node test/v3RigGrammar.mjs
+      - name: Install official runtime browser host
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Compile six editable .riv scenes and capture official runtime PNG at 31 timestamps each
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core";process.stdout.write(chromium.executablePath())')"
+          test -x "$CHROME"
+          RIVE_MCP_CHROME="$CHROME" node scripts/v3-rig-build.mjs test/tmp/v3-rigs --render
+          test "$(find test/tmp/v3-rigs -maxdepth 1 -name '*.riv' | wc -l)" -eq 6
+          test "$(find test/tmp/v3-rigs -name 'frame-*.png' | wc -l)" -eq 186
+          node --input-type=module <<'JS'
+          import {readFileSync} from "node:fs";
+          const s=JSON.parse(readFileSync("test/tmp/v3-rigs/summary.json","utf8"));
+          if(s.rigs!==15||s.compositions.length!==6||s.officialRuntime.status!=="PASS"||
+             s.officialRuntime.framesPerComposition!==31||
+             s.aestheticBlindReview!=="NOT_EVALUATED"||
+             s.nativeTransformRoundtrip!=="NOT_EVALUATED")throw Error("Inaccurate runtime/evidence summary");
+          JS
+      - name: Generate GIFs exclusively from genuine captured Rive frames
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          for scene in atelier signal observatory pulse-stage field-lab radio-outpost; do
+            /usr/bin/ffmpeg -hide_banner -loglevel error -y -framerate 10 \
+              -i "test/tmp/v3-rigs/$scene/frame-%03d.png" \
+              -filter_complex "[0:v]scale=800:-1:flags=lanczos,split[pal-in][gif-in];[pal-in]palettegen=stats_mode=diff[pal];[gif-in][pal]paletteuse=dither=bayer:bayer_scale=3" \
+              -loop 0 "test/tmp/v3-rigs/$scene.gif"
+            test "$(stat -c%s "test/tmp/v3-rigs/$scene.gif")" -gt 10000
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-rig-source-native-binaries-and-real-runtime-evidence
+          path: |
+            test/tmp/v3-rigs/*.riv
+            test/tmp/v3-rigs/*.png
+            test/tmp/v3-rigs/**/*.png
+            test/tmp/v3-rigs/*.gif
+            test/tmp/v3-rigs/index.html
+            test/tmp/v3-rigs/summary.json
+          if-no-files-found: warn
