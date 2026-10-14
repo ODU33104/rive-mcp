@@ -399,7 +399,7 @@ export async function writeConstructiveScene(prompt,out,{render=false}={}){
           width:plan.design.camera.width,height:plan.design.camera.height,format:"png"});
       if(rendered.frames.length!==31)throw Error("missing official runtime frames");
       const folder=dirname(resolve(out));
-      for(let i=0;i<25;i++){
+      for(let i=0;i<rendered.frames.length;i++){
         const b=Buffer.from(rendered.frames[i],"base64");
         if(b.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")
           throw Error("invalid PNG frame "+i);
