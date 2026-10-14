@@ -26,7 +26,8 @@ struct Vertex {
  let p=(uv-vec2<f32>(0.58,0.47))*vec2<f32>(1.22,1.0);
  let r=length(p);
  let base=mix(vec3<f32>(0.027,0.05,0.09),vec3<f32>(0.052,0.21,0.28),clamp(uv.y,0.,1.));
- let band=exp(-pow((uv.x-0.61)*7.5+sin(uv.y*8.0)*0.73,2.0))*0.28;
+ let scan=(uv.x-0.61)*7.5+sin(uv.y*8.0)*0.73;
+ let band=exp(-(scan*scan))*0.28;
  let glow=exp(-r*r*14.5)*0.52;
  let prism=0.028+0.031*sin((uv.y-uv.x)*23.0);
  let rgb=base+vec3<f32>(glow*0.26+band*0.85,glow*0.63+band*0.70,glow*0.62+prism);
