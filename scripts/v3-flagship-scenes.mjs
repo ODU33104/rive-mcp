@@ -25,7 +25,7 @@ function author(id){
   const stroke=(id,pts,color,width,z,p,extra={})=>poly(id,pts,null,z,p,{closed:false,stroke:{color,thickness:width,cap:"round",join:"round",...extra}});
   const text=(id,value,x,y,width,size,color,z,parent,align="left")=>(texts.push({id,x,y,width,align,z,parent,runs:[{text:value,font:"inter",fontSize:size,color}]}),id);
   const lane=(target,property,frames)=>tracks.push({target,property,keyframes:frames.map(a=>k(...a))});
-  const fade=(target,a,b,to=1)=>lane(target,"opacity",[[0,0],[a,0,"hold"],[b,to,"ease-out"],[DURATION,to]]);
+  const fade=(target,a,b,to=1)=>lane(target,"opacity",[[0,0],...(a>0?[[a,0,"hold"]]:[]),[b,to,"ease-out"],[DURATION,to]]);
   const sceneMeta={id,durationFrames:DURATION,fps:60,nativeReveal:[],animatedFamilies:[],initialMotion:[],closingMotion:[]};
 
   if(id==="vessel"){
