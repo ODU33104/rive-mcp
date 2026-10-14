@@ -1,0 +1,72 @@
+name: Visual Rig Library — Real Rive Runtime Evidence
+on:
+  push:
+    branches: ['feat/motion-visual-rig']
+    paths:
+      - 'scripts/visual-rig-*.mjs'
+      - 'test/visualRig*.mjs'
+      - 'data/visual-rigs/**'
+      - 'samples/visual-rigs/**'
+      - 'docs/VISUAL_RIG_LIBRARY.md'
+      - '.github/workflows/visual-rig-ci.yml'
+  pull_request:
+    paths:
+      - 'scripts/visual-rig-*.mjs'
+      - 'test/visualRig*.mjs'
+      - 'data/visual-rigs/**'
+      - 'samples/visual-rigs/**'
+      - 'docs/VISUAL_RIG_LIBRARY.md'
+      - '.github/workflows/visual-rig-ci.yml'
+jobs:
+  verify-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned packages and compile Rive writer
+        run: |
+          npm ci
+          npm run build
+      - name: Static and binary assertions, tampered bindings and semantic transfer
+        run: node test/visualRigLibrary.mjs
+      - name: Install Chromium to drive bundled official Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Compile native Rive artboards and capture real runtime PNG sequences
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          test -x "$CHROME"
+          RIVE_MCP_CHROME="$CHROME" node scripts/visual-rig-build.mjs test/tmp/visual-rigs --render
+          test "$(find test/tmp/visual-rigs -maxdepth 1 -name '*.riv' | wc -l)" -eq 3
+          test "$(find test/tmp/visual-rigs -name 'frame-*.png' | wc -l)" -eq 93
+          test -s test/tmp/visual-rigs/index.html
+      - name: Encode GIF only from real runtime PNG captures
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          for scene in atelier signal observatory; do
+            /usr/bin/ffmpeg -hide_banner -loglevel error -y -framerate 10 \
+              -i "test/tmp/visual-rigs/$scene/frame-%03d.png" \
+              -filter_complex "[0:v]scale=800:-1:flags=lanczos,split[pal-in][gif-in];[pal-in]palettegen=stats_mode=diff[pal];[gif-in][pal]paletteuse=dither=bayer:bayer_scale=3" \
+              -loop 0 "test/tmp/visual-rigs/$scene.gif"
+            file "test/tmp/visual-rigs/$scene.gif"
+            test "$(stat -c%s "test/tmp/visual-rigs/$scene.gif")" -gt 10000
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-rig-native-binaries-and-runtime-evidence
+          path: |
+            test/tmp/visual-rigs/*.riv
+            test/tmp/visual-rigs/*.png
+            test/tmp/visual-rigs/*.gif
+            test/tmp/visual-rigs/index.html
+            test/tmp/visual-rigs/summary.json
+          if-no-files-found: warn
