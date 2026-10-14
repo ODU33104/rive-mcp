@@ -1,0 +1,50 @@
+name: Effect Visual Impact Reality Check
+on:
+  pull_request:
+    paths:
+      - 'scripts/effect-visual-impact.mjs'
+      - 'test/effectVisualImpact.mjs'
+      - 'test/effectQualityGate.mjs'
+      - 'scripts/effect-quality-gate.mjs'
+      - 'data/effect-quality/**'
+      - 'docs/EFFECT_VISUAL_IMPACT.md'
+      - '.github/workflows/effect-visual-impact.yml'
+jobs:
+  runtime-pixel-coverage:
+    name: Real Rive pixel impact ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        variant: [fx-spectra, fx-atlas, fx-meridian, fx-zenith, fx-prism, fx-vesper, fx-bassline, fx-quantum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Test impact classifier and insufficient evidence handling
+        run: |
+          node test/effectVisualImpact.mjs
+          node test/effectQualityGate.mjs
+          node scripts/effect-quality-gate.mjs
+      - name: Install Chromium matching native Rive Canvas runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Pixel area checks across five timeline positions
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/effect-visual-impact.mjs "${{ matrix.variant }}" "test/tmp/effect-visual-impact/${{ matrix.variant }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: effect-visual-impact-${{ matrix.variant }}
+          path: |
+            test/tmp/effect-visual-impact/${{ matrix.variant }}/*.png
+            test/tmp/effect-visual-impact/${{ matrix.variant }}/*.json
+            test/tmp/effect-visual-impact/${{ matrix.variant }}/*.riv
+          if-no-files-found: warn

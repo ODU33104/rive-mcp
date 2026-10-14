@@ -1,0 +1,312 @@
+{
+  "schema": "effect-source-capsule/v1",
+  "description": "Actual artwork and existing motion copied from the repo's original Studio Foundry scenes; NOT externally downloaded assets. Source-based reuse; future external acquisition must use independent rights gates.",
+  "sourceBranch": "feat/motion-showcase-multigenre",
+  "sourceFile": "scripts/studio-foundry-scenes.mjs",
+  "rights": {
+    "artwork": "project-original",
+    "externalMedia": "none",
+    "bundledFont": "existing Studio license separately reviewed",
+    "importedMarketplaceArt": "none"
+  },
+  "capsules": [
+    {
+      "id": "spectral-beams",
+      "sourceScene": "prism",
+      "shapeIdPrefix": "refraction-",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "spectra",
+        "quantum",
+        "prism"
+      ],
+      "semanticFunction": "optical refraction/spectrally illuminated glass",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "orbital-trace",
+      "sourceScene": "orbital",
+      "shapeIdPrefix": "orbit-arc",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "atlas",
+        "orbital",
+        "meridian"
+      ],
+      "semanticFunction": "orbit/astronomical navigation annotation",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "joy-sparkle",
+      "sourceScene": "luma",
+      "shapeIdPrefix": "confetti-star-",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "luma",
+        "zenith"
+      ],
+      "semanticFunction": "playful/celebratory emphasis, prohibited on quiet premium scenes",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "data-pulse",
+      "sourceScene": "quantum",
+      "shapeIdPrefix": "trace-",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "meridian",
+        "quantum"
+      ],
+      "semanticFunction": "electronic telemetry/data flow",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "organic-dew",
+      "sourceScene": "botanica",
+      "shapeIdPrefix": "dew-",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "botanica",
+        "prism"
+      ],
+      "semanticFunction": "moisture/spectral glints on organic or refractive media",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "optic-specular",
+      "sourceScene": "spectra",
+      "shapeIdPrefix": "lens-reflection",
+      "sourceParent": "hero",
+      "compatibleScenes": [
+        "vesper",
+        "prism",
+        "spectra"
+      ],
+      "semanticFunction": "specular accent on coated optical/glossy surfaces",
+      "inheritAccentMotion": false,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "vu-meter",
+      "sourceScene": "bassline",
+      "shapeIdPrefix": "meter-",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "meridian",
+        "bassline"
+      ],
+      "semanticFunction": "audio-responsive level indicators",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "editorial-rays",
+      "sourceScene": "zenith",
+      "shapeIdPrefix": "rays-",
+      "sourceParent": "accent",
+      "compatibleScenes": [
+        "zenith",
+        "vesper",
+        "archive"
+      ],
+      "semanticFunction": "expressive editorial sunburst; must not masquerade as lens flare",
+      "inheritAccentMotion": true,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "instrument-indices",
+      "sourceScene": "atlas",
+      "shapeIdPrefix": "compass-tick-",
+      "sourceParent": "hero",
+      "compatibleScenes": [
+        "atlas",
+        "orbital",
+        "meridian"
+      ],
+      "semanticFunction": "clockwise instrument calibration markers",
+      "inheritAccentMotion": false,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "system-beacon",
+      "sourceScene": "meridian",
+      "shapeIdPrefix": "graph-beacon",
+      "sourceParent": "hero",
+      "compatibleScenes": [
+        "quantum",
+        "meridian"
+      ],
+      "semanticFunction": "single instrument/data event indicator",
+      "inheritAccentMotion": false,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "device-led",
+      "sourceScene": "vesper",
+      "shapeIdPrefix": "indicator-led",
+      "sourceParent": "hero",
+      "compatibleScenes": [
+        "vesper",
+        "meridian",
+        "quantum"
+      ],
+      "semanticFunction": "small hardware device readiness light",
+      "inheritAccentMotion": false,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "print-emboss",
+      "sourceScene": "archive",
+      "shapeIdPrefix": "emboss",
+      "sourceParent": "hero",
+      "compatibleScenes": [
+        "archive",
+        "zenith"
+      ],
+      "semanticFunction": "metallic printed ornamental rings",
+      "inheritAccentMotion": false,
+      "coordinates": "source hero-local origin",
+      "attachment": "target hero-local origin",
+      "materialCompatibility": "MANUAL_VISUAL_CHECK_REQUIRED",
+      "aestheticClaim": "NOT_EVALUATED"
+    }
+  ],
+  "examples": [
+    {
+      "id": "fx-spectra",
+      "targetScene": "spectra",
+      "capsuleId": "spectral-beams",
+      "placement": {
+        "x": -20,
+        "y": 0,
+        "scale": 0.74
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-atlas",
+      "targetScene": "atlas",
+      "capsuleId": "orbital-trace",
+      "placement": {
+        "x": 0,
+        "y": 0,
+        "scale": 0.87
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-meridian",
+      "targetScene": "meridian",
+      "capsuleId": "data-pulse",
+      "placement": {
+        "x": 0,
+        "y": 0,
+        "scale": 0.83
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-zenith",
+      "targetScene": "zenith",
+      "capsuleId": "joy-sparkle",
+      "placement": {
+        "x": 0,
+        "y": 0,
+        "scale": 0.9
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-prism",
+      "targetScene": "prism",
+      "capsuleId": "organic-dew",
+      "placement": {
+        "x": 0,
+        "y": 0,
+        "scale": 0.95
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-vesper",
+      "targetScene": "vesper",
+      "capsuleId": "optic-specular",
+      "placement": {
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "zOffset": 35
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-bassline",
+      "targetScene": "bassline",
+      "capsuleId": "vu-meter",
+      "placement": {
+        "x": -50,
+        "y": -40,
+        "scale": 0.8
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-quantum",
+      "targetScene": "quantum",
+      "capsuleId": "system-beacon",
+      "placement": {
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "zOffset": 20
+      },
+      "route": "own-sourced-effect-transfer",
+      "aestheticClaim": "NOT_EVALUATED"
+    }
+  ]
+}

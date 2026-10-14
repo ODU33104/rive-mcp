@@ -1,0 +1,54 @@
+name: Reuse Existing FX (Native Rive)
+on:
+  pull_request:
+    paths:
+      - 'scripts/effect-capsule-reuse.mjs'
+      - 'data/effect-capsules/**'
+      - 'test/effectCapsuleReuse.mjs'
+      - '.github/workflows/effect-capsule-reuse.yml'
+jobs:
+  source-to-target-effects:
+    name: Existing FX transfer ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        variant: [fx-spectra, fx-atlas, fx-meridian, fx-zenith, fx-prism, fx-vesper, fx-bassline, fx-quantum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify effects came from real existing Studio vector/motion, not invented data
+        run: node test/effectCapsuleReuse.mjs
+      - name: Install Chromium pinned to project Playwright
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Inspect and render Rive before/after (not screenshots of GIF mockups)
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/effect-capsule-reuse.mjs "${{ matrix.variant }}" "test/tmp/effect-capsules/${{ matrix.variant }}" --render
+      - name: GIF only from actual runtime PNGs
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/effect-capsules/${{ matrix.variant }}/after"
+          /usr/bin/ffmpeg -hide_banner -loglevel error -y -framerate 10 -i frame-%03d.png -filter_complex "[0:v]scale=640:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[pal];[b][pal]paletteuse=dither=bayer:bayer_scale=3" -loop 0 "../${{ matrix.variant }}.gif"
+          test "$(stat -c%s "../${{ matrix.variant }}.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reused-effect-${{ matrix.variant }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/effect-capsules/${{ matrix.variant }}/*.riv
+            test/tmp/effect-capsules/${{ matrix.variant }}/*.gif
+            test/tmp/effect-capsules/${{ matrix.variant }}/*.png
+            test/tmp/effect-capsules/${{ matrix.variant }}/*.json
+            test/tmp/effect-capsules/${{ matrix.variant }}/before/key-*.png
+            test/tmp/effect-capsules/${{ matrix.variant }}/after/key-*.png

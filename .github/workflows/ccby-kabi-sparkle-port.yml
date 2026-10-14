@@ -1,0 +1,62 @@
+name: Licensed Third-Party Rive Component Port (Real Studio Host)
+on:
+  pull_request:
+    paths:
+      - 'scripts/ccby-kabi-sparkle-port.mjs'
+      - 'test/ccbyKabiSparklePort.mjs'
+      - 'docs/KABI_SPARKLE_COMPONENT_REUSE.md'
+      - '.github/workflows/ccby-kabi-sparkle-port.yml'
+jobs:
+  port-native-external-fx:
+    name: Port CC BY Kabi component into ${{ matrix.scene }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        scene: [luma, zenith]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Download original CC BY source from pinned commit, not copied art
+        shell: bash
+        run: |
+          mkdir -p test/tmp/kabi-sparkle-source
+          ROOT="https://raw.githubusercontent.com/bryllim/kabi-mascot/7dee2abc2320fcc72f08c7064214ba9df84687f5"
+          curl --fail --location --show-error --retry 3 "$ROOT/dist/kabi.model.json" -o test/tmp/kabi-sparkle-source/kabi.model.json
+          curl --fail --location --show-error --retry 3 "$ROOT/LICENSE" -o test/tmp/kabi-sparkle-source/LICENSE
+          grep -q 'Attribution 4.0 International' test/tmp/kabi-sparkle-source/LICENSE
+          sha256sum test/tmp/kabi-sparkle-source/kabi.model.json
+      - name: Contract tests — actual external geometry, source motion, bad intent rejection
+        run: node test/ccbyKabiSparklePort.mjs test/tmp/kabi-sparkle-source/kabi.model.json
+      - name: Install pinned Chromium compatible with local Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Render source-imported real editable native RIVE + 46 PNG frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/ccby-kabi-sparkle-port.mjs test/tmp/kabi-sparkle-source/kabi.model.json "${{ matrix.scene }}" "test/tmp/kabi-port/${{ matrix.scene }}" --render
+      - name: Produce motion evidence GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/kabi-port/${{ matrix.scene }}"
+          /usr/bin/ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 10 -i frame-%03d.png -vf "scale=640:-1:flags=lanczos" -loop 0 "external-original-sparkles.gif"
+          test "$(stat -c%s "external-original-sparkles.gif")" -gt 20000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-external-kabi-sparkle-ported-${{ matrix.scene }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/kabi-port/${{ matrix.scene }}/*.riv
+            test/tmp/kabi-port/${{ matrix.scene }}/*.gif
+            test/tmp/kabi-port/${{ matrix.scene }}/*.png
+            test/tmp/kabi-port/${{ matrix.scene }}/*.json
+            test/tmp/kabi-sparkle-source/LICENSE

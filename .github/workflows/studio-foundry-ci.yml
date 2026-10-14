@@ -1,0 +1,52 @@
+name: Studio Foundry Multi-Genre Visuals
+on:
+  pull_request:
+    paths:
+      - 'scripts/studio-foundry-*.mjs'
+      - 'test/studioFoundry.mjs'
+      - 'docs/STUDIO_FOUNDRY.md'
+      - '.github/workflows/studio-foundry-ci.yml'
+jobs:
+  original-rive-scenes:
+    name: Rive scene ${{ matrix.scene }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        scene: [vesper, spectra, orbital, luma, bassline, meridian, archive, botanica, prism, atlas, zenith, quantum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Validate the source geometry and animation tracks
+        run: node test/studioFoundry.mjs "${{ matrix.scene }}"
+      - name: Install pinned Chromium for official Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Produce native Rive and 46 official PNG frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/studio-foundry-render.mjs "${{ matrix.scene }}" "test/tmp/studio-foundry/${{ matrix.scene }}"
+      - name: Convert official runtime PNG sequence into looping GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/studio-foundry/${{ matrix.scene }}"
+          /usr/bin/ffmpeg -hide_banner -loglevel error -y -framerate 10 -i frame-%03d.png -filter_complex "[0:v]scale=640:-1:flags=lanczos,split[p][g];[p]palettegen=stats_mode=diff[pal];[g][pal]paletteuse=dither=bayer:bayer_scale=3" -loop 0 "${{ matrix.scene }}.gif"
+          test "$(stat -c%s "${{ matrix.scene }}.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-${{ matrix.scene }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/studio-foundry/${{ matrix.scene }}/*.riv
+            test/tmp/studio-foundry/${{ matrix.scene }}/*.gif
+            test/tmp/studio-foundry/${{ matrix.scene }}/*-poster.png
+            test/tmp/studio-foundry/${{ matrix.scene }}/*-proof.json

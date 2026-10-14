@@ -1,0 +1,94 @@
+{
+  "schema": "native-rive-effect-screen-impact/v1",
+  "runId": 38480696536,
+  "commit": "89180cb1f026259b19d15efd72fb3ddf46f43c0c",
+  "renderer": "existing official Rive Canvas advanced",
+  "positionsSeconds": [
+    0.5,
+    1,
+    1.6,
+    2.4,
+    3.4
+  ],
+  "thresholdColorChannel": 16,
+  "unit": "% changed pixels in 720x460 native render",
+  "policy": {
+    "eligible": "at least one sampled position >=0.05% changed pixels",
+    "restricted": "no production quality approval from pixel differences alone",
+    "source": "recorded from actual GitHub Actions job stdout"
+  },
+  "rows": [
+    {
+      "id": "fx-bassline",
+      "classification": "MICRO",
+      "maxChangedPercent": 0.0966,
+      "meanChangedPercent": 0.0443,
+      "gate": "VISIBLY_APPLIED",
+      "stage": "technical-visual-candidate",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-spectra",
+      "classification": "SUBTLE",
+      "maxChangedPercent": 0.3472,
+      "meanChangedPercent": 0.0894,
+      "gate": "VISIBLY_APPLIED",
+      "stage": "technical-visual-candidate",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-meridian",
+      "classification": "SUBTLE",
+      "maxChangedPercent": 0.2065,
+      "meanChangedPercent": 0.0594,
+      "gate": "VISIBLY_APPLIED",
+      "stage": "technical-visual-candidate",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-prism",
+      "classification": "MICRO",
+      "maxChangedPercent": 0.0731,
+      "meanChangedPercent": 0.0404,
+      "gate": "VISIBLY_APPLIED",
+      "stage": "technical-visual-candidate",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-vesper",
+      "classification": "NEGLIGIBLE",
+      "maxChangedPercent": 0,
+      "meanChangedPercent": 0,
+      "gate": "INSUFFICIENT_PIXEL_EVIDENCE",
+      "stage": "quarantine-insufficient-effect",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-atlas",
+      "classification": "SUBTLE",
+      "maxChangedPercent": 1.1606,
+      "meanChangedPercent": 0.4585,
+      "gate": "VISIBLY_APPLIED",
+      "stage": "technical-visual-candidate",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-zenith",
+      "classification": "SUBTLE",
+      "maxChangedPercent": 0.3046,
+      "meanChangedPercent": 0.1728,
+      "gate": "VISIBLY_APPLIED",
+      "stage": "technical-visual-candidate",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    },
+    {
+      "id": "fx-quantum",
+      "classification": "MICRO",
+      "maxChangedPercent": 0.0266,
+      "meanChangedPercent": 0.0053,
+      "gate": "INSUFFICIENT_PIXEL_EVIDENCE",
+      "stage": "quarantine-insufficient-effect",
+      "aestheticHumanRating": "NOT_EVALUATED"
+    }
+  ]
+}
