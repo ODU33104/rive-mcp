@@ -5,6 +5,7 @@ on:
       - 'scripts/v5-real-glb-mesh.mjs'
       - 'scripts/v5-rive-real-model-scene.mjs'
       - 'scripts/v5-real-gpu-audit.mjs'
+      - 'scripts/v5-real-gpu-sequence.mjs'
       - 'test/v5RealModel.mjs'
       - 'docs/V5_REAL_3D_MODEL_STUDIO.md'
       - '.github/workflows/v5-real-glb-gpu.yml'
@@ -78,6 +79,17 @@ jobs:
           "$cli" "$p" --screenshot="$o/early.png" --viewport=960x600 --advance=0.6s
           "$cli" "$p" --screenshot="$o/late.png" --viewport=960x600 --advance=2.8s
           node scripts/v5-real-gpu-audit.mjs "${{ matrix.direction }}" "$p" "$o"
+      - name: 31 genuine native Rive frames and animated GIF (no raster interpolation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="test/tmp/v5-projects/${{ matrix.direction }}"
+          out="test/tmp/v5-output/${{ matrix.direction }}"
+          node scripts/v5-real-gpu-sequence.mjs "$project" "$out" "$HOME/.rive/bin/rive"
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 8 -i "$out/native-frame-%03d.png" -vf "scale=768:480:flags=lanczos" -loop 0 "$out/native-v5.gif"
+          test "$(stat -c %s "$out/native-v5.gif")" -gt 10000
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -92,5 +104,6 @@ jobs:
             test/tmp/v5-projects/${{ matrix.direction }}/source-licence.json
             test/tmp/v5-projects/${{ matrix.direction }}/build/*.riv
             test/tmp/v5-output/${{ matrix.direction }}/*.png
+            test/tmp/v5-output/${{ matrix.direction }}/*.gif
             test/tmp/v5-output/${{ matrix.direction }}/*.json
             test/tmp/v5-output/${{ matrix.direction }}/*.txt
