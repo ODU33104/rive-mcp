@@ -48,6 +48,8 @@ jobs:
         run: |
           CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
           RIVE_MCP_CHROME="$CHROME" node scripts/v3-flagship-render.mjs "${{ matrix.scene }}" "test/tmp/v3-flagship/${{ matrix.scene }}"
+      - name: Install ffmpeg for native-frame proof encoding
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - name: Native-frame contact sheet and animation GIF
         shell: bash
         run: |
