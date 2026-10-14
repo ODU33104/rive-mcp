@@ -1,0 +1,26 @@
+[
+  {
+    "id": "earbuds-premium",
+    "prompt": "高級イヤホンケースを静かに開いて見せる、左右並び、バウンスなし"
+  },
+  {
+    "id": "earbuds-energetic",
+    "prompt": "premium earbuds floating open case, diagonal composition, energetic reveal"
+  },
+  {
+    "id": "instrument-quiet",
+    "prompt": "精密な軌道計器を中央に。回転させない、静かな動き"
+  },
+  {
+    "id": "instrument-scan",
+    "prompt": "technical orbital instrumentation, oscilloscope scan, high energy, split layout"
+  },
+  {
+    "id": "poster-minimal",
+    "prompt": "ミニマルなタイポグラフィポスター、グリッド配置、落ち着いたアニメーション"
+  },
+  {
+    "id": "poster-bold",
+    "prompt": "bold typographic poster, energetic modular bands and diagonal composition"
+  }
+]
