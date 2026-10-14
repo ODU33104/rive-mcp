@@ -23,10 +23,19 @@ export function auditReal3DRive(id,source,render){
   return [...png.rgba.subarray(i,i+4)];};
  const locations=[[.5,.5],[.55,.32],[.50,.75],[.12,.12],[.8,.8]];
  const samples=locations.map(([x,y])=>({x,y,color:sample(last,x,y)}));
- const contrasts=samples.flatMap((a,i)=>samples.slice(i+1).map(b=>
-  Math.max(...[0,1,2].map(k=>Math.abs(a.color[k]-b.color[k])))));
- const max=Math.max(...contrasts);
- if(max<24)throw Error("GPU GLB geometry visually absent (flat pixel output)");
+ // The 3 editorial art-directions deliberately move the product off-centre:
+ // fixed 0.5/0.5 sampling falsely rejected the LEFT-aligned museum composition.
+ // Scan the entire actual framebuffer against its sampled background instead.
+ const background=sample(last,.02,.02);
+ let max=0,visibleGeometryGridCells=0;
+ for(let y=16;y<last.height-16;y+=20)for(let x=16;x<last.width-16;x+=20){
+  const c=sample(last,x/last.width,y/last.height);
+  const delta=Math.max(...[0,1,2].map(k=>Math.abs(c[k]-background[k])));
+  max=Math.max(max,delta);
+  if(delta>32)visibleGeometryGridCells++;
+ }
+ if(max<24||visibleGeometryGridCells<30)
+  throw Error("GPU GLB geometry visually absent (flat pixel output): "+visibleGeometryGridCells);
  const timeline=pixelDifference(join(r,"early.png"),join(r,"late.png"),16);
  if(timeline.changedPercent<.035)throw Error("Native GLB 3D asset did not visibly move");
  const proof={schema:"real-CC0-external-GLB-native-Rive-GPU-proof/v1",
@@ -35,6 +44,7 @@ export function auditReal3DRive(id,source,render){
   sourceTriangles:receipt.sourceMeshTriangles,originalMaterialFactors:glb.materialEntries,
   previewEvidence:"RIVE_FIRST_PARTY_CLI_NATIVE_GPU",
   nativeFramebufferColorRange:max,nativeMotion:timeline,samples,
+  visibleGeometryGridCells,
   modelTransferred:"ACTUAL_GLTF_TRIANGLES_NORMALS_AND_PBR_FACTORS",
   sourceTextures:"NOT_REPRODUCED",fullPBR:"NO: analytic BRDF approximation",
   hdrEnvironment:"NOT_IMPLEMENTED",
