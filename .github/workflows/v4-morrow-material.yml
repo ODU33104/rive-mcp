@@ -1,0 +1,53 @@
+name: V4 MORROW Cinematic Material Re-Authoring
+on:
+  pull_request:
+    paths:
+      - 'scripts/v4-morrow-material.mjs'
+      - 'test/v4MorrowMaterial.mjs'
+      - 'docs/V4_MORROW_MATERIAL.md'
+      - '.github/workflows/v4-morrow-material.yml'
+jobs:
+  source-to-native-material:
+    name: Real V4 material ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        variant: [atelier, spectral]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Test complex vector optical geometry and real source-based effect import
+        run: node test/v4MorrowMaterial.mjs
+      - name: Install pinned Chromium for official Rive runtime
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Generate actual editable Rive A/B and 76 native-runtime PNG frames
+        shell: bash
+        run: |
+          CHROME="$(node --input-type=module -e 'import {chromium} from "playwright-core"; process.stdout.write(chromium.executablePath())')"
+          RIVE_MCP_CHROME="$CHROME" node scripts/v4-morrow-material.mjs "${{ matrix.variant }}" "test/tmp/v4-morrow/${{ matrix.variant }}" --render
+      - name: Encode genuine native Rive PNG frames into animated GIF
+        shell: bash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          cd "test/tmp/v4-morrow/${{ matrix.variant }}"
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 15 -i frame-%03d.png -filter_complex "[0:v]fps=12,scale=800:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3" -loop 0 "${{ matrix.variant }}.gif"
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 3 -i frame-%03d.png -vf "select='not(mod(n,10))',scale=480:300:flags=lanczos,tile=4x2" -frames:v 1 "review-contact.png"
+          test "$(stat -c%s "${{ matrix.variant }}.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: optical-morrow-v4-${{ matrix.variant }}
+          path: |
+            test/tmp/v4-morrow/${{ matrix.variant }}/*.riv
+            test/tmp/v4-morrow/${{ matrix.variant }}/*.gif
+            test/tmp/v4-morrow/${{ matrix.variant }}/*.png
+            test/tmp/v4-morrow/${{ matrix.variant }}/*.json
+          if-no-files-found: warn
