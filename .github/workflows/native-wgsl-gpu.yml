@@ -1,0 +1,66 @@
+name: Actual First-Party Rive WGSL GPUCanvas Source
+on:
+  pull_request:
+    paths:
+      - 'scripts/native-rml-gpu-shader.mjs'
+      - 'scripts/native-gpu-shader-audit.mjs'
+      - 'scripts/rml-evidence-audit.mjs'
+      - 'test/nativeGpuShader.mjs'
+      - 'docs/NATIVE_WGSL_GPU_SHADER.md'
+      - '.github/workflows/native-wgsl-gpu.yml'
+jobs:
+  native-cli-gpucanvas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Original shader-source contracts and explicit rights/publication gate
+        run: node test/nativeGpuShader.mjs test/tmp/rml-wgsl-gpu
+      - name: Install native EGL/GL and first-party Rive CLI 1.5.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgles2 libx11-6 libgl1 libxkbcommon0 libglib2.0-0
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 https://releases.rive.app/cli/install.sh -o /tmp/rive-install.sh
+          bash /tmp/rive-install.sh
+          "$HOME/.rive/bin/rive" --version
+      - name: Official CLI compiles actual WGSL and Luau runtime pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          project="test/tmp/rml-wgsl-gpu"
+          mkdir -p test/tmp/rml-wgsl-render
+          "$cli" "$project" --verify --format=json > test/tmp/rml-wgsl-render/verify.json
+          "$cli" "$project" --once --format=json > test/tmp/rml-wgsl-render/build.json
+          "$cli" inspect "$project" --summary > test/tmp/rml-wgsl-render/inspect.json
+          "$cli" --version > test/tmp/rml-wgsl-render/rive-version.txt
+          test -s test/tmp/rml-wgsl-gpu/build/gpu_prism_study.riv
+      - name: Actual headless GPU shader images from native Rive CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          "$cli" test/tmp/rml-wgsl-gpu --screenshot=test/tmp/rml-wgsl-render/gpu-early.png --viewport=640x480 --advance=0.4s
+          "$cli" test/tmp/rml-wgsl-gpu --screenshot=test/tmp/rml-wgsl-render/gpu-late.png --viewport=640x480 --advance=1.8s
+          node scripts/native-gpu-shader-audit.mjs test/tmp/rml-wgsl-gpu test/tmp/rml-wgsl-render
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rive-cli-real-wgsl-gpucanvas-evidence
+          path: |
+            test/tmp/rml-wgsl-gpu/*.wgsl
+            test/tmp/rml-wgsl-gpu/*.luau
+            test/tmp/rml-wgsl-gpu/*.yaml
+            test/tmp/rml-wgsl-gpu/build/*.riv
+            test/tmp/rml-wgsl-render/*.png
+            test/tmp/rml-wgsl-render/*.json
+            test/tmp/rml-wgsl-render/*.txt
+          if-no-files-found: warn
