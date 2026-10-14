@@ -1,0 +1,117 @@
+name: V7 True Poly Haven Studio HDRI in Native Rive GPU
+on:
+  pull_request:
+    paths:
+      - 'scripts/v7-*.mjs'
+      - 'test/v7PolyHavenStudio.mjs'
+      - 'docs/V7_REAL_STUDIO_HDRI.md'
+      - '.github/workflows/v7-studio-hdri.yml'
+jobs:
+  real-CC0-environment:
+    name: Poly Haven studio vs neutral ${{ matrix.direction }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        direction: [midnight, glacier, museum]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install first-party Rive CLI, GPU libraries and HDR Radiance decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgles2 libx11-6 libgl1 libxkbcommon0 libglib2.0-0 ffmpeg
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 https://releases.rive.app/cli/install.sh -o /tmp/rive-install.sh
+          bash /tmp/rive-install.sh
+          "$HOME/.rive/bin/rive" --version
+      - name: Download exact CC0 3D source with individual license and SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/tmp/v7-source
+          base="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/edc7c9e67c639d230715049ee31f9a96a6babbbe/Models/WaterBottle"
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 "$base/LICENSE.md" -o test/tmp/v7-source/WaterBottle_LICENSE.md
+          grep -q CC0-1.0 test/tmp/v7-source/WaterBottle_LICENSE.md
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 "$base/glTF-Binary/WaterBottle.glb" -o test/tmp/v7-source/WaterBottle.glb
+          echo "b337e526fd6a162013c2984aeec163f5fbb4f717252724dfc3f3458bd51df94b  test/tmp/v7-source/WaterBottle.glb" | sha256sum -c -
+      - name: Download CC0 environment from official Poly Haven API, not guessed mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/tmp/v7-hdri
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 -H 'User-Agent: rive-mcp-source-rights-audit/1.0' "https://api.polyhaven.com/files/studio_small_03" -o test/tmp/v7-hdri/polyhaven-original-asset-file-metadata.json
+          url="$(node scripts/v7-polyhaven-hdri.mjs url test/tmp/v7-hdri/polyhaven-original-asset-file-metadata.json)"
+          curl -fL --retry 3 --proto '=https' --tlsv1.2 -H 'User-Agent: rive-mcp-CC0-study/1.0' "$url" -o test/tmp/v7-hdri/studio_small_03_1k.hdr
+          test "$(stat -c%s test/tmp/v7-hdri/studio_small_03_1k.hdr)" -gt 100000
+      - name: Import original four glTF maps and true HDR, create exact-match shader A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/v5-real-glb-mesh.mjs test/tmp/v7-source/WaterBottle.glb test/tmp/v7-legacy
+          node scripts/v6-real-gltf-textures.mjs test/tmp/v7-source/WaterBottle.glb test/tmp/v7-materials
+          node test/v7PolyHavenStudio.mjs test/tmp/v7-hdri/studio_small_03_1k.hdr test/tmp/v7-hdri/polyhaven-original-asset-file-metadata.json test/tmp/v7-legacy test/tmp/v7-materials test/tmp/v7-linear-hdr test/tmp/v7-scenes
+      - name: Compile studio HDR and neutral environment through official Rive CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          output="test/tmp/v7-output/${{ matrix.direction }}"
+          mkdir -p "$output"
+          for state in studio neutral; do
+            p="test/tmp/v7-scenes/${{ matrix.direction }}-$state"
+            cp assets/inter.ttf "$p/InterFont.bin"
+            "$cli" "$p" --verify --format=json > "$output/verify-$state.json"
+            "$cli" "$p" --once --format=json > "$output/build-$state.json"
+            "$cli" inspect "$p" --summary > "$output/inspect-$state.json"
+            test -s "$p/build/real_waterbottle_${{ matrix.direction }}.riv"
+          done
+          "$cli" --version > "$output/rive-version.txt"
+      - name: Native image A/B proves actual authored HDR environmental pixel impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$HOME/.rive/bin/rive"
+          output="test/tmp/v7-output/${{ matrix.direction }}"
+          for state in studio neutral; do
+            p="test/tmp/v7-scenes/${{ matrix.direction }}-$state"
+            label="hdr"
+            if test "$state" = "neutral"; then label="flat"; fi
+            "$cli" "$p" --screenshot="$output/$label-early.png" --viewport=960x600 --advance=0.6s
+            "$cli" "$p" --screenshot="$output/$label-late.png" --viewport=960x600 --advance=2.8s
+          done
+          node scripts/v7-studio-hdri-audit.mjs "${{ matrix.direction }}" "test/tmp/v7-scenes/${{ matrix.direction }}-studio" "test/tmp/v7-scenes/${{ matrix.direction }}-neutral" "$output"
+      - name: Render genuine source Rive 31-frame animation
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="test/tmp/v7-output/${{ matrix.direction }}"
+          node scripts/v5-real-gpu-sequence.mjs "test/tmp/v7-scenes/${{ matrix.direction }}-studio" "$output" "$HOME/.rive/bin/rive"
+          ffmpeg -nostdin -y -hide_banner -loglevel error -framerate 8 -i "$output/native-frame-%03d.png" -vf "scale=768:480:flags=lanczos" -loop 0 "$output/true-hdr-studio.gif"
+          test "$(stat -c%s "$output/true-hdr-studio.gif")" -gt 10000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v7-native-cc0-real-studio-${{ matrix.direction }}
+          if-no-files-found: warn
+          path: |
+            test/tmp/v7-source/WaterBottle_LICENSE.md
+            test/tmp/v7-hdri/polyhaven-original-asset-file-metadata.json
+            test/tmp/v7-linear-hdr/polyhaven-provenance.json
+            test/tmp/v7-scenes/${{ matrix.direction }}-studio/main.luau
+            test/tmp/v7-scenes/${{ matrix.direction }}-studio/RealModel.wgsl
+            test/tmp/v7-scenes/${{ matrix.direction }}-studio/environment-evidence.json
+            test/tmp/v7-scenes/${{ matrix.direction }}-studio/build/*.riv
+            test/tmp/v7-scenes/${{ matrix.direction }}-neutral/build/*.riv
+            test/tmp/v7-output/${{ matrix.direction }}/*.png
+            test/tmp/v7-output/${{ matrix.direction }}/*.gif
+            test/tmp/v7-output/${{ matrix.direction }}/*.json
+            test/tmp/v7-output/${{ matrix.direction }}/*.txt
