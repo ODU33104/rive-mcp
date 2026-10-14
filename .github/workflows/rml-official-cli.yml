@@ -38,6 +38,20 @@ jobs:
           echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
           "$HOME/.rive/bin/rive" --version
           "$HOME/.rive/bin/rive" analytics off || true
+      - name: Inspect official built-in RML and script sample contracts
+        if: matrix.styleframe == 'halo'
+        shell: bash
+        run: |
+          set -euo pipefail
+          samples="$("$HOME/.rive/bin/rive" samples --path)"
+          echo "Official Rive samples path: $samples"
+          find "$samples/hello_rive" "$samples/rml_triangle" -maxdepth 3 -type f | sort | head -30
+          for f in "$samples/hello_rive/scene.rml" "$samples/hello_rive/main.luau" "$samples/rml_triangle/scene.rml"; do
+            if test -f "$f"; then
+              echo "===== $f ====="
+              sed -n '1,160p' "$f"
+            fi
+          done
       - name: Compile through Rive official RML parser and inspect the original scene
         shell: bash
         run: |
