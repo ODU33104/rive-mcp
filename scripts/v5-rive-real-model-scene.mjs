@@ -7,9 +7,9 @@ import {createHash} from "node:crypto";
 import {pathToFileURL} from "node:url";
 const SHA=b=>createHash("sha256").update(b).digest("hex");
 export const DIRECTIONS=Object.freeze({
- midnight:{label:"MIDNIGHT / sculptural shadow",clear:[.009,.014,.024],ink:[.82,.68,.46],accent:[.38,.78,.91],yaw:.58,pitch:-.08,key:1.12,exposure:.82},
- glacier:{label:"GLACIER / cold optics",clear:[.025,.045,.068],ink:[.52,.78,.83],accent:[.85,.98,.99],yaw:-.41,pitch:.14,key:1.22,exposure:1.02},
- museum:{label:"MUSEUM / warm gallery",clear:[.063,.049,.043],ink:[.92,.77,.66],accent:[.89,.72,.48],yaw:.24,pitch:.03,key:.94,exposure:1.05}
+ midnight:{label:"MIDNIGHT / sculptural shadow",clear:[.009,.014,.024],ink:[.82,.68,.46],accent:[.38,.78,.91],yaw:.58,pitch:-.08,key:.66,exposure:.67,pan:.48,title:"SILHOUETTE",eyebrow:"OBJECT STUDY  /  001",copy:"Volume rendered in light."},
+ glacier:{label:"GLACIER / cold optics",clear:[.025,.045,.068],ink:[.52,.78,.83],accent:[.85,.98,.99],yaw:-.41,pitch:.14,key:.78,exposure:.77,pan:.47,title:"GLACIER",eyebrow:"MATERIAL STUDY  /  002",copy:"Clarity has a surface."},
+ museum:{label:"MUSEUM / warm gallery",clear:[.063,.049,.043],ink:[.92,.77,.66],accent:[.89,.72,.48],yaw:.24,pitch:.03,key:.65,exposure:.75,pan:-.43,title:"STILL LIFE",eyebrow:"MUSEUM EDITION  /  003",copy:"An object. A new angle."}
 });
 const shader=String.raw`// Original GPU material authored for real Khronos WaterBottle glTF PBR geometry.
 // Mesh attributes preserve source positions, normals, baseColor/metallic/roughness.
@@ -47,7 +47,7 @@ struct VertexOut {
  let distance=4.45-w.z;
  let perspective=1.0/max(distance,0.2);
  var o:VertexOut;
- o.clip=vec4<f32>(w.x*2.9*perspective,w.y*2.9*perspective,distance/9.0,1.0);
+ o.clip=vec4<f32>(w.x*2.30*perspective + SCENE_PAN_X,w.y*2.30*perspective,distance/9.0,1.0);
  o.normal=nw;
  o.world=w;
  o.base=base;
@@ -65,9 +65,9 @@ struct VertexOut {
  let fresnel=pow(1.0-max(dot(n,eye),0.0),5.0);
  let gloss=pow(nDotH,mix(8.0,120.0,1.0-v.rough));
  let shadow=.16+.84*nDotL;
- let tints=vec3<f32>(0.89,0.94,0.94);
+ let tints=vec3<f32>(MATERIAL_TINT_R,MATERIAL_TINT_G,MATERIAL_TINT_B);
  let diff=v.base*tints*shadow*(1.0-v.metal*.45);
- let spec=vec3<f32>(.72,.84,.94)*(gloss*(.42+v.metal*.77)+fresnel*(.10+v.metal*.60));
+ let spec=vec3<f32>(LIGHT_TINT_R,LIGHT_TINT_G,LIGHT_TINT_B)*(gloss*(.42+v.metal*.77)+fresnel*(.10+v.metal*.60));
  let bounce=vec3<f32>(.13,.26,.33)*max(dot(n,vec3<f32>(.42,-.30,.61)),0.0)*.27;
  let shaded=(diff+spec*camera.key+bounce)*camera.exposure;
  return vec4<f32>(clamp(shaded,vec3<f32>(0.0),vec3<f32>(1.0)),1.0);
@@ -85,6 +85,9 @@ type ModelStage = {
  size: Vector,
  time: number,
  points: number,
+ title: Text?,
+ kicker: Text?,
+ description: Text?,
 }
 function init(self:ModelStage, context:Context):boolean
  self.canvas=context:gpuCanvas({width=960,height=600})
@@ -120,6 +123,17 @@ function init(self:ModelStage, context:Context):boolean
  end
  local layout=self.pipeline:getBindGroupLayout(0)
  self.bindings=GPUBindGroup.new({layout=layout,ubos={{slot=0,buffer=cameraBuffer}}})
+ local font=context:font("Inter")
+ if not font then error("Editorial text requires source-licensed Inter font") end
+ local title=Text.new()
+ title:append(TITLE_STRING,{font=font,size=61,paint=Paint.with({color=Color.rgb(239,239,227)})})
+ self.title=title
+ local kicker=Text.new()
+ kicker:append(EYEBROW_STRING,{font=font,size=13,letterSpacing=2.2,paint=Paint.with({color=Color.rgb(166,182,181)})})
+ self.kicker=kicker
+ local description=Text.new()
+ description:append(DESCRIPTION_STRING,{font=font,size=21,paint=Paint.with({color=Color.rgb(205,206,193)})})
+ self.description=description
  print("REAL_CC0_GLB_GPU_TRIANGLES",self.points/3)
  return true
 end
@@ -157,10 +171,24 @@ function draw(self:ModelStage,renderer:Renderer)
  pass:finish()
  local sampler=ImageSampler("clamp","clamp","bilinear")
  renderer:drawImage(self.canvas.image,sampler,"srcOver",1)
+ if self.title and self.kicker and self.description then
+  renderer:save()
+  renderer:transform(Mat2D.withTranslation(TEXT_ORIGIN_X,151))
+  self.kicker:draw(renderer)
+  renderer:restore()
+  renderer:save()
+  renderer:transform(Mat2D.withTranslation(TEXT_ORIGIN_X,202))
+  self.title:draw(renderer)
+  renderer:restore()
+  renderer:save()
+  renderer:transform(Mat2D.withTranslation(TEXT_ORIGIN_X,297))
+  self.description:draw(renderer)
+  renderer:restore()
+ end
 end
 return function(context:Context):Layout<ModelStage>
  return {canvas=nil,depth=nil,mesh=nil,camera=nil,bindings=nil,pipeline=nil,
-  size=Vector.xy(960,600),time=0,points=0,
+  size=Vector.xy(960,600),time=0,points=0,title=nil,kicker=nil,description=nil,
   init=init,resize=resize,advance=advance,draw=draw}
 end
 `;
@@ -172,11 +200,17 @@ export function makeRealModelDirection(id, packed,manifest){
   throw Error("No verified rights-cleared actual GLB mesh");
  const substitutions={
   BASE_YAW:c.yaw,BASE_PITCH:c.pitch,LIGHT_INTENSITY:c.key,EXPOSURE:c.exposure,
-  CLEAR_R:c.clear[0],CLEAR_G:c.clear[1],CLEAR_B:c.clear[2]
+  CLEAR_R:c.clear[0],CLEAR_G:c.clear[1],CLEAR_B:c.clear[2],
+  TEXT_ORIGIN_X:c.pan>0?76:570
  };
  let script=lua;
  for(const [tag,num] of Object.entries(substitutions))
   script=script.replaceAll(tag,String(num));
+ for(const [tag,value] of Object.entries({TITLE_STRING:c.title,EYEBROW_STRING:c.eyebrow,DESCRIPTION_STRING:c.copy}))
+  script=script.replaceAll(tag,JSON.stringify(value));
+ const directionShader=shader.replaceAll("SCENE_PAN_X",c.pan<0?"(0.0 - "+Math.abs(c.pan)+")":String(c.pan))
+  .replaceAll("MATERIAL_TINT_R",String(c.ink[0])).replaceAll("MATERIAL_TINT_G",String(c.ink[1])).replaceAll("MATERIAL_TINT_B",String(c.ink[2]))
+  .replaceAll("LIGHT_TINT_R",String(c.accent[0])).replaceAll("LIGHT_TINT_G",String(c.accent[1])).replaceAll("LIGHT_TINT_B",String(c.accent[2]));
  const yaml="name: real_waterbottle_"+id+"\nmain: main\nartboards:\n  main:\n    width: 960\n    height: 600\n    background: \"#111922\"\noutput:\n  dir: build\nlogs:\n  problems: build/problems.log\n";
  const receipt={schema:"v5-real-cc0-glb-rive-gpu-direction/v1",variant:id,
   artDirection:c.label,source:manifest.source,modelGLBSha256:manifest.glbSha256,
@@ -185,7 +219,7 @@ export function makeRealModelDirection(id, packed,manifest){
   renderedView:"NATIVE_CLI_PENDING",publishedScript:"NOT_SIGNED",
   humanAestheticReview:"NOT_EVALUATED",
   sourceImportedNotReconstructed:true};
- return {yaml,script,shader,mesh:packed,receipt};
+ return {yaml,script,shader:directionShader,mesh:packed,receipt};
 }
 export function materializeRealModel(id,sourceDir,destination){
  const manifest=JSON.parse(readFileSync(join(resolve(sourceDir),"mesh-manifest.json"),"utf8"));
