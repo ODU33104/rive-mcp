@@ -286,14 +286,22 @@ export async function renderSourceFx(id,outdir){
   const sourceDoc='<html><body style="margin:0;background:#24303e;display:flex;align-items:center;justify-content:center;width:256px;height:256px">'+v.raw.toString("utf8").replace("<svg ","<svg style=\"width:180px;height:180px\" ")+"</body></html>";
   await page.setContent(sourceDoc);
   // Browser screenshots of the actual original SVG only; no raster derivative is imported.
+  const sourceOriginalHashes=[];
   for(let i=0;i<5;i++){
-   await page.evaluate(()=>document.getAnimations().forEach(a=>a.pause()));
-   await page.waitForTimeout(180);
+   await page.evaluate(time=>{
+    const svg=document.querySelector("svg");
+    if(!svg||typeof svg.setCurrentTime!=="function"||typeof svg.pauseAnimations!=="function")
+      throw Error("SMIL source-time control unavailable; do not fabricate original frames");
+    svg.pauseAnimations();svg.setCurrentTime(time);
+   },i*v.evidence.originalCycleSec/5);
    const shot=await page.screenshot({type:"png"});
+   sourceOriginalHashes.push(hash(shot));
    writeFileSync(join(dir,"source-original-"+String(i).padStart(2,"0")+".png"),shot);
   }
+  if(new Set(sourceOriginalHashes).size<3)
+   throw Error("Original source playback not visibly animated across five sampled frames");
   const report={...v.evidence,officialRuntime:"PASS",officialRuntimePackage:"@rive-app/canvas-advanced",
-    actualNativePNGFrames:46,impactAtFiveTimes:diffs,sourceBrowserOriginalCapture:true,
+    actualNativePNGFrames:46,impactAtFiveTimes:diffs,sourceBrowserOriginalCapture:true,sourceOriginalFrameHashes,
     performance:{impactChecksWallMs:Math.round(performance.now()-start),nativeFrameSequenceWallMs:Math.round(durationMs),
       nativeFrames:46,outputRivBytes:v.after.length,outputRivSha256:hash(v.after),benchmarkEnvironment:"GitHub Actions ephemeral Ubuntu runner, wall-clock only"},
     originalAssetPolicy:"SVG source captured in browser; not represented as original Rive program",
