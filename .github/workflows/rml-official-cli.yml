@@ -31,6 +31,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgles2 libx11-6 libgl1 libxkbcommon0 libglib2.0-0
           curl --proto '=https' --tlsv1.2 --fail --location --retry 3 https://releases.rive.app/cli/install.sh -o /tmp/rive-official-install.sh
           bash /tmp/rive-official-install.sh
           echo "$HOME/.rive/bin" >> "$GITHUB_PATH"
