@@ -91,7 +91,10 @@ function draw(self: Optical, renderer: Renderer)
   self.path:reset()
   local x=w*0.53+math.sin(self.elapsed*1.25)*w*.12
   self.path:moveTo(Vector.xy(x,h*.12))
+  self.path:lineTo(Vector.xy(x+7,h*.12))
+  self.path:lineTo(Vector.xy(x+w*.05+7,h*.88))
   self.path:lineTo(Vector.xy(x+w*.05,h*.88))
+  self.path:close()
   renderer:drawPath(self.path,self.paint)
  end
 end
