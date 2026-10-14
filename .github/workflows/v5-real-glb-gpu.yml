@@ -61,6 +61,7 @@ jobs:
           p="test/tmp/v5-projects/${{ matrix.direction }}"
           o="test/tmp/v5-output/${{ matrix.direction }}"
           mkdir -p "$o"
+          cp assets/inter.ttf "$p/Inter.ttf"
           cp test/tmp/v5-packed/mesh-manifest.json "$o/mesh-manifest.json"
           "$cli" "$p" --verify --format=json > "$o/verify.json"
           "$cli" "$p" --once --format=json > "$o/build.json"
@@ -87,6 +88,7 @@ jobs:
             test/tmp/v5-source/ORIGINAL_METADATA.json
             test/tmp/v5-projects/${{ matrix.direction }}/main.luau
             test/tmp/v5-projects/${{ matrix.direction }}/RealModel.wgsl
+            test/tmp/v5-projects/${{ matrix.direction }}/fonts.rml
             test/tmp/v5-projects/${{ matrix.direction }}/rive.yaml
             test/tmp/v5-projects/${{ matrix.direction }}/source-licence.json
             test/tmp/v5-projects/${{ matrix.direction }}/build/*.riv
