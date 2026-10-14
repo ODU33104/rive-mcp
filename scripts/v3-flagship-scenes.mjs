@@ -34,12 +34,12 @@ function author(id){
     const INK="#080F18",IVORY="#F2EDDE",MOSS="#B1CEB5",METAL="#D6C7A3";
     rect("cyclorama",480,300,960,600,grad("#14232C","#050A10",-500,-290,420,340),0);
     oval("warm-pool",486,355,690,430,grad("#38554E","#0A141B"),1,null,{opacity:.32});
-    oval("falloff",480,535,520,52,solid("#01060C"),2,null,{opacity:.72});
-    for(let i=0;i<17;i++){
-      const x=130+i*44;
-      stroke("light-ray-"+i,[[x,-25],[x-94,615]],"#7A9F99",.55,3,null,{opacity:.035+Math.abs(i-8)*.002});
+    oval("falloff",480,558,480,38,solid("#01060C"),2,null,{opacity:.56});
+    for(let i=0;i<9;i++){
+      const x=283+i*44;
+      stroke("light-ray-"+i,[[x,127],[x-55,542]],"#7A9F99",.5,3,null,{opacity:.012+Math.abs(i-4)*.002});
     }
-    group("object",477,310,{opacity:1,scaleX:1,scaleY:1});
+    group("object",477,380,{opacity:1,scaleX:1,scaleY:1});
     group("glass",0,0,{parent:"object"});
     group("fluid",0,0,{parent:"object",opacity:1});
     group("cap",0,-212,{parent:"object",opacity:1});
@@ -64,7 +64,7 @@ function author(id){
     stroke("glass-right-rim",[[103,-151],[125,-107],[131,130],[104,160]],"#A5DED6",2.6,29,"glass",{trim:{start:0,end:1},opacity:.84});
     stroke("inner-chamfer",[[-91,-134],[-107,-105],[-110,115],[-88,139]],"#618C88",1.2,29,"glass",{opacity:.68});
     rect("central-reflection",-57,-10,20,270,grad("#F7FFF0","#32555C"),30,"lights",10,{opacity:.14,rotation:11,clipBy:"vesselMask"});
-    rect("moving-caustic",-115,12,35,292,grad("#FFFFFF","#477B85"),31,"lights",12,{opacity:.55,rotation:-18,clipBy:"vesselMask"});
+    rect("moving-caustic",-115,12,18,292,grad("#FFFFFF","#477B85"),31,"lights",12,{opacity:.29,rotation:-13,clipBy:"vesselMask"});
     stroke("right-glisten",[[91,-130],[109,-97],[116,48]],"#F9FFEF",3,33,"lights",{trim:{start:0,end:1},opacity:.67});
     // Neck + cap: separate motion families, slightly asymmetric bevel and engraved flutes.
     rect("neck",0,-175,125,49,grad("#8AA9A4","#29434C"),35,"glass",14);
@@ -76,15 +76,15 @@ function author(id){
     text("brand-etch","M O R R O W",-45,-27,105,14,IVORY,49,"etched","center");
     text("batch-etch","E A U  /  0 1",-48,0,109,10,MOSS,49,"etched","center");
     stroke("bottle-engrave",[[-42,29],[42,29]],METAL,1,51,"etched",{trim:{start:0,end:1},opacity:.65});
-    text("product-title","THE SHAPE",79,52,530,77,IVORY,70,"heroWord");
-    text("product-title-2","OF SILENCE",83,122,615,77,IVORY,71,"heroWord");
-    text("product-small","MORROW  /  FRAGRANCE STUDY",84,38,440,13,METAL,72,"folio");
+    text("product-title","MORROW",65,18,834,113,IVORY,70,"heroWord");
+    text("product-title-2","THE SHAPE OF SILENCE",70,135,343,22,MOSS,71,"heroWord");
+    text("product-small","ATELIER / OLFACTORY STUDY",68,15,460,12,METAL,72,"folio");
     text("product-number","01 — 03",774,40,130,13,METAL,72,"folio","right");
-    text("product-note","SMOKED GLASS. FILTERED LIGHT.",91,524,500,15,MOSS,72,"productCaption");
-    text("product-foot","FORM / MATERIAL / LIGHT",665,524,238,12,METAL,72,"productCaption","right");
+    text("product-note","SMOKED GLASS  /  FILTERED LIGHT",69,552,500,12,MOSS,72,"productCaption");
+    text("product-foot","FORM  /  MATERIAL  /  LIGHT",665,552,238,11,METAL,72,"productCaption","right");
 
     // Unfold and settle rather than a single global slide.
-    lane("object","y",[[0,357],[65,340,"emphasized-decel"],[164,301,"ease-out"],[238,310,"ease-in-out"],[300,310]]);
+    lane("object","y",[[0,447],[65,416,"emphasized-decel"],[164,371,"ease-out"],[238,380,"ease-in-out"],[300,380]]);
     lane("object","scaleX",[[0,.87],[120,1.035,"emphasized-decel"],[212,1],[300,1]]);
     lane("object","scaleY",[[0,.87],[120,1.035,"emphasized-decel"],[212,1],[300,1]]);
     fade("glass",10,106);lane("cap","y",[[0,-290],[58,-290,"hold"],[159,-218,"emphasized-decel"],[227,-212],[300,-212]]);
@@ -92,7 +92,7 @@ function author(id){
     lane("fluid","y",[[0,135],[67,135,"hold"],[207,0,"emphasized-decel"],[300,0]]);
     lane("fluid","opacity",[[0,.03],[85,.03],[218,1,"ease-out"],[300,1]]);
     lane("moving-caustic","x",[[0,-205],[81,-205,"hold"],[247,210,"ease-in-out"],[300,228]]);
-    lane("moving-caustic","opacity",[[0,0],[96,0],[163,.42],[249,.12],[300,0]]);
+    lane("moving-caustic","opacity",[[0,0],[96,0],[163,.28],[249,.08],[300,0]]);
     lane("glass-left-rim","trimEnd",[[0,0],[44,0],[184,1,"emphasized-decel"],[300,1]]);
     lane("right-glisten","trimEnd",[[0,0],[126,0],[266,1,"emphasized-decel"],[300,1]]);
     fade("etched",130,254);fade("heroWord",33,135);fade("productCaption",203,280);
@@ -122,11 +122,11 @@ function author(id){
     for(const [ch,x] of letters)text("cut-"+ch,ch,x,92,120,177,BLACK,30,"wordA");
     text("THROUGH","THROUGH",67,261,795,132,BLACK,31,"wordB");
     text("SPACE","SPACE",144,432,675,121,BLACK,32,"wordC");
-    rect("red-slash",489,287,1090,45,solid(RED),42,"slash",0,{rotation:-15});
-    rect("slice-edge",486,262,1080,2,solid("#F1BDB4"),43,"slash",0,{rotation:-15,opacity:.76});
+    rect("red-slash",489,271,1030,14,solid(RED),42,"slash",0,{rotation:-10});
+    rect("slice-edge",486,257,1030,2,solid("#F1BDB4"),43,"slash",0,{rotation:-10,opacity:.76});
     // Counter-space masking is a real native clip, not a fake bitmap overlay.
-    rect("aperture-mask",480,373,817,66,null,15);
-    rect("red-index-reveal",480,375,816,62,solid(RED),16,"rules",0,{clipBy:"aperture-mask"});
+    rect("aperture-mask",480,419,817,17,null,15);
+    rect("red-index-reveal",480,419,816,15,solid(RED),16,"rules",0,{clipBy:"aperture-mask"});
     text("index-number","03",788,84,108,48,RED,60,"indices","right");
     text("micro-left","THE ART OF THE IN-BETWEEN",28,19,492,12,PAPER,61,"indices");
     text("micro-right","MOTION MANIFESTO / 2026",673,19,267,11,PAPER,62,"indices","right");
@@ -135,7 +135,7 @@ function author(id){
     for(let i=0;i<6;i++){
       stroke("registration-"+i,[[59+i*143,54],[59+i*143,84]],GREY,i%2===0?1.4:.8,12,"rules",{trim:{start:0,end:1}});
     }
-    stroke("gutter-rule",[[63,414],[856,414]],BLACK,1.5,17,"rules",{trim:{start:0,end:1}});
+    stroke("gutter-rule",[[63,448],[856,448]],BLACK,1.4,17,"rules",{trim:{start:0,end:1}});
     stroke("baseline-rule",[[78,540],[850,540]],BLACK,1.2,17,"rules",{trim:{start:0,end:1}});
     oval("index-dot",806,496,10,10,solid(RED),65,"annotation");
     // Type takes turns *cutting* into the composition. Deliberate inter-word conflict.
@@ -188,7 +188,7 @@ function author(id){
     // A sweeping current vector and active acoustic ring.
     poly("sonar-arc",pts(255,161,.2),null,38,"sonar",{stroke:{color:GOLD,thickness:3,cap:"round",trim:{start:0,end:.0}},opacity:.85});
     stroke("transect",[[-350,-67],[-200,-42],[-82,-81],[34,-16],[170,-26],[340,55]],ICE,2,39,"sonar",{trim:{start:0,end:1},opacity:.90});
-    stroke("transect-light",[[-350,-64],[-200,-39],[-82,-78],[34,-13],[170,-23],[340,58]],AQUA,6,38,"sonar",{opacity:.12});
+    stroke("transect-light",[[-350,-64],[-200,-39],[-82,-78],[34,-13],[170,-23],[340,58]],AQUA,2.5,38,"sonar",{opacity:0});
     stroke("cross-x",[[-27,0],[27,0]],GOLD,1.8,41,"sonar",{trim:{start:0,end:1}});
     stroke("cross-y",[[0,-27],[0,27]],GOLD,1.8,41,"sonar",{trim:{start:0,end:1}});
     oval("core",0,0,11,11,solid(GOLD),44,"sonar");
@@ -200,8 +200,8 @@ function author(id){
       const x=47+i*95;
       stroke("longitude-"+i,[[x,59],[x,546]],AQUA,.5,3,"grid",{opacity:.11});
     }
-    rect("north-line",96,108,2,55,solid(GOLD),48,"labels");
-    text("north","N",80,72,35,23,GOLD,50,"labels","center");
+    rect("north-line",897,476,2,55,solid(GOLD),48,"labels");
+    text("north","N",879,421,35,23,GOLD,50,"labels","center");
     text("heading","TIDAL",66,81,414,66,ICE,55,"labels");
     text("subheading","FIELD NOTES / 001",71,151,360,13,AQUA,55,"labels");
     text("depth","DEPTH — 4,280M",688,82,230,17,ICE,55,"readout","right");
@@ -216,6 +216,7 @@ function author(id){
     for(let i=0;i<8;i++)lane("contour-"+i,"trimEnd",[[0,0],[27+i*12,0],[166+i*13,1,"emphasized-decel"],[300,1]]);
     lane("sonar-arc","trimEnd",[[0,0],[108,0],[261,.78,"ease-in-out"],[300,.86]]);
     lane("transect","trimEnd",[[0,0],[66,0],[217,1,"emphasized-decel"],[300,1]]);
+    lane("transect-light","opacity",[[0,0],[50,0],[120,.09],[238,.12],[300,.12]]);
     lane("cross-x","trimEnd",[[0,0],[101,0],[178,1],[300,1]]);
     lane("cross-y","trimEnd",[[0,0],[119,0],[194,1],[300,1]]);
     lane("markers","rotation",[[0,-8],[165,5,"emphasized-decel"],[300,0]]);
