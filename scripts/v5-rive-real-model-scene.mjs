@@ -123,7 +123,8 @@ function init(self:ModelStage, context:Context):boolean
  end
  local layout=self.pipeline:getBindGroupLayout(0)
  self.bindings=GPUBindGroup.new({layout=layout,ubos={{slot=0,buffer=cameraBuffer}}})
- local font=context:font("Inter")
+ local fontBlob=context:blob("InterFont")
+ local font=fontBlob and Font.decode(fontBlob.data)
  if not font then error("Editorial text requires source-licensed Inter font") end
  local title=Text.new()
  title:append(TITLE_STRING,{font=font,size=61,paint=Paint.with({color=Color.rgb(239,239,227)})})
@@ -230,7 +231,6 @@ export function materializeRealModel(id,sourceDir,destination){
  writeFileSync(join(out,"main.luau"),o.script);
  writeFileSync(join(out,"RealModel.wgsl"),o.shader);
  writeFileSync(join(out,"WaterBottleMesh.bin"),o.mesh);
- writeFileSync(join(out,"fonts.rml"),`<Rive version="1" kind="fragment"><FontAsset file="Inter.ttf" name="Inter" id="0:103"/></Rive>\n`);
  writeFileSync(join(out,"source-licence.json"),JSON.stringify(o.receipt,null,2)+"\n");
  return {dir:out,receipt:o.receipt};
 }
