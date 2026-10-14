@@ -37,7 +37,8 @@ export function planConstructiveScene(prompt){
   const stationCount=stationMatch?Number(stationMatch[1]):6;
   if(domain==="transit"&&(stationCount<4||stationCount>10))
     return abstain("transit graph supports 4..10 stations; requested count cannot be constructed","topology-capacity");
-  const layout=/(?:対角|斜め|diagonal|dynamic angle)/iu.test(p)?"diagonal":
+  const layout=/(?:reverse layout|reversed layout|text on the right|right headline|文字を右|反転配置|逆配置)/iu.test(p)?"reverse":
+    /(?:対角|斜め|diagonal|dynamic angle)/iu.test(p)?"diagonal":
     /(?:左右|分割|split|two.column)/iu.test(p)?"split":"center";
   const language=/(?:高級|上質|premium|luxury|polished)/iu.test(p)?"premium":
     /(?:精密|計測|tech|technical|計器)/iu.test(p)?"technical":
@@ -290,6 +291,18 @@ function builder(plan){
     slot("poster.composition","typeBlockRig",null,{x:cx,y:cy},
       ["posterPanel","posterDisc"]);
     enter("typeBlockRig",d.energy==="high"?54:22);
+  }
+  // A true composition inversion: scene roots, authored pivots, editorial hierarchy
+  // and ambient balance all change, rather than merely recoloring a fixed poster.
+  if(d.layout==="reverse"){
+    for(const g of scene.groups)if(!g.parent)g.x-=350;
+    for(const component of slots)if(component.parentId===null)component.anchor.x-=350;
+    for(const t of scene.texts)if(["eyebrow","headline","subline","issue"].includes(t.id)){
+      t.x=553;
+      if(t.id==="headline")t.width=334;
+    }
+    const ambient=scene.shapes.find(x=>x.id==="ambient");
+    if(ambient)ambient.x=300;
   }
   scene.fonts=[{id:"inter",bytes:new Uint8Array(readFileSync(join(ROOT,"assets","inter.ttf")))}];
   scene.animations=[{name:"Reveal",duration:F,fps:60,loop:"oneShot",tracks}];
