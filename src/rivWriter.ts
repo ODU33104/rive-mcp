@@ -278,6 +278,16 @@ export interface TextRunSpec {
   font?: string; // fonts[].id（既定: 先頭のフォント）
   bind?: DataBindSpec; // text をViewModelの文字列プロパティに配線
 }
+/** テキストをパスに沿わせる（TextFollowPathModifier）。runs の位置（アドバンス）がパス上の距離に写される */
+export interface TextFollowPathSpec {
+  path: string; // 沿わせる先の shapes[].id（パスを持つシェイプ）
+  start?: number; // パス上の開始位置（0〜1 の割合。既定 0）
+  end?: number; // パス上の終了位置（0〜1。既定 1）
+  strength?: number; // 効きの強さ 0〜1（既定 1。0.5 でパスと元の位置の中間）
+  offset?: number; // パス上のずらし量（パス長に対する割合。既定 0）
+  orient?: boolean; // 文字をパスの接線方向へ回転させる（既定 true）
+  radial?: boolean; // 放射状（パスを円として扱う）モード（既定 false）
+}
 export interface TextSpec {
   id: string;
   x: number;
@@ -288,6 +298,7 @@ export interface TextSpec {
   parent?: string;
   z?: number;
   runs: TextRunSpec[];
+  followPath?: TextFollowPathSpec; // text on path。プレビュー対応状況は docs/riv-format.md 参照
 }
 export interface NestedSpec {
   id: string;
@@ -1343,6 +1354,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       }
     };
 
+    const pendingTextPaths: Array<{ textNode: number; spec: TextFollowPathSpec; owner: string }> = [];
     const emitText = (t: TextSpec): void => {
       const props: Record<string, unknown> = {
         name: t.id,
@@ -1358,6 +1370,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       }
       const text = push({ type: "Text", props });
       textIds.set(t.id, text);
+      if (t.followPath) pendingTextPaths.push({ textNode: text, spec: t.followPath, owner: t.id });
       // ラン毎にスタイルを作成（fontSize/color/font の組でデデュープ）
       const styleIds = new Map<string, number>();
       const styleOf = (run: TextRunSpec): number => {
@@ -1440,6 +1453,25 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       };
       if (c.strength !== undefined) props.strength = c.strength;
       followIds.set(c.item, push({ type: "FollowPathConstraint", props }));
+    }
+
+    // text on path（沿わせる先のシェイプの出力後に解決）
+    for (const tp of pendingTextPaths) {
+      const target = shapeIds.get(tp.spec.path);
+      if (target === undefined) throw new Error(`text '${tp.owner}' followPath: path shape '${tp.spec.path}' not found`);
+      // TextFollowPathModifier は TextModifierGroup の子で、グループに TextModifierRange（既定=全文）が
+      // 無いと何も効かない（実測: Text 直下・Range 無しでは読み込めるが無効果）
+      const modParent = push({ type: "TextModifierGroup", props: { parentId: tp.textNode } });
+      push({ type: "TextModifierRange", props: { parentId: modParent } });
+      push({
+        type: "TextFollowPathModifier",
+        props: {
+          parentId: modParent, targetId: target,
+          radial: tp.spec.radial ?? false, orient: tp.spec.orient ?? true,
+          start: tp.spec.start ?? 0, end: tp.spec.end ?? 1,
+          strength: tp.spec.strength ?? 1, offset: tp.spec.offset ?? 0,
+        },
+      });
     }
 
     // クリッピング（クリップ元シェイプの出力後に解決）

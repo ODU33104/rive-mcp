@@ -847,6 +847,7 @@ Character animation (images/groups/mesh):
   ]}]
 }
 - images[].pngPath: PNG file embedded into the .riv. mesh enables vertex deformation; vertices addressed as "<imageId>#v<row>_<col>" (row 0 = top), coordinates in the image's natural pixel space centered at origin. Mesh vertex tracks support x/y only.
+- texts[].followPath {"path":"<shapes[].id>","start":0,"end":1,"offset":0,"strength":1,"orient":true} bends the text along that shape's path (text on path; start/end/offset are 0-1 fractions of the path length). Needs fonts[] like any text.
 - groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
 - transitions support exitTimeMs (play source animation this long before transitioning).
 Motion presets — PREFER these over hand-authored keyframes (professionally tuned amplitudes/easings, ~10x fewer tokens):

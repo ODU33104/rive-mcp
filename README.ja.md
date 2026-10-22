@@ -136,7 +136,7 @@ Twemojiアートワーク © Twitter/X and contributors（[CC-BY 4.0](https://cr
 ## 対応機能（riv_create シーン仕様）
 
 - **描画**: rect(角丸)/ellipse/polygon（**ベジェハンドル付き頂点**でCubicMirrored/CubicAsymmetric対応）、単色・線形/放射グラデ、ストローク、feather（ぼかし。データは正しく書き込まれるがCanvas2Dプレビューでは非表示、下記「対象外」参照）、統一z順序、PNG画像
-- **テキスト**: フォント埋め込み（既定: 同梱Inter/OFL）、スタイル付きラン（サイズ・色）、名前付きランはランタイム差し替え可
+- **テキスト**: フォント埋め込み（既定: 同梱Inter/OFL）、スタイル付きラン（サイズ・色）、名前付きランはランタイム差し替え可、パスに沿わせる text on path（`followPath`）
 - **構造**: 複数アートボード、ネストアートボード（SM入力自動公開）、グループ階層、ボーン+スキニング、IKコンストレイント
 - **アニメ**: キーフレーム（linear/hold/ease系 + **elastic-in/out/in-out**）、色アニメ、メッシュ頂点アニメ、物理ベイク（gravity/spring/pendulum/wind → Douglas-Peucker圧縮 + 自動イージング付与）、パーティクル（rain/snow/sparks/dust/confetti/bubbles）
 - **State Machine**: 複数SM・複数レイヤー、ブレンドステート(1D)、条件付き遷移（==,!=,<,>,<=,>=）、duration/exit time、**リスナー**（click/down/up/enter/exit/move → trigger発火・bool設定/トグル・number設定）、**イベント**（カスタム/OpenURL、state進入時発火）
