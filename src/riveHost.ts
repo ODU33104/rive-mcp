@@ -217,6 +217,19 @@ export class RiveHost {
     return this.call<RenderResult>("renderFrames", rivBytes.toString("base64"), opts);
   }
 
+  /** 指定時刻(秒)ごとのボーンのワールド変換（ランタイム評価値）。Studioのボーンオーバーレイと同じ読み取り元 */
+  boneWorldAt(
+    rivBytes: Buffer,
+    opts: { artboard?: string; animation?: string; stateMachine?: string; times: number[]; bones: string[] }
+  ): Promise<
+    Array<{
+      time: number;
+      bones: Record<string, { xx: number; xy: number; yx: number; yy: number; tx: number; ty: number; rotation: number; length: number } | null>;
+    }>
+  > {
+    return this.call("boneWorldAt", rivBytes.toString("base64"), opts);
+  }
+
   playStateMachine(rivBytes: Buffer, opts: Record<string, unknown>): Promise<PlayResult> {
     return this.call<PlayResult>("playStateMachine", rivBytes.toString("base64"), opts);
   }

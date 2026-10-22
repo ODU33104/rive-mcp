@@ -1958,6 +1958,7 @@ function boot(artboard, smName, animName) {
       $('status').textContent = 'ready';
       guideStep(1);
       drawSelBox();
+      ensureBoneTick();
     },
     onLoadError: (e) => {
       if (myBoot !== bootSeq) return;
@@ -4008,6 +4009,7 @@ async function renderOnionSkin(centerT) {
     try { r.scrub(scrubAnim, centerT); } catch {}
     await raf2();
     onionBusy = false;
+    if (!boneDrag) renderBoneOverlay(); // 前後フレームを読みに行った後の絵に合わせて描き直す
   }
 }
 function syncOnionUI() {
@@ -4062,9 +4064,10 @@ function currentBoneArtboard() {
   return gBones.artboards.find(a => a.name === name) ?? gBones.artboards[0];
 }
 // 祖先チェーン（Node等）+ ボーンのワールド行列をメモ化しながら合成する
-function computeBoneWorldMats(ab) {
+// seed: 事前に確定している id→ワールド行列（ランタイム評価値）。rotOverride: id→評価済みローカル回転。
+function computeBoneWorldMats(ab, seed, rotOverride) {
   const byLocal = new Map(ab.nodes.map(n => [n.id, n]));
-  const mats = new Map();
+  const mats = new Map(seed || []);
   function worldOf(local) {
     if (!local) return MAT_ID;
     if (mats.has(local)) return mats.get(local);
@@ -4073,14 +4076,15 @@ function computeBoneWorldMats(ab) {
     mats.set(local, MAT_ID); // 循環参照ガード（壊れたデータでも無限再帰しない）
     const parentMat = worldOf(n.parentId || 0);
     let localMat;
+    const rot = (rotOverride && rotOverride.has(n.id)) ? rotOverride.get(n.id) : n.rotation;
     if (n.type === 'Bone') {
       const parentNode = byLocal.get(n.parentId || 0);
       const parentLen = (parentNode && parentNode.length != null) ? parentNode.length : 0;
-      localMat = matMulB(matTRSB(parentLen, 0, 0), matTRSB(0, 0, n.rotation));
+      localMat = matMulB(matTRSB(parentLen, 0, 0), matTRSB(0, 0, rot));
     } else if (n.type === 'RootBone') {
-      localMat = matTRSB(n.x, n.y, n.rotation);
+      localMat = matTRSB(n.x, n.y, rot);
     } else {
-      localMat = matTRSB(n.x, n.y, n.rotation, n.scaleX, n.scaleY);
+      localMat = matTRSB(n.x, n.y, rot, n.scaleX, n.scaleY);
     }
     const world = matMulB(parentMat, localMat);
     mats.set(local, world);
@@ -4109,6 +4113,82 @@ function positionBoneCanvas() {
 function boneHasRotationTrack(n) {
   return !!(rivAnimData && rivAnimData.tracks && rivAnimData.tracks.some(tr => tr.targetIndex === n.globalIndex && tr.propertyName === 'rotation'));
 }
+// ---- ランタイム評価値の読み取り（再生ヘッド/SMの現在姿勢。補間・IK・SMブレンド込みで絵と一致する） ----
+// Rive インスタンスの artboard（canvas-advanced の Artboard）から名前でボーンを引き、
+// worldTransform()/rotation を読む。名前が無い/重複するボーンは引けないので定義値にフォールバックする。
+function runtimeArtboard() {
+  try { return (r && r.artboard && typeof r.artboard.bone === 'function') ? r.artboard : null; } catch { return null; }
+}
+function runtimeComp(rab, n) {
+  if (!n.name) return null;
+  try {
+    const c = n.type === 'RootBone' ? rab.rootBone(n.name) : n.type === 'Bone' ? rab.bone(n.name) : rab.transformComponent(n.name);
+    return c || null;
+  } catch { return null; }
+}
+function runtimeWorld(rab, n, dupNames) {
+  if (dupNames && dupNames.has(n.name)) return null;
+  const c = runtimeComp(rab, n);
+  if (!c) return null;
+  try {
+    const m = c.worldTransform();
+    // ランタイムの Mat2D は (xx,xy)=x軸ベクトル。Studio 内の規約（xx,yx=x軸ベクトル）に直す
+    const o = { xx: m.xx, yx: m.xy, xy: m.yx, yy: m.yy, tx: m.tx, ty: m.ty };
+    try { if (m.delete) m.delete(); } catch {}
+    return Object.values(o).every(Number.isFinite) ? o : null;
+  } catch { return null; }
+}
+function runtimeRotation(rab, n, dupNames) {
+  if (dupNames && dupNames.has(n.name)) return null;
+  const c = runtimeComp(rab, n);
+  try { return (c && Number.isFinite(c.rotation)) ? c.rotation : null; } catch { return null; }
+}
+function duplicateNames(ab) {
+  const seen = new Set(), dup = new Set();
+  for (const n of ab.nodes) { if (n.name == null) continue; if (seen.has(n.name)) dup.add(n.name); seen.add(n.name); }
+  return dup;
+}
+// 稼働中のランタイムの現在姿勢でのボーンのワールド行列（取れたものだけ）
+function liveBoneSeed(ab, bones) {
+  const rab = runtimeArtboard();
+  if (!rab) return null;
+  const dup = duplicateNames(ab);
+  const seed = new Map();
+  for (const n of bones) { const m = runtimeWorld(rab, n, dup); if (m) seed.set(n.id, m); }
+  return seed.size ? seed : null;
+}
+// ドラッグ開始時に確定させる: 親のワールド行列（ランタイム）と、全ボーンの評価済みローカル回転
+function captureBoneDragBase(ab, bones, node) {
+  const rab = runtimeArtboard();
+  const base = { seed: null, rotOv: null };
+  if (!rab) return base;
+  const dup = duplicateNames(ab);
+  base.rotOv = new Map();
+  for (const n of bones) {
+    if (n.id === node.id) continue;
+    const rot = runtimeRotation(rab, n, dup);
+    if (rot != null) base.rotOv.set(n.id, rot);
+  }
+  const parent = ab.nodes.find(n => n.id === (node.parentId || 0));
+  if (parent) {
+    const pm = runtimeWorld(rab, parent, dup);
+    if (pm) base.seed = new Map([[parent.id, pm]]);
+  }
+  return base;
+}
+// 動いている間（SMの自動再生など、seekTo を通らない経路）にオーバーレイを毎フレーム追従させる
+let boneTickId = null;
+function ensureBoneTick() {
+  const want = boneOn && mode !== 'anim' && !paused && !!r;
+  if (want && boneTickId == null) boneTickId = requestAnimationFrame(boneTickStep);
+  else if (!want && boneTickId != null) { cancelAnimationFrame(boneTickId); boneTickId = null; }
+}
+function boneTickStep() {
+  boneTickId = null;
+  if (!(boneOn && mode !== 'anim' && !paused && r)) return;
+  if (!boneDrag) renderBoneOverlay();
+  boneTickId = requestAnimationFrame(boneTickStep);
+}
 function renderBoneOverlay() {
   if (!boneCv.isConnected) return;
   positionBoneCanvas();
@@ -4120,7 +4200,10 @@ function renderBoneOverlay() {
   const ab = currentBoneArtboard();
   const bones = ab ? ab.nodes.filter(n => n.type === 'Bone' || n.type === 'RootBone') : [];
   if (!ab || !bones.length) { boneLive = null; return; }
-  const { byLocal, mats } = computeBoneWorldMats(ab);
+  // 通常: 再生ヘッド/SMの現在姿勢（ランタイム評価）。ドラッグ中: 親のワールド（ランタイム）+評価済み回転で子孫を再計算
+  const { byLocal, mats } = boneDrag
+    ? computeBoneWorldMats(ab, boneDrag.seed, boneDrag.rotOv)
+    : computeBoneWorldMats(ab, liveBoneSeed(ab, bones), null);
   const map = boneStageMap(ab);
   const toCanvas = (wx, wy) => ({ x: map.ox + wx * map.s, y: map.oy + wy * map.s });
   const handles = [];
@@ -4172,10 +4255,17 @@ boneCv.addEventListener('pointerdown', (e) => {
   const pw = boneLive.mats.get(parentLocal) || MAT_ID;
   const frameAngle = Math.atan2(pw.yx, pw.xx);
   const selfMat = boneLive.mats.get(best.local);
+  const allBones = boneLive.ab.nodes.filter(n => n.type === 'Bone' || n.type === 'RootBone');
+  const base = captureBoneDragBase(boneLive.ab, allBones, best.node);
+  const startRotation = best.node.rotation; // 定義値（失敗時の巻き戻し先）
+  // 現在フレームの評価済み回転から編集を始める（定義値のままだとドラッグ開始時に姿勢が飛ぶ）
+  const rab = runtimeArtboard();
+  const evalRot = rab ? runtimeRotation(rab, best.node, duplicateNames(boneLive.ab)) : null;
+  if (evalRot != null) best.node.rotation = evalRot;
   boneDrag = {
     local: best.local, node: best.node, ab: boneLive.ab, frameAngle,
     joint: { x: selfMat.tx, y: selfMat.ty },
-    startRotation: best.node.rotation, moved: false,
+    startRotation, moved: false, seed: base.seed, rotOv: base.rotOv,
     snapshotPromise: pushRivUndoSnapshot(), pointerId: e.pointerId,
   };
 });
@@ -4212,7 +4302,7 @@ async function endBoneDrag(e) {
   boneDrag = null;
   boneCv.classList.remove('dragging');
   try { boneCv.releasePointerCapture(bd.pointerId); } catch {}
-  if (!bd.moved) { renderBoneOverlay(); return; }
+  if (!bd.moved) { bd.node.rotation = bd.startRotation; renderBoneOverlay(); return; }
   try {
     if (boneKeyOn && mode === 'anim' && scrubAnim) {
       await commitBonePoseKeyframe(bd.node);
@@ -4239,6 +4329,7 @@ $('boneToggle').onclick = () => {
   if (!boneOn) boneDrag = null;
   syncBoneUI();
   renderBoneOverlay();
+  ensureBoneTick();
 };
 $('boneKeyToggle').onchange = () => {
   boneKeyOn = $('boneKeyToggle').checked;
@@ -4722,6 +4813,7 @@ $('pauseBtn').onclick = () => {
   $('pauseBtn').textContent = paused ? '▶' : '⏸';
   log(paused ? t('paused') : t('resumed'));
   renderBoneOverlay();
+  ensureBoneTick();
 };
 $('speedSel').onchange = () => { playSpeed = Number($('speedSel').value); };
 const syncZoomLabel = () => { $('zoomLabel').textContent = Math.round(parseFloat($('zoom').value) * 100) + '%'; };

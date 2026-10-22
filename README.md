@@ -198,7 +198,7 @@ Works without a scene JSON too: any `.riv` can be edited property-by-property th
 
 ![Inspector editing](docs/media/studio-edit-v05-en.jpg)
 
-**Bone overlay & posing** — see the bone skeleton over the canvas, drag to rotate a bone (FK) while paused, and bake the current pose into a keyframe.
+**Bone overlay & posing** — see the bone skeleton over the canvas, following the playhead (scrubbing, playing and paused all show the runtime-evaluated pose), drag to rotate a bone (FK) while paused, and bake the current pose into a keyframe.
 
 ![Bone overlay](docs/media/studio-bones-v05-en.jpg)
 

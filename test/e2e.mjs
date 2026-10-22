@@ -479,6 +479,34 @@ try {
     textOf(boneCreated).slice(0, 250)
   );
 
+  // Studio のボーンオーバーレイのフレーム追従: ランタイムが評価したボーンのワールド変換を
+  // 途中フレームで読むと、初期姿勢（t=0）とは違う値になる（UIを通さず RiveHost.boneWorldAt で検証）
+  if (!boneCreated.isError) {
+    const { RiveHost } = await import(pathToFileURL(join(root, "dist", "riveHost.js")).href);
+    const { PAGE_SCRIPT } = await import(pathToFileURL(join(root, "dist", "pageScript.js")).href);
+    const h = new RiveHost(PAGE_SCRIPT);
+    try {
+      const boneBytes = readFileSync(join(root, "samples", "e2e-bones.riv"));
+      // bend: b2.rotation 0 -> 45deg を 30 フレーム(fps60 で 0.5s)
+      const samples = await h.boneWorldAt(boneBytes, { animation: "bend", times: [0, 0.25, 0.49], bones: ["b1", "b2"] });
+      const [s0, sMid, sEnd] = samples;
+      const deg = (rad) => (rad * 180) / Math.PI;
+      check("boneWorldAt: t=0 の b2 は初期姿勢（rotation 0）",
+        Math.abs(deg(s0.bones.b2.rotation)) < 0.5, JSON.stringify(s0.bones.b2));
+      check("boneWorldAt: 途中フレームの b2 は初期姿勢と異なる回転（0<rot<45deg）",
+        deg(sMid.bones.b2.rotation) > 5 && deg(sMid.bones.b2.rotation) < 40, JSON.stringify(sMid.bones.b2));
+      check("boneWorldAt: 途中フレームの b2 のワールド行列が初期姿勢と異なる",
+        Math.abs(sMid.bones.b2.xx - s0.bones.b2.xx) > 0.05 && Math.abs(sMid.bones.b2.yx - s0.bones.b2.yx) > 0.05,
+        `${JSON.stringify(s0.bones.b2)} vs ${JSON.stringify(sMid.bones.b2)}`);
+      // loop なので t=0.5(=30f) は先頭に戻る。終端の一つ手前(29f付近)で 45deg 近くまで進んでいること
+      check("boneWorldAt: 終端直前の b2 は 45deg 付近",
+        Math.abs(deg(sEnd.bones.b2.rotation) - 44) < 2, JSON.stringify(sEnd.bones.b2));
+      check("boneWorldAt: アニメの無い b1（根元）は全フレームで不動",
+        Math.abs(sMid.bones.b1.tx - s0.bones.b1.tx) < 1e-3 && Math.abs(sMid.bones.b1.ty - s0.bones.b1.ty) < 1e-3 &&
+        Math.abs(sMid.bones.b1.xx - s0.bones.b1.xx) < 1e-4);
+    } finally { await h.close(); }
+  }
+
   // riv_slice_image
   const sliced = await callTool("riv_slice_image", {
     pngPath: join(root, "samples", "vehicles.riv").replace("vehicles.riv", "e2e-tiny.png"),

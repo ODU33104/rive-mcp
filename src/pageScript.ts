@@ -1725,6 +1725,41 @@ window.riveApi = {
     });
   },
 
+  // ボーンの評価済みワールド変換を指定時刻ごとに読む（Studioのボーンオーバーレイと同じ読み取り元）。
+  // opts: { artboard?, animation?, stateMachine?, times: number[](秒), bones?: string[] }
+  // bones 省略時は渡された名前を持たないので呼び出し側が列挙して渡すこと。
+  // 戻り: [{ time, bones: { [name]: { xx,xy,yx,yy,tx,ty, rotation, length } | null } }]
+  async boneWorldAt(b64, opts) {
+    return withFile(b64, (file) => {
+      const out = [];
+      for (const time of opts.times || [0]) {
+        const scene = makeScene(file, opts);
+        try {
+          scene.seek(time);
+          const bones = {};
+          for (const name of opts.bones || []) {
+            let c = null;
+            try { c = scene.ab.rootBone(name); } catch (e) { c = null; }
+            if (!c) { try { c = scene.ab.bone(name); } catch (e) { c = null; } }
+            if (!c) { bones[name] = null; continue; }
+            const m = c.worldTransform();
+            // ランタイムの Mat2D は (xx,xy) が x軸ベクトル、(yx,yy) が y軸ベクトル。ここでは
+            // rivWriter.ts の matMul/matTRS と同じ規約（xx,yx が x軸ベクトル）に直して返す
+            bones[name] = {
+              xx: m.xx, yx: m.xy, xy: m.yx, yy: m.yy, tx: m.tx, ty: m.ty,
+              rotation: c.rotation, length: c.length,
+            };
+            if (m.delete) m.delete();
+          }
+          out.push({ time, bones });
+        } finally {
+          scene.cleanup();
+        }
+      }
+      return out;
+    });
+  },
+
   // フレーム列をレンダリングする（PNG base64 or RGBA base64）
   async renderFrames(b64, opts) {
     return withFile(b64, (file) => {
