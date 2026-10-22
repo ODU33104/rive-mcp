@@ -3,9 +3,42 @@ import { spawn } from "node:child_process";
 import { existsSync, statSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { connect as netConnect } from "node:net";
+import { request as httpRequest } from "node:http";
+import { networkInterfaces } from "node:os";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const RIV = join(root, "samples", "vehicles.riv");
+
+// ---- 共有(読み取り専用)テスト用の小道具 ----
+function firstLanIp() {
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family === "IPv4" && !a.internal && !a.address.startsWith("169.254.")) return a.address;
+    }
+  }
+  return null;
+}
+function tcpOpen(host, port) {
+  return new Promise((res) => {
+    const s = netConnect({ host, port, timeout: 1500 });
+    s.once("connect", () => { s.destroy(); res(true); });
+    s.once("timeout", () => { s.destroy(); res(false); });
+    s.once("error", () => res(false));
+  });
+}
+// fetch は .. を正規化し Host も固定できないので、生のパス/ヘッダーを送れる http.request を使う
+function rawRequest({ host, port, path, method = "GET", headers = {} }) {
+  return new Promise((res, rej) => {
+    const req = httpRequest({ host, port, path, method, headers }, (r) => {
+      const chunks = [];
+      r.on("data", (c) => chunks.push(c));
+      r.on("end", () => res({ status: r.statusCode, body: Buffer.concat(chunks).toString("utf8") }));
+    });
+    req.on("error", rej);
+    req.end();
+  });
+}
 
 function fsMod2Sig(path) {
   return readFileSync(path).subarray(0, 4).toString("hex");
@@ -1071,8 +1104,117 @@ try {
   const brokenStopped = await callTool("riv_studio", { path: lintBrokenPath, stop: true });
   check("riv_studio (broken SM fixture) stops", !brokenStopped.isError && textOf(brokenStopped).includes("stopped"));
 
+  // 共有なし(既定)では 127.0.0.1 以外で待ち受けない。LAN の IP 宛ての接続は拒否されるはず
+  // （直前のテストで別の studio を起動して止めたので、既定の起動をここで改めて行う）
+  const lanIp = firstLanIp();
+  const defStudio = await callTool("riv_studio", { path: genPath, port: 8797 });
+  check("riv_studio default restart", !defStudio.isError && !textOf(defStudio).includes("Read-only share"), textOf(defStudio).slice(0, 120));
+  if (lanIp) {
+    check("riv_studio default: 127.0.0.1 accepts", await tcpOpen("127.0.0.1", 8797));
+    check(`riv_studio default: LAN address ${lanIp} refuses (not listening beyond loopback)`, !(await tcpOpen(lanIp, 8797)));
+    check(`riv_studio default: no share port (${lanIp}:8798) is open`, !(await tcpOpen(lanIp, 8798)));
+  } else {
+    console.log("  (skip) no LAN IPv4 address on this machine; default-binding check needs one");
+  }
+  // 編集用サーバーは Host が loopback 以外のリクエストを拒否（DNS リバインディング対策）
+  const evilHost = await rawRequest({ host: "127.0.0.1", port: 8797, path: "/state", headers: { Host: "evil.example" } });
+  check("edit server rejects a non-loopback Host header", evilHost.status === 403, String(evilHost.status));
+
   const stopped = await callTool("riv_studio", { path: genPath, stop: true });
   check("riv_studio stops", !stopped.isError && textOf(stopped).includes("stopped"));
+
+  // --- riv_studio share: 読み取り専用のLAN共有 ---
+  if (lanIp) {
+    const shared = await callTool("riv_studio", { path: genPath, port: 8841, share: true, sharePort: 8842 });
+    const shareText = textOf(shared);
+    const m = /Read-only share URL \(LAN\): (http:\/\/(\d+\.\d+\.\d+\.\d+):(\d+)\/s\/([A-Za-z0-9_-]+)\/)/.exec(shareText);
+    check("riv_studio share:true returns a LAN read-only URL with a token", !shared.isError && !!m, shareText.slice(0, 300));
+    if (m) {
+      const [, shareUrl, shHost, shPortStr, token] = m;
+      const shPort = Number(shPortStr);
+      const origin = `http://${shHost}:${shPort}`;
+      check("share token has >= 16 bytes of entropy (>= 22 base64url chars)", token.length >= 22, String(token.length));
+      check("share URL host is a LAN address (not loopback)", !shHost.startsWith("127."), shHost);
+      const rivBefore = readFileSync(genPath);
+
+      // (a) トークン付きで読み取り専用ページと .riv が取れる
+      const page = await fetch(shareUrl);
+      const html = await page.text();
+      const setCookie = page.headers.get("set-cookie") ?? "";
+      check("share (a): token URL serves the read-only page", page.status === 200 && html.includes("window.__RO__") && html.includes('class="ro"'), String(page.status));
+      check("share (a): page sets an HttpOnly SameSite=Strict cookie", /HttpOnly/i.test(setCookie) && /SameSite=Strict/i.test(setCookie), setCookie);
+      const cookie = setCookie.split(";")[0];
+      const rivViaPath = await fetch(`${origin}/s/${token}/file.riv`);
+      const rivBytes = Buffer.from(await rivViaPath.arrayBuffer());
+      check("share (a): .riv is served via the token path", rivViaPath.status === 200 && rivBytes.subarray(0, 4).toString() === "RIVE", String(rivViaPath.status));
+      const rivViaCookie = await fetch(`${origin}/file.riv`, { headers: { Cookie: cookie } });
+      check("share (a): .riv is served via the cookie", rivViaCookie.status === 200, String(rivViaCookie.status));
+      const stateRo = await (await fetch(`${origin}/state`, { headers: { Cookie: cookie } })).text();
+      check("share (a): /state does not leak local paths or scene", !stateRo.includes("rivPath") && !stateRo.includes(genPath) && !stateRo.includes("scenePath"), stateRo.slice(0, 160));
+      for (const p of ["/tree", "/sm", "/bones", "/anim?artboard=Gen&animation=wobble"]) {
+        const r2 = await fetch(`${origin}${p}`, { headers: { Cookie: cookie } });
+        check(`share (a): GET ${p.split("?")[0]} works read-only`, r2.status === 200, String(r2.status));
+      }
+      const sse = await fetch(`${origin}/events`, { headers: { Cookie: cookie } });
+      check("share (a): SSE stream opens", sse.status === 200 && (sse.headers.get("content-type") ?? "").includes("text/event-stream"));
+      await sse.body?.cancel();
+
+      // (b) トークン無し / 違うトークンは 403
+      const noTok = [`${origin}/`, `${origin}/file.riv`, `${origin}/state`, `${origin}/events`, `${origin}/s/${token.slice(0, -1)}/`, `${origin}/s/${"A".repeat(token.length)}/file.riv`];
+      let allDenied = true; const detail = [];
+      for (const u of noTok) { const r2 = await fetch(u); if (r2.status !== 403) allDenied = false; detail.push(r2.status); }
+      check("share (b): no/wrong token -> 403 everywhere", allDenied, detail.join(","));
+      const badCookie = await fetch(`${origin}/file.riv`, { headers: { Cookie: cookie.replace(/=.*/, "=wrong") } });
+      check("share (b): wrong cookie -> 403", badCookie.status === 403, String(badCookie.status));
+      const noTokWrite = await fetch(`${origin}/edit`, { method: "POST", body: "[]" });
+      check("share (b): unauthenticated write -> 403", noTokWrite.status === 403);
+
+      // (c) 読み取り専用トークンで書き込み系・管理系の API が拒否される
+      const writes = [
+        ["POST", "/edit", "[]"], ["POST", "/rebuild", "{}"], ["POST", "/notes", JSON.stringify({ text: "x" })],
+        ["POST", "/chat", JSON.stringify({ text: "x" })], ["POST", "/curve", "{}"], ["POST", "/riv-restore", JSON.stringify({ bytesBase64: "AAAA" })],
+        ["POST", "/api/snapshots", "{}"], ["POST", "/api/snapshots/restore", "{}"], ["POST", "/api/snapshots/delete", "{}"],
+        ["POST", "/api/replace-asset", "{}"], ["POST", "/export/gif", "{}"], ["POST", "/export/apng", "{}"],
+        ["PUT", "/file.riv", "x"], ["DELETE", "/file.riv", undefined], ["POST", "/file.riv", "x"], ["POST", "/", "x"],
+        ["GET", "/chat"], ["GET", "/notes?consume=1"], ["GET", "/notes"], ["GET", "/api/assets"], ["GET", "/api/snapshots"], ["GET", "/nope"],
+      ];
+      const bad = [];
+      for (const [method, p, body] of writes) {
+        for (const auth of [`${origin}/s/${token}${p}`, null]) {
+          const r2 = await fetch(auth ?? `${origin}${p}`, { method, body, headers: auth ? {} : { Cookie: cookie } });
+          if (r2.status !== 403) bad.push(`${method} ${p} -> ${r2.status}`);
+        }
+      }
+      check("share (c): every write/admin/unknown route is 403 (token path and cookie)", bad.length === 0, bad.join("; "));
+      const head = await rawRequest({ host: shHost, port: shPort, path: `/s/${token}/file.riv`, method: "HEAD" });
+      check("share (c): HEAD is refused", head.status === 403, String(head.status));
+      // パストラバーサル: 生のパスをそのまま送る（fetch は .. を正規化してしまうため http.request を使う）
+      const trav = [`/s/${token}/../package.json`, `/s/${token}/..%2f..%2fpackage.json`, `/s/${token}/%2e%2e/%2e%2e/package.json`, `/s/${token}//etc/passwd`, `/s/${token}/file.riv/../../package.json`, `/..%5c..%5cpackage.json`];
+      const travBad = [];
+      for (const p of trav) {
+        const r2 = await rawRequest({ host: shHost, port: shPort, path: p, headers: { Cookie: cookie } });
+        if (r2.status === 200 || /rive-mcp-server|root:/.test(r2.body)) travBad.push(`${p} -> ${r2.status}`);
+      }
+      check("share (c): path traversal never reads other files", travBad.length === 0, travBad.join("; "));
+      check("share (c): .riv on disk is unchanged after all rejected writes", readFileSync(genPath).equals(rivBefore));
+
+      // (d) 共有あり: 編集用ポートは LAN から届かない。共有ポートは LAN の指定アドレスだけで待ち受け
+      check("share (d): edit port is not reachable via the LAN address", !(await tcpOpen(shHost, 8841)));
+      check("share (d): edit port is reachable on 127.0.0.1", await tcpOpen("127.0.0.1", 8841));
+      check("share (d): share port is reachable via the LAN address", await tcpOpen(shHost, shPort));
+      check("share (d): share port is not listening on loopback", !(await tcpOpen("127.0.0.1", shPort)));
+      // 編集用は 127.0.0.1 から従来どおり書ける（Host=localhost）
+      const editOk = await fetch("http://127.0.0.1:8841/notes", { method: "POST", body: JSON.stringify({ text: "from loopback" }) });
+      check("share: edit server still accepts writes from 127.0.0.1", editOk.status === 200, String(editOk.status));
+      // 編集側の未取得の指示数は共有側に出さない
+      check("share: viewer /state has no pendingNotes", !stateRo.includes("pendingNotes"));
+    }
+    const sharedStop = await callTool("riv_studio", { path: genPath, stop: true });
+    check("riv_studio (share) stops", !sharedStop.isError && textOf(sharedStop).includes("stopped"));
+    check("share port is closed after stop (token revoked)", !(await tcpOpen(lanIp, 8842)));
+  } else {
+    console.log("  (skip) share checks need a LAN IPv4 address");
+  }
 
   // --- riv_ui_detect → riv_ui_prototype（画像1枚から動くプロトタイプ） ---
   // 検出は riv_ui_prototype 側でも走るので、**同じ引数でなければ id がずれる**。

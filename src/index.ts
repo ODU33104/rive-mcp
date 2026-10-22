@@ -1590,18 +1590,35 @@ server.registerTool(
       scenePath: z.string().optional().describe("Scene spec JSON path — enables the edit+rebuild panel"),
       port: z.number().int().optional().describe("Port (default 8787)"),
       stop: z.boolean().optional().describe("Stop the running studio instead"),
+      share: z.boolean().optional().describe("Also open a READ-ONLY view on the LAN (default false: Studio listens on 127.0.0.1 only). Returns a URL with an unguessable token; viewers can play/scrub/drive state-machine inputs but cannot edit, save, chat or write files. Plain HTTP, so only share on a network you trust."),
+      sharePort: z.number().int().optional().describe("Port for the read-only view (default: port + 1)"),
+      shareHost: z.string().optional().describe("Local IPv4 address to listen on for the read-only view (default: the auto-detected LAN address; '0.0.0.0' = all interfaces)"),
     },
   },
-  wrap(async ({ path, scenePath, port, stop }: { path: string; scenePath?: string; port?: number; stop?: boolean }) => {
+  wrap(async ({ path, scenePath, port, stop, share, sharePort, shareHost }: { path: string; scenePath?: string; port?: number; stop?: boolean; share?: boolean; sharePort?: number; shareHost?: string }) => {
     if (stop) {
       stopStudio();
       return { content: [{ type: "text", text: "Studio stopped." }] };
     }
-    const handle = startStudio({ rivPath: resolve(path), scenePath, port });
+    const handle = startStudio({ rivPath: resolve(path), scenePath, port, share, sharePort, shareHost });
+    let shareText = "";
+    if (handle.share) {
+      try {
+        const info = await handle.share;
+        shareText =
+          `\n\nRead-only share URL (LAN): ${info.url}\n` +
+          `Listening on ${info.host}:${info.port}. Anyone on the same network who has this URL can VIEW (play, scrub, state-machine inputs) but cannot edit/save/chat. ` +
+          `The token is regenerated every time riv_studio starts; stop the studio to revoke it. Plain HTTP (no encryption) — share only on a trusted network.` +
+          (info.alternatives.length ? `\nOther addresses: ${info.alternatives.join("  ")}` : "") +
+          `\nIf other devices cannot connect, allow inbound TCP ${info.port} for node.exe in Windows Firewall (this tool does not change firewall settings). The editable Studio stays at ${handle.url} (127.0.0.1 only).`;
+      } catch (e) {
+        shareText = `\n\nRead-only share FAILED to start: ${e instanceof Error ? e.message : String(e)} (the local editable Studio is running normally).`;
+      }
+    }
     return {
       content: [{
         type: "text",
-        text: `Studio running at ${handle.url}\nwatching: ${resolve(path)}${scenePath ? `\nscene: ${resolve(scenePath)}` : ""}\nブラウザで開いてください。ファイルを riv_create / riv_edit で更新すると即座に反映されます。\n左パネル下部の「エージェント」はチャットです。ユーザーの発言は riv_studio_notes で取得し、作業が終わったら同ツールの reply 引数で結果を必ず返すこと（返さないとユーザー側は何が起きたか分かりません）。`,
+        text: `Studio running at ${handle.url}\nwatching: ${resolve(path)}${scenePath ? `\nscene: ${resolve(scenePath)}` : ""}\nブラウザで開いてください。ファイルを riv_create / riv_edit で更新すると即座に反映されます。\n左パネル下部の「エージェント」はチャットです。ユーザーの発言は riv_studio_notes で取得し、作業が終わったら同ツールの reply 引数で結果を必ず返すこと（返さないとユーザー側は何が起きたか分かりません）。${shareText}`,
       }],
     };
   })
@@ -1627,7 +1644,7 @@ server.registerTool(
     let replied = false;
     if (reply && reply.trim()) {
       try {
-        const res = await fetch(`http://localhost:${p}/chat`, {
+        const res = await fetch(`http://127.0.0.1:${p}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json; charset=utf-8" },
           body: JSON.stringify({ text: reply.trim(), role: "assistant" }),
@@ -1640,7 +1657,7 @@ server.registerTool(
     const replyNote = reply ? (replied ? "Reply posted to the Studio chat.\n" : "Could not post the reply — the Studio is not reachable.\n") : "";
     let data: { notes: Array<{ text: string; time: string; context?: { selection?: string | null; artboard?: string | null; animation?: string | null; timeSec?: number | null } }> };
     try {
-      const res = await fetch(`http://localhost:${p}/notes${peek ? "" : "?consume=1"}`);
+      const res = await fetch(`http://127.0.0.1:${p}/notes${peek ? "" : "?consume=1"}`);
       data = (await res.json()) as typeof data;
     } catch {
       const notes = takeStudioNotes();
