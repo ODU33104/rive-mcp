@@ -1037,13 +1037,13 @@ try {
 
   // riv_studio: 起動→/state→停止
   const studio = await callTool("riv_studio", { path: genPath, port: 8797 });
-  check("riv_studio starts", !studio.isError && textOf(studio).includes("http://localhost:8797/"));
-  const stateRes = await fetch("http://localhost:8797/state").then((r2) => r2.json()).catch(() => null);
+  check("riv_studio starts", !studio.isError && textOf(studio).includes("http://127.0.0.1:8797/"));
+  const stateRes = await fetch("http://127.0.0.1:8797/state").then((r2) => r2.json()).catch(() => null);
   check("riv_studio serves state", !!stateRes && typeof stateRes.objects === "number", JSON.stringify(stateRes)?.slice(0, 120));
-  const treeRes = await fetch("http://localhost:8797/tree").then((r2) => r2.json()).catch(() => null);
+  const treeRes = await fetch("http://127.0.0.1:8797/tree").then((r2) => r2.json()).catch(() => null);
   check("riv_studio serves tree", !!treeRes?.artboards?.length && treeRes.artboards[0].nodes.length > 0, JSON.stringify(treeRes)?.slice(0, 120));
   // AIへの指示: UI投稿 → riv_studio_notes で消費
-  await fetch("http://localhost:8797/notes", { method: "POST", body: JSON.stringify({ text: "テスト指示: 大きくして" }) });
+  await fetch("http://127.0.0.1:8797/notes", { method: "POST", body: JSON.stringify({ text: "テスト指示: 大きくして" }) });
   const notesRes = await callTool("riv_studio_notes", { port: 8797 });
   check("riv_studio_notes fetches instructions", !notesRes.isError && textOf(notesRes).includes("テスト指示"), textOf(notesRes).slice(0, 150));
   const notesEmpty = await callTool("riv_studio_notes", { port: 8797 });
@@ -1052,7 +1052,7 @@ try {
   // /anim + /curve: カーブエディタのHTTP面（genPathの"wobble"アニメには dot/scaleX に
   // 実際の ease-in-out CubicEaseInterpolator が入っている = riv_create 時にシフト書き込み済み）
   const genBytesBefore = fsMod.readFileSync(genPath);
-  const animRes = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json()).catch(() => null);
+  const animRes = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json()).catch(() => null);
   check("/anim serves tracks for the riv-only timeline", !!animRes?.tracks?.length, JSON.stringify(animRes)?.slice(0, 150));
   const scaleTrack = animRes?.tracks?.find((tr) => tr.propertyName === "scaleX");
   check("/anim resolves target name and property name", scaleTrack?.targetName === "dot", JSON.stringify(scaleTrack)?.slice(0, 200));
@@ -1068,13 +1068,13 @@ try {
   );
   check("/anim: editTargetIndex for frame30's segment is a real object index (the shifted keyframe)", typeof kfFrame30?.editTargetIndex === "number");
 
-  const curveRes = await fetch("http://localhost:8797/curve", {
+  const curveRes = await fetch("http://127.0.0.1:8797/curve", {
     method: "POST",
     body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "cubic", cubic: [0.1, 0.1, 0.9, 0.9] }),
   }).then((r2) => r2.json());
   check("/curve applies a cubic edit", curveRes.ok === true, JSON.stringify(curveRes));
 
-  const animAfter = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const animAfter = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const scaleTrackAfter = animAfter.tracks.find((tr) => tr.propertyName === "scaleX");
   const kfFrame30After = scaleTrackAfter.keyframes.find((k) => k.frame === 30);
   const kfFrame60After = scaleTrackAfter.keyframes.find((k) => k.frame === 60);
@@ -1092,22 +1092,22 @@ try {
   check("an unrelated track (sq/rotation) is unaffected by the curve edit", !!rotationTrackAfter, JSON.stringify(rotationTrackAfter)?.slice(0, 150));
 
   // /curve: hold/linear への切替
-  const curveHoldRes = await fetch("http://localhost:8797/curve", {
+  const curveHoldRes = await fetch("http://127.0.0.1:8797/curve", {
     method: "POST",
     body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "hold" }),
   }).then((r2) => r2.json());
   check("/curve applies a hold edit", curveHoldRes.ok === true, JSON.stringify(curveHoldRes));
-  const animAfterHold = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const animAfterHold = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const kfFrame30Hold = animAfterHold.tracks.find((tr) => tr.propertyName === "scaleX").keyframes.find((k) => k.frame === 30);
   check("/anim reflects the hold interpolationType", kfFrame30Hold.segment.interpolationType === 0, JSON.stringify(kfFrame30Hold));
 
   // /riv-restore: Undo相当（rivのみモードのUndo/Redoが依拠するエンドポイント）でファイルを丸ごと差し戻す
-  const restoreRes = await fetch("http://localhost:8797/riv-restore", {
+  const restoreRes = await fetch("http://127.0.0.1:8797/riv-restore", {
     method: "POST",
     body: JSON.stringify({ bytesBase64: genBytesBefore.toString("base64") }),
   }).then((r2) => r2.json());
   check("/riv-restore accepts a snapshot", restoreRes.ok === true, JSON.stringify(restoreRes));
-  const animAfterRestore = await fetch("http://localhost:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const animAfterRestore = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const kfFrame30Restored = animAfterRestore.tracks.find((tr) => tr.propertyName === "scaleX").keyframes.find((k) => k.frame === 30);
   check(
     "/riv-restore reverts the file to the pre-edit snapshot",
@@ -1116,7 +1116,7 @@ try {
   );
 
   // /sm: SMグラフビュー用のノードグラフJSON（genPathの"Flow": entry->idle, idle->moving(active条件)）
-  const smRes = await fetch("http://localhost:8797/sm").then((r2) => r2.json()).catch(() => null);
+  const smRes = await fetch("http://127.0.0.1:8797/sm").then((r2) => r2.json()).catch(() => null);
   const genAb = smRes?.artboards?.find((a) => a.name === "Gen");
   const flowSm = genAb?.stateMachines?.find((s) => s.name === "Flow");
   check("/sm finds the artboard and state machine", !!flowSm, JSON.stringify(smRes)?.slice(0, 200));

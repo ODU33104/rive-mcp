@@ -1122,7 +1122,7 @@ export function startStudio(opts: StudioOptions): StudioHandle {
   }
 
   current = { server, watchers, port, notes, chat, notify, snapDir, snapshots, shareServer };
-  return { url: `http://localhost:${port}/`, port, close: stopStudio, share: sharePromise };
+  return { url: `http://127.0.0.1:${port}/`, port, close: stopStudio, share: sharePromise };
 }
 
 // 読み取り専用ビュー: 同じ STUDIO_HTML に「編集系UIを隠すCSS」「書き込み系の fetch を拒否するガード」を差し込む。
