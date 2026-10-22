@@ -9,8 +9,8 @@ import { createServer, type Server } from "node:http";
 import { readFileSync, writeFileSync, existsSync, watch, mkdirSync, rmSync, unlinkSync, type FSWatcher } from "node:fs";
 import { join, dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
-import { randomUUID } from "node:crypto";
+import { tmpdir, networkInterfaces } from "node:os";
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { createRiv, pngSize, type SceneSpec } from "./rivWriter.js";
 import { readRiv, propInfo, isLayerStateType, type RivObject } from "./rivBinary.js";
 import { editRiv, setKeyframeCurve, type EditOp } from "./rivEdit.js";
@@ -24,12 +24,24 @@ export interface StudioOptions {
   rivPath: string;
   scenePath?: string; // シーンJSON（あれば編集→再ビルドUIが有効化）
   port?: number;
+  // 読み取り専用のLAN共有。明示したときだけ有効（既定は 127.0.0.1 のみ）
+  share?: boolean;
+  sharePort?: number; // 既定: port + 1
+  shareHost?: string; // 待ち受けるローカルIP。既定: 自動選択したLANのIPv4
+}
+
+export interface StudioShareInfo {
+  url: string; // トークン入りの読み取り専用URL
+  host: string; // 待ち受けアドレス
+  port: number;
+  alternatives: string[]; // 他のLAN IPで同じ共有を開く場合のURL（host が 0.0.0.0 のときのみ）
 }
 
 export interface StudioHandle {
   url: string;
   port: number;
   close: () => void;
+  share?: Promise<StudioShareInfo>; // share:true のときだけ。待ち受け開始で解決、失敗で reject
 }
 
 export interface StudioNoteContext {
@@ -467,12 +479,18 @@ let current: {
   notify: (msg: string) => void;
   snapDir: string;
   snapshots: StudioSnapshot[];
+  shareServer: Server | null;
 } | null = null;
 
 export function stopStudio(): void {
   if (current) {
     for (const w of current.watchers) w.close();
     current.server.close();
+    current.server.closeAllConnections?.();
+    if (current.shareServer) {
+      current.shareServer.close();
+      current.shareServer.closeAllConnections?.();
+    }
     try { rmSync(current.snapDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
     current = null;
   }
@@ -517,12 +535,91 @@ function decodeRequestBody(buf: Buffer): string {
   }
 }
 
+// ---- 読み取り専用のLAN共有 ----------------------------------------------------
+// 共有サーバーは編集用サーバーとは別のポート・別のハンドラ。編集用は常に 127.0.0.1 のみ。
+// 共有側は「許可リスト方式」: トークンが合い、メソッドが GET で、下の固定パスのときだけ応答する。
+// それ以外（/edit /rebuild /notes /chat /api/* /export/* /curve /riv-restore と未知のパス）は全て 403。
+// ファイルパスはリクエストから一切受け取らない（読むのは起動時に決めた rivPath と同梱アセットだけ）。
+const SHARE_GET_PATHS = new Set(["/", "/rive.js", "/rive.wasm", "/inter.ttf", "/file.riv", "/state", "/tree", "/anim", "/sm", "/bones", "/events"]);
+const SHARE_MAX_SSE = 32;
+const SHARE_MAX_CONNECTIONS = 64;
+
+interface LanAddress { name: string; address: string }
+
+// 仮想NIC（WSL/Hyper-V/Docker/VPN 等）は共有先として不適なので後回しにし、192.168 > 10 > 172.16-31 の順に選ぶ
+export function listLanAddresses(): LanAddress[] {
+  const out: Array<LanAddress & { rank: number }> = [];
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family !== "IPv4" || a.internal) continue;
+      const parts = a.address.split(".").map(Number);
+      if (parts[0] === 169 && parts[1] === 254) continue; // リンクローカル
+      let rank = 3;
+      if (parts[0] === 192 && parts[1] === 168) rank = 0;
+      else if (parts[0] === 10) rank = 1;
+      else if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) rank = 2;
+      if (/vethernet|wsl|virtualbox|vmware|docker|hyper-v|tailscale|zerotier|loopback|vpn/i.test(name)) rank += 10;
+      out.push({ name, address: a.address, rank });
+    }
+  }
+  out.sort((x, y) => x.rank - y.rank);
+  return out.map(({ name, address }) => ({ name, address }));
+}
+
+function ownIpv4Addresses(): Set<string> {
+  const set = new Set<string>();
+  for (const addrs of Object.values(networkInterfaces())) for (const a of addrs ?? []) if (a.family === "IPv4") set.add(a.address);
+  return set;
+}
+
+function tokenMatches(presented: string, expected: string): boolean {
+  // 長さの違いで比較時間が変わらないよう、固定長のハッシュ同士を timingSafeEqual で比べる
+  const a = createHash("sha256").update(presented).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+function readCookie(header: string | undefined, name: string): string {
+  if (!header) return "";
+  for (const part of header.split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
+  }
+  return "";
+}
+
+function isLoopbackHost(hostHeader: string | undefined): boolean {
+  // DNS リバインディング対策: 編集用サーバーは Host が localhost / 127.0.0.1 / [::1] のときだけ応える
+  const h = (hostHeader ?? "").replace(/:\d+$/, "").toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+}
+
 export function startStudio(opts: StudioOptions): StudioHandle {
   stopStudio();
   const rivPath = resolve(opts.rivPath);
   const scenePath = opts.scenePath ? resolve(opts.scenePath) : undefined;
   const port = opts.port ?? 8787;
   const sseClients = new Set<import("node:http").ServerResponse>();
+  const shareClients = new Set<import("node:http").ServerResponse>();
+  let shareHost = "";
+  let shareUrlHost = "";
+  const sharePort = opts.sharePort ?? port + 1;
+  const shareToken = opts.share ? randomBytes(24).toString("base64url") : "";
+  const lanAddrs = opts.share ? listLanAddresses() : [];
+  if (opts.share) {
+    if (sharePort === port) throw new Error("sharePort must differ from the Studio port");
+    if (opts.shareHost) {
+      if (opts.shareHost !== "0.0.0.0" && !ownIpv4Addresses().has(opts.shareHost)) {
+        throw new Error(`shareHost ${opts.shareHost} is not an address of this machine`);
+      }
+      shareHost = opts.shareHost;
+    } else if (lanAddrs.length) {
+      shareHost = lanAddrs[0].address;
+    } else {
+      throw new Error("No LAN IPv4 address found for sharing. Connect to a network, or pass shareHost explicitly.");
+    }
+    shareUrlHost = shareHost === "0.0.0.0" ? (lanAddrs[0]?.address ?? "127.0.0.1") : shareHost;
+  }
   const notes: StudioNote[] = [];
   const chat: StudioChatMessage[] = [];
   // スナップショット履歴: undoとは別に名前付きで .riv 全体をコピー保存する作業ディレクトリ（セッション終了時にrmSync）
@@ -531,6 +628,8 @@ export function startStudio(opts: StudioOptions): StudioHandle {
 
   const notify = (msg = "reload") => {
     for (const res of sseClients) res.write(`data: ${msg}\n\n`);
+    // 共有側にはチャット・指示の通知を流さない（reload だけ）
+    if (msg === "reload") for (const res of shareClients) res.write(`data: ${msg}\n\n`);
   };
 
   const watchers: FSWatcher[] = [];
@@ -564,6 +663,7 @@ export function startStudio(opts: StudioOptions): StudioHandle {
       req.on("data", (c: Buffer | string) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c, "utf8")));
       req.on("end", () => cb(decodeRequestBody(Buffer.concat(chunks))));
     };
+    if (!isLoopbackHost(req.headers.host)) return send(403, "text/plain", "forbidden");
     try {
       if (url.pathname === "/") {
         return send(200, "text/html; charset=utf-8", STUDIO_HTML);
@@ -911,10 +1011,191 @@ export function startStudio(opts: StudioOptions): StudioHandle {
       send(500, "text/plain", e instanceof Error ? e.message : String(e));
     }
   });
-  server.listen(port);
-  current = { server, watchers, port, notes, chat, notify, snapDir, snapshots };
-  return { url: `http://localhost:${port}/`, port, close: stopStudio };
+  // 編集用は常にループバックのみ（以前は全インターフェースで待ち受けていた）
+  server.on("error", (e) => console.error(`[studio] server error: ${e instanceof Error ? e.message : String(e)}`));
+  server.listen(port, "127.0.0.1");
+
+  let shareServer: Server | null = null;
+  let sharePromise: Promise<StudioShareInfo> | undefined;
+  if (opts.share) {
+    const cookieName = `rivestudio_share_${sharePort}`;
+    shareServer = createServer((req, res) => {
+      const deny = (status: number, msg: string) => {
+        res.writeHead(status, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+        res.end(msg);
+      };
+      const secureHeaders = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY" };
+      const sendOk = (type: string, body: string | Uint8Array, extra: Record<string, string> = {}) => {
+        res.writeHead(200, { "Content-Type": type, ...secureHeaders, ...extra });
+        res.end(body);
+      };
+      try {
+        const u = new URL(req.url ?? "/", "http://share.invalid");
+        // 認証: URL の /s/<token>/ プレフィックス（初回アクセス用。Cookie を発行する）か、その Cookie
+        let rest = u.pathname;
+        let presented = "";
+        const m = /^\/s\/([A-Za-z0-9_-]{1,128})(\/.*)?$/.exec(u.pathname);
+        if (m) {
+          presented = m[1];
+          rest = m[2] ?? "/";
+        } else {
+          presented = readCookie(req.headers.cookie, cookieName);
+          if (presented.length > 128) presented = "";
+        }
+        if (!presented || !tokenMatches(presented, shareToken)) return deny(403, "forbidden");
+        if (req.method !== "GET") return deny(403, "forbidden: read-only");
+        if (!SHARE_GET_PATHS.has(rest)) return deny(403, "forbidden: read-only");
+        switch (rest) {
+          case "/":
+            return sendOk("text/html; charset=utf-8", getReadOnlyHtml(), {
+              "Set-Cookie": `${cookieName}=${shareToken}; Path=/; HttpOnly; SameSite=Strict`,
+            });
+          case "/rive.js":
+            return sendOk("text/javascript", readFileSync(join(ASSETS_DIR, "rive-canvas.js")));
+          case "/rive.wasm":
+            return sendOk("application/wasm", readFileSync(join(ASSETS_DIR, "rive-canvas.wasm")));
+          case "/inter.ttf":
+            return sendOk("font/ttf", readFileSync(join(ASSETS_DIR, "inter.ttf")));
+          case "/file.riv":
+            if (!existsSync(rivPath)) return deny(404, "riv not found yet");
+            return sendOk("application/octet-stream", readFileSync(rivPath));
+          case "/state": {
+            // 編集用と違い、ローカルのパス・シーンJSON・未取得の指示数は返さない
+            const state: Record<string, unknown> = { rivName: basename(rivPath) };
+            if (existsSync(rivPath)) {
+              const bytes = readFileSync(rivPath);
+              const d = readRiv(new Uint8Array(bytes), { tolerant: true });
+              state.objects = d.objects.length;
+              state.version = `${d.major}.${d.minor}`;
+              state.bytes = bytes.length;
+            }
+            return sendOk("application/json; charset=utf-8", JSON.stringify(state));
+          }
+          case "/tree":
+            if (!existsSync(rivPath)) return sendOk("application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
+            return sendOk("application/json; charset=utf-8", JSON.stringify(buildTreeJson(new Uint8Array(readFileSync(rivPath)))));
+          case "/anim": {
+            if (!existsSync(rivPath)) return deny(404, "riv not found");
+            const data = buildAnimJson(new Uint8Array(readFileSync(rivPath)), u.searchParams.get("artboard") ?? "", u.searchParams.get("animation") ?? "");
+            if (!data) return deny(404, "artboard/animation not found");
+            return sendOk("application/json; charset=utf-8", JSON.stringify(data));
+          }
+          case "/sm":
+            if (!existsSync(rivPath)) return sendOk("application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
+            return sendOk("application/json; charset=utf-8", JSON.stringify(buildSmJson(new Uint8Array(readFileSync(rivPath)))));
+          case "/bones":
+            if (!existsSync(rivPath)) return sendOk("application/json; charset=utf-8", JSON.stringify({ artboards: [] }));
+            return sendOk("application/json; charset=utf-8", JSON.stringify(buildBonesJson(new Uint8Array(readFileSync(rivPath)))));
+          case "/events": {
+            if (shareClients.size >= SHARE_MAX_SSE) return deny(503, "too many viewers");
+            res.writeHead(200, { "Content-Type": "text/event-stream", Connection: "keep-alive", ...secureHeaders });
+            res.write("data: connected\n\n");
+            shareClients.add(res);
+            req.on("close", () => shareClients.delete(res));
+            return;
+          }
+          default:
+            return deny(403, "forbidden: read-only");
+        }
+      } catch (e) {
+        console.error(`[studio:share] ${e instanceof Error ? e.message : String(e)}`);
+        deny(500, "error");
+      }
+    });
+    shareServer.maxConnections = SHARE_MAX_CONNECTIONS;
+    const sv = shareServer;
+    sharePromise = new Promise<StudioShareInfo>((resolveP, rejectP) => {
+      sv.once("error", (e) => rejectP(e));
+      sv.listen(sharePort, shareHost, () => {
+        const addr = sv.address();
+        const actualPort = typeof addr === "object" && addr ? addr.port : sharePort;
+        const mk = (h: string) => `http://${h}:${actualPort}/s/${shareToken}/`;
+        resolveP({
+          url: mk(shareUrlHost),
+          host: shareHost,
+          port: actualPort,
+          alternatives: shareHost === "0.0.0.0" ? lanAddrs.map((a) => mk(a.address)).filter((x) => x !== mk(shareUrlHost)) : [],
+        });
+      });
+    });
+    sharePromise.catch((e) => console.error(`[studio:share] listen failed: ${e instanceof Error ? e.message : String(e)}`));
+  }
+
+  current = { server, watchers, port, notes, chat, notify, snapDir, snapshots, shareServer };
+  return { url: `http://localhost:${port}/`, port, close: stopStudio, share: sharePromise };
 }
+
+// 読み取り専用ビュー: 同じ STUDIO_HTML に「編集系UIを隠すCSS」「書き込み系の fetch を拒否するガード」を差し込む。
+// ここは見た目の層で、本当の拒否はサーバー側（上の許可リスト）。STUDIO_HTML 本体は書き換えない。
+let readOnlyHtmlCache: string | null = null;
+function getReadOnlyHtml(): string {
+  if (readOnlyHtmlCache) return readOnlyHtmlCache;
+  if (!STUDIO_HTML.includes("</style></head><body>") || !STUDIO_HTML.endsWith("</script></body></html>")) {
+    throw new Error("STUDIO_HTML layout changed: update getReadOnlyHtml()");
+  }
+  readOnlyHtmlCache = STUDIO_HTML.replace("</style></head><body>", () => `</style>${RO_HEAD}</head><body class="ro">`).replace(
+    /<\/script><\/body><\/html>$/,
+    () => `</script>${RO_TAIL}</body></html>`
+  );
+  return readOnlyHtmlCache;
+}
+
+const RO_HEAD = String.raw`<style>
+/* 読み取り専用ビュー: 編集・保存・チャット・書き出し(サーバー合成)の入口を隠す */
+body.ro #undoBtn, body.ro #redoBtn, body.ro #addRect, body.ro #addEllipse, body.ro #addText,
+body.ro #modeSeg, body.ro #helpBtn, body.ro #helpWrap, body.ro #guide,
+body.ro #accAssetsItem, body.ro #accAgentItem, body.ro #assetPickWrap, body.ro #dropOverlay,
+body.ro #inspector, body.ro #timeline, body.ro #boneCv, body.ro #selBox, body.ro #gutterR,
+body.ro #expApng, body.ro #expGif, body.ro #boneToggle, body.ro #toolbar label,
+body.ro .sbTab[data-dock="Changes"], body.ro #sbScene, body.ro #dockChanges, body.ro #dockScene { display:none !important; }
+body.ro:not(.graphOn) #right { display:none !important; }
+body.ro #roBadge { color:var(--warn); border:1px solid var(--warn); background:transparent; white-space:nowrap; flex-shrink:0; }
+@media (max-width: 820px) {
+  body.ro { height:auto; min-height:100vh; overflow:auto; }
+  body.ro #appbar .ab-center { display:none; }
+  body.ro #appbar { gap:8px; }
+  body.ro #main { flex-direction:column; min-height:0; }
+  body.ro #left { width:auto !important; max-height:38vh; border-right:0; border-bottom:1px solid var(--border); }
+  body.ro .gutter { display:none; }
+  body.ro #center { min-height:70vh; }
+  body.ro #right { width:auto !important; max-height:40vh; }
+}
+</style>
+<script>
+window.__RO__ = true;
+(function () {
+  // 書き込み系の呼び出しを手元で止める（サーバー側でも 403 になる。これは余計な通信とエラー表示を出さないための層）
+  var okGet = { '/file.riv':1, '/state':1, '/tree':1, '/anim':1, '/sm':1, '/bones':1, '/rive.js':1, '/rive.wasm':1, '/inter.ttf':1 };
+  var nativeFetch = window.fetch;
+  window.fetch = function (input, init) {
+    var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    var p = '';
+    try { p = new URL(typeof input === 'string' ? input : input.url, location.href).pathname; } catch (e) {}
+    if (method !== 'GET' || !okGet[p]) return Promise.reject(new Error('read-only view'));
+    return nativeFetch.apply(this, arguments);
+  };
+  // キー操作（Undo/Redo/Delete/矢印移動/コピペ）とファイルのドロップは丸ごと無効化。文字入力そのものは妨げない
+  window.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopImmediatePropagation(); }, true);
+  ['dragenter', 'dragover', 'drop'].forEach(function (n) {
+    window.addEventListener(n, function (e) { e.preventDefault(); e.stopImmediatePropagation(); }, true);
+  });
+})();
+</script>`;
+
+const RO_TAIL = String.raw`<script>
+(function () {
+  var badge = document.createElement('span');
+  badge.className = 'badge'; badge.id = 'roBadge';
+  badge.textContent = /^ja/i.test(navigator.language || '') ? '閲覧専用' : 'Read-only';
+  var right = document.querySelector('#appbar .ab-right');
+  if (right) right.insertBefore(badge, right.firstChild);
+  // SMグラフ表示のときだけ右パネル（遷移の詳細）を出す
+  var orig = window.showStagePane;
+  if (typeof orig === 'function') {
+    window.showStagePane = function (which) { orig(which); document.body.classList.toggle('graphOn', which === 'graph'); };
+  }
+})();
+</script>`;
 
 // ---- スタジオUI（自己完結・ダークテーマ・日英対応・3ペイン） ----------------
 const STUDIO_HTML = /* html */ `<!DOCTYPE html>
