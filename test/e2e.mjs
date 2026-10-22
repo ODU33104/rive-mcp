@@ -506,6 +506,38 @@ try {
         Math.abs(sMid.bones.b1.xx - s0.bones.b1.xx) < 1e-4);
     } finally { await h.close(); }
   }
+  // riv_create: text on path（TextModifierGroup > TextModifierRange + TextFollowPathModifier）。
+  // 公式ランタイムでロードでき、followPath 有りは無しと描画が変わる（= パスに沿って曲がる）ことを確認
+  mkdirSync(join(root, "local"), { recursive: true });
+  const topScene = (withPath) => ({
+    artboard: { width: 400, height: 300 },
+    backgroundColor: "#ffffff",
+    fonts: [{ id: "f" }],
+    shapes: [{ id: "curve", type: "polygon", x: 0, y: 0, closed: false,
+      points: [{ x: 40, y: 200 }, { x: 200, y: 60, cubic: { rotation: 0, distance: 60 } }, { x: 360, y: 200 }],
+      stroke: { color: "#cccccc", thickness: 2 } }],
+    texts: [{ id: "t", x: 0, y: 0, runs: [{ text: "Hello text on path", fontSize: 28, color: "#d00000" }],
+      ...(withPath ? { followPath: { path: "curve" } } : {}) }],
+  });
+  const topOn = await callTool("riv_create", { outPath: join(root, "local", "e2e-textpath.riv"), scene: topScene(true) });
+  const topOff = await callTool("riv_create", { outPath: join(root, "local", "e2e-textpath-off.riv"), scene: topScene(false) });
+  const topImg = (r) => (r.content || []).find((c) => c.type === "image")?.data;
+  check(
+    "riv_create text on path validated + renders differently from plain text",
+    !topOn.isError && textOf(topOn).includes("validated") && topImg(topOn) && topImg(topOff) && topImg(topOn) !== topImg(topOff),
+    textOf(topOn).slice(0, 250)
+  );
+  const topDump = await callTool("riv_dump", { path: join(root, "local", "e2e-textpath.riv") });
+  check(
+    "riv_dump shows TextFollowPathModifier inside a TextModifierGroup",
+    !topDump.isError && textOf(topDump).includes("TextFollowPathModifier") && textOf(topDump).includes("TextModifierGroup"),
+    textOf(topDump).slice(0, 200)
+  );
+  const topBad = await callTool("riv_create", {
+    outPath: join(root, "local", "e2e-textpath-bad.riv"),
+    scene: { ...topScene(true), texts: [{ id: "t", x: 0, y: 0, runs: [{ text: "x" }], followPath: { path: "nope" } }] },
+  });
+  check("riv_create text on path rejects unknown path shape", !!topBad.isError && textOf(topBad).includes("nope"), textOf(topBad).slice(0, 200));
 
   // riv_slice_image
   const sliced = await callTool("riv_slice_image", {

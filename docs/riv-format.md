@@ -85,6 +85,38 @@ ToC: varuint propertyKey... 0終端
   AudioAsset/AudioEvent の直列化・公式ランタイムでのロード可否は検証済みだが、実際の再生確認は
   GPU版 Rive Renderer（WebGL/Skia、例: rive.app や本番プレイヤー）でのみ可能
 
+## Text on path（実装済み・検証済み）
+
+`texts[].followPath: { path, start?, end?, strength?, offset?, orient?, radial? }` で、テキストを
+`shapes[].id` のパスに沿わせる。書き出し構造（Text の子として、パス用シェイプの出力後に追記）:
+
+```
+Text (134)
+ └ TextModifierGroup (159)            ← 既定値のまま
+    ├ TextModifierRange (158)         ← 既定値のまま（= 全文が対象）
+    └ TextFollowPathModifier (547)    ← targetId = パスを持つ Shape のローカルindex
+```
+
+| followPath | キー | 型 | 既定 | 実測した意味 |
+|---|---|---|---|---|
+| path | targetId (778) | Id | 必須 | Shape のローカルindex。シェイプのワールド変換が反映される（x/y を動かすと文字も付いてくる） |
+| start | 783 | double | 0 | パス上の開始位置（0〜1 の割合） |
+| end | 784 | double | 1 | パス上の終了位置（0〜1）。start/end で文字列を載せる区間を絞る |
+| strength | 785 | double | 1 | 0 でパスの影響なし、0.5 で元の位置とパス上の中間 |
+| offset | 786 | double | 0 | パス上のずらし量（パス長に対する割合）。1 周分を超えると繰り返す |
+| orient | 782 | bool | true | false で文字を回転させず位置だけパスに載せる |
+| radial | 779 | bool | false | 書き込みのみ。開いたパスのテストでは見た目の違いを確認できていない |
+
+- **TextModifierGroup + TextModifierRange が必須**。`TextFollowPathModifier` を Text 直下に置くか、
+  グループだけで Range が無いと、公式ランタイムはエラー無く読み込むが**何も効かない**（実測）。
+  グループ/Range の各プロパティは既定値で足りる
+- 書き出しは「パスのシェイプより後」（FollowPathConstraint と同じ前方参照の解決タイミング）。
+  `path` が存在しない id ならエラーにする
+- **プレビュー対応**: このサーバーの Canvas2D プレビューでも**描画される**（headless Chromium +
+  canvas_advanced で、パスに沿って回転した文字が出ることを目視確認。Feather や音声のような
+  「プレビュー非対応」ではない）
+- 注意: 沿わせたテキストの `x`/`y` はパス座標の原点基準。パスに沿う位置はパス自身のワールド位置で決まる
+
 ## ボーン・スキニング（実装済み・検証済み）
 
 - チェーン先頭は `RootBone`（x/y/rotation/length、親は Node）、以降は `Bone`（rotation/length のみ。
