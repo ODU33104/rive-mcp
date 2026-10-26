@@ -51,7 +51,8 @@
     "test:e2e": "node test/e2e.mjs",
     "test:phase1": "node test/phase1.mjs",
     "test:phase2": "node test/phase2.mjs",
-    "test:lottie": "node test/lottie.mjs"
+    "test:lottie": "node test/lottie.mjs",
+    "check:studio-i18n": "node scripts/check-studio-i18n.mjs"
   },
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
