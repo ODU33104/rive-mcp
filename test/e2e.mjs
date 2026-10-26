@@ -103,6 +103,18 @@ function check(label, cond, detail = "") {
   console.log(`[${mark}] ${label}${detail ? " — " + detail : ""}`);
 }
 
+// 編集用 Studio は認証必須: riv_studio の出力にある入口 URL (#token) を控え、以降の fetch に Bearer を付ける
+const studioTokens = new Map();
+function noteStudio(res) {
+  const m = /http:\/\/127\.0\.0\.1:(\d+)\/#([a-f0-9]{64})/.exec(JSON.stringify(res));
+  if (m) studioTokens.set(m[1], m[2]);
+  return res;
+}
+function sFetch(url, opts = {}) {
+  const t = studioTokens.get(new URL(url).port);
+  return fetch(url, { ...opts, headers: { ...(opts.headers ?? {}), ...(t ? { Authorization: "Bearer " + t } : {}) } });
+}
+
 function textOf(res) {
   return (res.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
 }
@@ -1061,14 +1073,14 @@ try {
   check("setKeyframeCurve(hold) sets interpolationType=0", aObjHold.properties.interpolationType === 0);
 
   // riv_studio: 起動→/state→停止
-  const studio = await callTool("riv_studio", { path: genPath, port: 8797 });
+  const studio = noteStudio(await callTool("riv_studio", { path: genPath, port: 8797 }));
   check("riv_studio starts", !studio.isError && textOf(studio).includes("http://127.0.0.1:8797/"));
-  const stateRes = await fetch("http://127.0.0.1:8797/state").then((r2) => r2.json()).catch(() => null);
+  const stateRes = await sFetch("http://127.0.0.1:8797/state").then((r2) => r2.json()).catch(() => null);
   check("riv_studio serves state", !!stateRes && typeof stateRes.objects === "number", JSON.stringify(stateRes)?.slice(0, 120));
-  const treeRes = await fetch("http://127.0.0.1:8797/tree").then((r2) => r2.json()).catch(() => null);
+  const treeRes = await sFetch("http://127.0.0.1:8797/tree").then((r2) => r2.json()).catch(() => null);
   check("riv_studio serves tree", !!treeRes?.artboards?.length && treeRes.artboards[0].nodes.length > 0, JSON.stringify(treeRes)?.slice(0, 120));
   // AIへの指示: UI投稿 → riv_studio_notes で消費
-  await fetch("http://127.0.0.1:8797/notes", { method: "POST", body: JSON.stringify({ text: "テスト指示: 大きくして" }) });
+  await sFetch("http://127.0.0.1:8797/notes", { method: "POST", body: JSON.stringify({ text: "テスト指示: 大きくして" }) });
   const notesRes = await callTool("riv_studio_notes", { port: 8797 });
   check("riv_studio_notes fetches instructions", !notesRes.isError && textOf(notesRes).includes("テスト指示"), textOf(notesRes).slice(0, 150));
   const notesEmpty = await callTool("riv_studio_notes", { port: 8797 });
@@ -1077,7 +1089,7 @@ try {
   // /anim + /curve: カーブエディタのHTTP面（genPathの"wobble"アニメには dot/scaleX に
   // 実際の ease-in-out CubicEaseInterpolator が入っている = riv_create 時にシフト書き込み済み）
   const genBytesBefore = fsMod.readFileSync(genPath);
-  const animRes = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json()).catch(() => null);
+  const animRes = await sFetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json()).catch(() => null);
   check("/anim serves tracks for the riv-only timeline", !!animRes?.tracks?.length, JSON.stringify(animRes)?.slice(0, 150));
   const scaleTrack = animRes?.tracks?.find((tr) => tr.propertyName === "scaleX");
   check("/anim resolves target name and property name", scaleTrack?.targetName === "dot", JSON.stringify(scaleTrack)?.slice(0, 200));
@@ -1093,13 +1105,13 @@ try {
   );
   check("/anim: editTargetIndex for frame30's segment is a real object index (the shifted keyframe)", typeof kfFrame30?.editTargetIndex === "number");
 
-  const curveRes = await fetch("http://127.0.0.1:8797/curve", {
+  const curveRes = await sFetch("http://127.0.0.1:8797/curve", {
     method: "POST",
     body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "cubic", cubic: [0.1, 0.1, 0.9, 0.9] }),
   }).then((r2) => r2.json());
   check("/curve applies a cubic edit", curveRes.ok === true, JSON.stringify(curveRes));
 
-  const animAfter = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const animAfter = await sFetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const scaleTrackAfter = animAfter.tracks.find((tr) => tr.propertyName === "scaleX");
   const kfFrame30After = scaleTrackAfter.keyframes.find((k) => k.frame === 30);
   const kfFrame60After = scaleTrackAfter.keyframes.find((k) => k.frame === 60);
@@ -1117,22 +1129,22 @@ try {
   check("an unrelated track (sq/rotation) is unaffected by the curve edit", !!rotationTrackAfter, JSON.stringify(rotationTrackAfter)?.slice(0, 150));
 
   // /curve: hold/linear への切替
-  const curveHoldRes = await fetch("http://127.0.0.1:8797/curve", {
+  const curveHoldRes = await sFetch("http://127.0.0.1:8797/curve", {
     method: "POST",
     body: JSON.stringify({ keyframeIndex: kfFrame30.editTargetIndex, type: "hold" }),
   }).then((r2) => r2.json());
   check("/curve applies a hold edit", curveHoldRes.ok === true, JSON.stringify(curveHoldRes));
-  const animAfterHold = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const animAfterHold = await sFetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const kfFrame30Hold = animAfterHold.tracks.find((tr) => tr.propertyName === "scaleX").keyframes.find((k) => k.frame === 30);
   check("/anim reflects the hold interpolationType", kfFrame30Hold.segment.interpolationType === 0, JSON.stringify(kfFrame30Hold));
 
   // /riv-restore: Undo相当（rivのみモードのUndo/Redoが依拠するエンドポイント）でファイルを丸ごと差し戻す
-  const restoreRes = await fetch("http://127.0.0.1:8797/riv-restore", {
+  const restoreRes = await sFetch("http://127.0.0.1:8797/riv-restore", {
     method: "POST",
     body: JSON.stringify({ bytesBase64: genBytesBefore.toString("base64") }),
   }).then((r2) => r2.json());
   check("/riv-restore accepts a snapshot", restoreRes.ok === true, JSON.stringify(restoreRes));
-  const animAfterRestore = await fetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
+  const animAfterRestore = await sFetch("http://127.0.0.1:8797/anim?artboard=Gen&animation=wobble").then((r2) => r2.json());
   const kfFrame30Restored = animAfterRestore.tracks.find((tr) => tr.propertyName === "scaleX").keyframes.find((k) => k.frame === 30);
   check(
     "/riv-restore reverts the file to the pre-edit snapshot",
@@ -1141,7 +1153,7 @@ try {
   );
 
   // /sm: SMグラフビュー用のノードグラフJSON（genPathの"Flow": entry->idle, idle->moving(active条件)）
-  const smRes = await fetch("http://127.0.0.1:8797/sm").then((r2) => r2.json()).catch(() => null);
+  const smRes = await sFetch("http://127.0.0.1:8797/sm").then((r2) => r2.json()).catch(() => null);
   const genAb = smRes?.artboards?.find((a) => a.name === "Gen");
   const flowSm = genAb?.stateMachines?.find((s) => s.name === "Flow");
   check("/sm finds the artboard and state machine", !!flowSm, JSON.stringify(smRes)?.slice(0, 200));
@@ -1171,9 +1183,9 @@ try {
   check("/sm: no false-positive selfLoopRisk on a well-formed SM", !flowSm.layers.some((l) => l.transitions.some((t) => t.selfLoopRisk)));
 
   // /sm: 到達不能state・条件なし自己遷移のハイライト用フラグ(rivLintの findings と同じファイルで再検証)
-  const brokenStudio = await callTool("riv_studio", { path: lintBrokenPath, port: 8798 });
+  const brokenStudio = noteStudio(await callTool("riv_studio", { path: lintBrokenPath, port: 8798 }));
   check("riv_studio (broken SM fixture) starts", !brokenStudio.isError);
-  const smBrokenRes = await fetch("http://localhost:8798/sm").then((r2) => r2.json()).catch(() => null);
+  const smBrokenRes = await sFetch("http://localhost:8798/sm").then((r2) => r2.json()).catch(() => null);
   const brokenSm = smBrokenRes?.artboards?.[0]?.stateMachines?.find((s) => s.name === "Broken");
   const brokenLayer = brokenSm?.layers?.[0];
   check(
@@ -1192,7 +1204,7 @@ try {
   // 共有なし(既定)では 127.0.0.1 以外で待ち受けない。LAN の IP 宛ての接続は拒否されるはず
   // （直前のテストで別の studio を起動して止めたので、既定の起動をここで改めて行う）
   const lanIp = firstLanIp();
-  const defStudio = await callTool("riv_studio", { path: genPath, port: 8797 });
+  const defStudio = noteStudio(await callTool("riv_studio", { path: genPath, port: 8797 }));
   check("riv_studio default restart", !defStudio.isError && !textOf(defStudio).includes("Read-only share"), textOf(defStudio).slice(0, 120));
   if (lanIp) {
     check("riv_studio default: 127.0.0.1 accepts", await tcpOpen("127.0.0.1", 8797));
@@ -1210,7 +1222,7 @@ try {
 
   // --- riv_studio share: 読み取り専用のLAN共有 ---
   if (lanIp) {
-    const shared = await callTool("riv_studio", { path: genPath, port: 8841, share: true, sharePort: 8842 });
+    const shared = noteStudio(await callTool("riv_studio", { path: genPath, port: 8841, share: true, sharePort: 8842 }));
     const shareText = textOf(shared);
     const m = /Read-only share URL \(LAN\): (http:\/\/(\d+\.\d+\.\d+\.\d+):(\d+)\/s\/([A-Za-z0-9_-]+)\/)/.exec(shareText);
     check("riv_studio share:true returns a LAN read-only URL with a token", !shared.isError && !!m, shareText.slice(0, 300));
@@ -1289,7 +1301,7 @@ try {
       check("share (d): share port is reachable via the LAN address", await tcpOpen(shHost, shPort));
       check("share (d): share port is not listening on loopback", !(await tcpOpen("127.0.0.1", shPort)));
       // 編集用は 127.0.0.1 から従来どおり書ける（Host=localhost）
-      const editOk = await fetch("http://127.0.0.1:8841/notes", { method: "POST", body: JSON.stringify({ text: "from loopback" }) });
+      const editOk = await sFetch("http://127.0.0.1:8841/notes", { method: "POST", body: JSON.stringify({ text: "from loopback" }) });
       check("share: edit server still accepts writes from 127.0.0.1", editOk.status === 200, String(editOk.status));
       // 編集側の未取得の指示数は共有側に出さない
       check("share: viewer /state has no pendingNotes", !stateRo.includes("pendingNotes"));

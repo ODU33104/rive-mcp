@@ -52,7 +52,7 @@ await page.screenshot({ path: "samples/studio-screenshot.png" });
 // 再ビルドAPI: 色を変えて反映されるか
 const modified = { ...scene };
 modified.shapes = [{ ...scene.shapes[0], fill: { color: "#e94560" } }];
-const res = await fetch("http://localhost:8791/rebuild", { method: "POST", body: JSON.stringify(modified) });
+const res = await fetch("http://localhost:8791/rebuild", { method: "POST", headers: { Authorization: handle.authHeader }, body: JSON.stringify(modified) });
 console.log("rebuild:", JSON.stringify(await res.json()));
 await page.waitForTimeout(1500);
 await page.screenshot({ path: "samples/studio-after-rebuild.png" });

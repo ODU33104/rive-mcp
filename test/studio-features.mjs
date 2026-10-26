@@ -97,11 +97,13 @@ writeFileSync(workRiv, readFileSync(join(root, "samples", "e2e-image.riv")));
 const origBytes = readFileSync(workRiv);
 const origDump = readRiv(new Uint8Array(origBytes), { tolerant: true });
 
+// 編集用 Studio は認証必須。MCP 側と同じく Authorization ヘッダを付ける
+const withAuth = (h, opts = {}) => ({ ...opts, headers: { ...(opts.headers ?? {}), Authorization: h.authHeader } });
 const PORT = 8799;
 let handle = null;
 
 async function api(path, opts) {
-  const res = await fetch(`http://localhost:${PORT}${path}`, opts);
+  const res = await fetch(`http://localhost:${PORT}${path}`, withAuth(handle, opts));
   return { status: res.status, json: await res.json() };
 }
 
@@ -181,7 +183,7 @@ try {
     new Promise((resolve, reject) => {
       const s = netConnect(PORT, "127.0.0.1", () => {
         s.write(Buffer.from(
-          `POST /chat HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: ${bodyBuf.length}\r\nConnection: close\r\n\r\n`,
+          `POST /chat HTTP/1.1\r\nHost: localhost\r\nAuthorization: ${handle.authHeader}\r\nContent-Type: application/json\r\nContent-Length: ${bodyBuf.length}\r\nConnection: close\r\n\r\n`,
           "latin1",
         ));
         let i = 0;
@@ -199,7 +201,7 @@ try {
     });
   await rawPost(Buffer.from(JSON.stringify({ text: "A:" + JP, role: "assistant" }), "utf8"));
   await rawPost(cp932(JSON.stringify({ text: "B:" + JP, role: "assistant" })));
-  const chatRes = await (await fetch(`http://localhost:${PORT}/chat`)).json();
+  const chatRes = await (await fetch(`http://localhost:${PORT}/chat`, withAuth(handle))).json();
   const texts = (chatRes.chat ?? []).map((m) => m.text);
   check("UTF-8 body split at every byte boundary survives intact", texts.includes("A:" + JP), JSON.stringify(texts[0]));
   check("CP932 body is recovered instead of becoming mojibake", texts.includes("B:" + JP), JSON.stringify(texts[1]));
@@ -210,7 +212,7 @@ try {
   writeFileSync(vehiclesWork, readFileSync(join(root, "samples", "vehicles.riv")));
   const PORT2 = PORT + 1; // 別ポート: 直前サーバーのclose()はソケット解放を待たないため同一ポート即再利用はレースの元
   const handle2 = startStudio({ rivPath: vehiclesWork, port: PORT2 });
-  const tree = await (await fetch(`http://localhost:${PORT2}/tree`)).json();
+  const tree = await (await fetch(`http://localhost:${PORT2}/tree`, withAuth(handle2))).json();
   const abNames = (tree.artboards ?? []).map((a) => a.name);
   check("multi-artboard file exposes both artboards via /tree", abNames.includes("Truck") && abNames.includes("Jeep"), JSON.stringify(abNames));
   handle2.close();
@@ -244,7 +246,7 @@ try {
   const PORT3 = PORT + 2;
   const handle3 = startStudio({ rivPath: kfWork, port: PORT3 });
   async function api3(path, opts) {
-    const res = await fetch(`http://localhost:${PORT3}${path}`, opts);
+    const res = await fetch(`http://localhost:${PORT3}${path}`, withAuth(handle3, opts));
     return { status: res.status, json: await res.json() };
   }
 
@@ -407,7 +409,7 @@ try {
     const PORT4 = PORT + 3;
     const handle4 = startStudio({ rivPath: boneWork, port: PORT4 });
     async function api4(path, opts) {
-      const res = await fetch(`http://localhost:${PORT4}${path}`, opts);
+      const res = await fetch(`http://localhost:${PORT4}${path}`, withAuth(handle4, opts));
       return { status: res.status, json: await res.json() };
     }
 
