@@ -110,7 +110,7 @@ Twemoji artwork © Twitter/X and contributors, [CC-BY 4.0](https://creativecommo
 
 1. `riv_design_tokens` → use only the returned palette/gradients/durations/easings (never invent raw hex or ad-hoc timings)
 2. `riv_create` with motion `presets` instead of hand-authored keyframes wherever one fits
-3. `riv_critique` → look at the frames, score the 6-axis checklist, fix anything below 4, re-run (at least twice)
+3. `riv_critique` → look at the frames, score the 7-axis checklist, fix anything below 4, re-run (at least twice)
 
 The same workflow plus hand-authoring craft rules (bezier curves, easing semantics, rigging) is exposed as the `rive-design-guidelines` MCP prompt. It also carries numeric recipes (spacing/timing tokens, composition & layering rules, anti-patterns to avoid) across 6 dedicated sections. For clients without MCP prompts support, it ships as a portable skill file at [`skills/rive-design-guidelines/SKILL.md`](skills/rive-design-guidelines/SKILL.md).
 
@@ -148,7 +148,7 @@ A Chromium-based browser is auto-detected in this order (usually nothing to inst
 2. Playwright browser cache
 3. Installed Chrome → Edge
 
-Requires Node.js 20+.
+Requires Node.js 20+ and a Chromium-based browser (Chrome, Edge or Chromium). If none is detected, set the `RIVE_MCP_CHROME` env var to the executable's path.
 
 ## The Studio: human ⇄ AI collaboration
 
@@ -221,6 +221,8 @@ Turn a single character PNG into a naturally moving `.riv`:
 - Or compose manually with `riv_create`: image embedding, grid meshes with per-vertex keyframes, bone chains with distance-weighted skinning, IK constraints
 
 ## Example prompts
+
+Examples for a cloned repository; with the npm version, use the path to your own `.riv` file.
 
 - "List the riv files in `samples/` and inspect vehicles.riv"
 - "Render the `curves` animation as a GIF"

@@ -41,7 +41,7 @@ claude mcp add --scope user rive -- rive-mcp
 ```bash
 npm install
 npm run build
-claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
+claude mcp add --scope user rive -- node /absolute/path/to/rive-mcp/dist/index.js
 ```
 
 ブラウザは以下の順で自動検出される（インストール不要のことが多い）:
@@ -49,6 +49,8 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 1. 環境変数 `RIVE_MCP_CHROME`（Chrome/Edge 実行ファイルパス）
 2. Playwright キャッシュ（`%LOCALAPPDATA%\ms-playwright\chromium-*`）
 3. インストール済み Chrome → Edge
+
+動作には Node.js 20 以上が必要。ブラウザ（Chrome・Edge・Chromium のどれか）も必要で、見つからないときは環境変数 `RIVE_MCP_CHROME` に実行ファイルのパスを指定する。
 
 ## ツール一覧
 
@@ -71,7 +73,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 | `riv_asset_search` | **Iconifyの約20万個のプロ製アイコンを検索**し、そのままRiveシェイプとしてインポート（要ネットワーク） |
 | `riv_lottie_import` | **Lottie/bodymovin JSON → Riveシーン断片**: LottieFilesの膨大な無料プロ製アニメーションを、形状だけでなく振り付けごと取り込む。キーフレーム化されたトランスフォームを名前近似せず正確な3次ベジェイージングのまま変換、パスモーフィング（頂点単位のキーフレーム）、shape/null/precompレイヤー階層、グラデーション、トリムパスのdraw-onアニメ、レイヤーの出現/消滅範囲に対応。未対応機能（テキストレイヤー・マスク・マット等）は隠さずカウント報告 |
 | `riv_decompile` | **.riv → 編集可能なシーン仕様**: プロのファイルを手本として解析・リミックス（ベジェパス・グラデ・Solo・トリムパス・名前付きイージングのアニメを復元）。未対応型は隠さずカウント報告 |
-| `riv_critique` | **ワンコールのレビューバンドル**: アニメ全域からサンプリングしたフレーム + 客観メトリクス（ベジェ/プリミティブ比・彩度フラグ・イージング分布・リグ/SM統計）+ lint結果 + 6軸採点チェックリスト。「レンダ→批評→修正」ループ用 |
+| `riv_critique` | **ワンコールのレビューバンドル**: アニメ全域からサンプリングしたフレーム + 客観メトリクス（ベジェ/プリミティブ比・彩度フラグ・イージング分布・リグ/SM統計）+ lint結果 + 7軸採点チェックリスト。「レンダ→批評→修正」ループ用 |
 | `riv_dump` | .riv バイナリの低レベル構造ダンプ（typeKey / プロパティ / 階層）。フォーマット調査・デバッグ用 |
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
 | `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
@@ -102,7 +104,7 @@ claude mcp add --scope user rive -- node D:/01.projects/rive-mcp/dist/index.js
 1. `riv_design_tokens` → 返ってきたパレット/グラデ/duration/easing**だけ**を使う（生の16進数や恣意的な時間を発明しない）
 2. **プロ製アートワークを取り込む（イラスト的な要素をAIがフリーハンドで描かない）**: `riv_asset_search`（Iconify約20万アイコン、要ネットワーク）/ `riv_import_svg`（Figma/Illustrator書き出し。ネットワーク制限下でも npm から `npm pack @twemoji/svg`(CC-BY 4.0)・`@mdi/svg`・`@tabler/icons` 等のプロ製SVG集を取得可）/ `riv_decompile`（プロ製.rivの手打ちベジェ+調整済みアニメトラックをリミックス）。プリミティブ手描きは背景・パネル・パーティクル等の単純形状のみ
 3. `riv_create` — キーフレーム手打ちの代わりに、当てはまる箇所は全てモーション`presets`で表現
-4. `riv_critique` → フレームを見て6軸チェックリストで採点し、4未満を修正して再実行（最低2周）
+4. `riv_critique` → フレームを見て7軸チェックリストで採点し、4未満を修正して再実行（最低2周）
 
 ### ショーケース: プロ素材イン→プロ品質アウト
 
@@ -218,6 +220,8 @@ Studio のツールバーで PNG / APNG / GIF / WebM を押すだけで、その
 
 ## 使用例（Claude での指示）
 
+リポジトリを clone した場合の例。npm 版では自分の .riv のパスを使う。
+
 - 「`samples/` にある riv ファイルを一覧して」
 - 「`vehicles.riv` の中身を調べて」
 - 「`vehicles.riv` の `curves` アニメーションを GIF にして」
@@ -233,7 +237,6 @@ npm run test:e2e   # 実サーバーを spawn して全ツールを JSON-RPC 実
 
 ## 制約
 
-- `.riv` の**読み取り専用**（編集・再エクスポートは Rive エディタの領分）
 - テキストラン列挙は Rive ランタイム API 制約により非対応（名前指定アクセスは可）
 - GIF は透過非対応のため既定で白背景合成（`background` で変更可）
 - `fill.feather`/`stroke.feather`（ぼかし）は .riv には正しく書き込まれるが、このサーバーのCanvas2Dプレビューでは描画されない（GPU版Rive Rendererのみ対応）
