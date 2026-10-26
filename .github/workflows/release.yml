@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch: # 手動実行は MCP Registry の登録だけをやり直す（npm 公開と Release はタグのときだけ）
 
 permissions:
   contents: write # GitHub Release の作成
@@ -27,15 +28,25 @@ jobs:
       - run: npm run build
       - run: node test/studio-security.mjs
       - name: Tag matches package.json
+        if: github.ref_type == 'tag'
         run: |
           v="$(node -p "require('./package.json').version")"
           test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
-      - run: npm publish --provenance --access public
+      - name: npm publish
+        if: github.ref_type == 'tag'
+        run: npm publish --provenance --access public
       - name: GitHub Release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes
       # MCP Registry（io.github.ODU33104/rive-mcp）。npm 公開が済んだ後なので、失敗しても公開は取り消さない
+      # npm のレジストリに新版が見えるまで数分かかることがあるので、見えるまで待つ
+      - name: Wait for npm
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          for i in $(seq 1 36); do curl -sf "https://registry.npmjs.org/rive-mcp-server/$v" > /dev/null && exit 0; sleep 10; done
+          echo "npm does not show $v yet"; exit 1
       - name: MCP Registry
         continue-on-error: true
         env:
