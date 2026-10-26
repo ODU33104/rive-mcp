@@ -21,6 +21,7 @@ import { editRiv, setKeyframeCurve, type EditOp } from "./rivEdit.js";
 import { extractAssets, replaceAssetBytes } from "./rivAssets.js";
 import { encodeApng } from "./apng.js";
 import { encodeGif } from "./gif.js";
+import { I18N, LANG_ORDER, LANG_NAMES } from "./studioI18n.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 
@@ -1209,7 +1210,7 @@ const RO_TAIL = String.raw`<script>
 (function () {
   var badge = document.createElement('span');
   badge.className = 'badge'; badge.id = 'roBadge';
-  badge.textContent = /^ja/i.test(navigator.language || '') ? '閲覧専用' : 'Read-only';
+  badge.dataset.i18n = 'roBadge'; badge.textContent = t('roBadge');
   var right = document.querySelector('#appbar .ab-right');
   if (right) right.insertBefore(badge, right.firstChild);
   // SMグラフ表示のときだけ右パネル（遷移の詳細）を出す
@@ -1221,6 +1222,8 @@ const RO_TAIL = String.raw`<script>
 </script>`;
 
 // ---- スタジオUI（自己完結・ダークテーマ・日英対応・3ペイン） ----------------
+// 辞書をブラウザへ JSON で埋め込む。"<" は \u003c に逃がし、script 要素が途中で閉じないようにする
+const I18N_DATA_JSON = JSON.stringify({ dict: I18N, order: LANG_ORDER, names: LANG_NAMES }).replace(/</g, "\\u003c");
 const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="utf-8"><title>rive-mcp Studio</title>
@@ -1805,238 +1808,37 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
 <script src="/rive.js"></script>
 <script>
 // ---- i18n ----------------------------------------------------------------
-const I18N = {
-  ja: {
-    guideTitle: 'はじめての方へ — 3ステップ',
-    guide1: 'Claude に「〇〇の .riv を作って riv_studio で開いて」と頼む（もう開けています）',
-    guide2: 'キャンバスのオブジェクトをクリック/ドラッグ、右のインスペクタで数値・色を微調整',
-    guide3: '大きな修正は左下の「エージェント」に書いて送信 → Claude に「スタジオの指示を見て」。結果はチャットに返ってきます',
-    close: '閉じる', clear: 'クリア',
-    tabTree: '階層', tabPlay: '再生 / SM', tabGraph: 'SMグラフ',
-    modeDesign: 'デザイン', modeAnimate: 'アニメート',
-    hHierarchy: '階層', hierSearchT: '名前で絞り込む (Ctrl+F)', hierSearchPh: '名前で絞り込む…',
-    expandAll: 'すべて展開', collapseAll: 'すべて折りたたむ',
-    deepExpand: 'この配下をすべて展開', deepCollapse: 'この配下をすべて折りたたむ',
-    ctxIsolate: 'これだけ表示', ctxCopyName: '名前をコピー',
-    treeNothingToCollapse: '折りたためる階層がありません（子を持つ行がありません）',
-    accData: 'データ', accDataHint: 'ステートマシンの入力', accAssets: 'アセット',
-    accAssetsHint: '埋め込み画像はステージにドロップすると差し替わります', accAnimations: 'アニメーション', accAgent: 'エージェント',
-    stStage: 'ステージ', stGraph: 'ステートマシン',
-    dockConsole: 'コンソール', dockProblems: '問題', dockChanges: '変更', dockScene: 'シーンJSON',
-    probNone: '問題は見つかっていません', probRun: '検査',
-    chatEmpty: 'ここに書いた内容は MCP 接続中の AI が受け取ります。作業結果はこの欄に返ってきます。',
-    chatYou: 'あなた', chatAI: 'AI', chatPending: '未受信', chatTaken: '受信済み',
-    chatNew: 'AI から返信が届きました',
-    keyBtnAddT: '再生ヘッド位置にキーフレームを打つ',
-    keyBtnRemoveT: '再生ヘッド位置のキーフレームを削除',
-    keyBtnRivT: 'このプロパティのキーへ移動',
-    tlPickAnim: 'アニメーションを選ぶとタイムラインが出ます',
-    tlOpenAnims: 'アニメーション一覧を開く',
-    tlUnitFrames: 'フレーム', tlUnitSeconds: '秒',
-    tlCurrent: '現在', tlDuration: '長さ', tlSpeed: '再生速度', tlSnap: 'キーのスナップ',
-    tlToStart: '先頭へ', tlPrevKey: '前のキーへ', tlNextKey: '次のキーへ',
-    ipPosition: '位置', ipSize: 'サイズ', ipScale: 'スケール', ipTransform: 'トランスフォーム', ipFill: '塗り', ipText: 'テキスト', ipEasing: 'イージング',
-    hGraph: 'SM グラフ', graphHint: 'ノードをドラッグして配置（自動保存）。エッジ/ノードをクリックすると下に詳細が出ます。',
-    graphReset: 'レイアウトをリセット',
-    graphLegendFixed: 'Entry / Any / Exit（固定ノード）', graphLegendUnreachable: '到達不能 state',
-    graphLegendSelfLoop: '条件/exitTimeなしの自己遷移', graphLegendActive: '再生中のアクティブ state',
-    hGraphFindings: 'リント結果', hGraphDetails: '詳細',
-    graphNoSel: 'ノード/エッジ未選択 — グラフ上でクリックすると詳細が出ます',
-    graphNoSm: 'このアートボードにステートマシンがありません',
-    graphUnreachable: '到達不能', graphSelfLoopRisk: '無限ループの恐れ（条件・exitTimeなしの自己遷移）',
-    graphNoFindings: '問題なし', graphTransition: '遷移 (Transition)',
-    graphDuration: 'duration', graphExitTime: 'exitTime', graphNoCondition: '条件なし（無条件で遷移）',
-    hArtboard: 'アートボード / ステートマシン', hInputs: 'SM 入力',
-    hAnim: 'アニメーション（単体再生）', hAI: 'AIへの指示', hLog: 'イベントログ',
-    hScene: 'シーンJSON（上級者向け）', hInspector: 'インスペクタ',
-    noSel: '未選択 — 左の階層かキャンバスのオブジェクトをクリックすると、ここで位置・サイズ・色などを直接編集できます',
-    play: '▶ 再生', backSM: 'SMに戻す', rebuild: '⟳ 再ビルド', format: '整形',
-    aiSend: 'AIに送る', aiPlaceholder: '例: しっぽの振りをもっと大きく、まばたきを2秒間隔に',
-    aiHint: 'Ctrl+Enter で送信。AI 側には「スタジオの指示を確認して」と伝えてください（作業結果はこの欄に返ります）。',
-    scenePlaceholder: 'riv_studio に scenePath を渡すとここで編集できます',
-    scrubL: 'シーク', zoomL: 'ズーム', snapshot: 'PNG保存',
-    noInputs: '入力なし — riv_create で stateMachine.inputs を定義するとここに操作パネルが出ます',
-    animOnly: 'アニメ単体再生中', fire: '発火',
-    helpTitle: 'rive-mcp Studio の使い方',
-    helpIntro: 'AI（Claude等のMCPクライアント）が作った .riv を、人間がその場で確認・直接編集・修正指示するための画面です。ファイルが更新されると自動で再読み込みされます。',
-    helpFlowT: '基本の流れ',
-    helpFlow1: 'AIに作らせる: チャットで「ボールが跳ねるrivを作って riv_studio で開いて」など',
-    helpFlow2: '直接さわる: キャンバスでクリック選択・ドラッグ移動、インスペクタで数値/色を変更（即反映）',
-    helpFlow3: 'AIに頼む: 左下「エージェント」に書いて送信 → チャットで「スタジオの指示を確認して」。AIの返事は同じ欄に出ます',
-    helpFlow4: 'AIが riv_edit / riv_create で修正すると、この画面は即座に更新されます',
-    helpPanelT: '各パネル',
-    helpP1: '階層: シーンのオブジェクトツリー。クリックで選択（公式エディタのHierarchy相当）',
-    helpP2: 'インスペクタ: 選択オブジェクトの位置・サイズ・回転・不透明度・色・テキストを直接編集',
-    helpP3: 'データ/アニメーション: ステートマシン入力（trigger/bool/number）の操作とアニメ単体再生',
-    helpP4: 'タイムライン: 右上「アニメート」に切り替えると出ます。◆=キーフレーム。キーはインスペクタ各行の◇ボタンで打ちます',
-    helpP5: 'シーンJSON: riv_create 仕様を直接編集して再ビルド（scenePath 指定時）',
-    helpP6: '最下段: コンソール / 問題（riv_lint の指摘）/ 変更（スナップショット）/ シーンJSON',
-    paused: '一時停止', resumed: '再開',
-    notesSent: '指示を送信しました', notesTaken: 'AIが指示を受け取りました',
-    fileUpdated: 'ファイル更新 → リロード', jsonError: 'JSONエラー: ',
-    rebuildOk: '再ビルド成功', rebuildNg: '再ビルド失敗: ', warn: ' 警告: ',
-    editOk: '編集を適用', editNg: '編集失敗: ',
-    rivOnlyHint: '（rivを直接編集中 — 生プロパティ）',
-    artboardSel: 'アートボード',
-    addRectBtn: '+ 四角形', addEllipseBtn: '+ 楕円', addTextBtn: '+ テキスト',
-    speedL: '再生速度', kfDeleteMin: '最後のキーフレームは削除できません',
-    undoDone: '元に戻しました', redoDone: 'やり直しました', objDeleted: 'オブジェクトを削除しました',
-    undoA: '元に戻す (Ctrl+Z)', redoA: 'やり直す (Ctrl+Y)', helpA: 'ヘルプ', pauseA: '再生 / 一時停止',
-    connT: 'サーバー接続中', connOffT: 'サーバー切断 — 再接続待ち', dirtyT: '未保存の変更（自動再ビルド待ち）',
-    expL: 'エクスポート', expPng: 'PNG', expPngT: '表示中フレームをPNG保存',
-    expProg: 'エクスポート中… ', expDone: 'エクスポート完了', expFail: 'エクスポート失敗: ',
-    expNoAnim: 'エクスポートできるアニメーションがありません',
-    kfEasingHint: 'easingは「このキーフレームへ向かう動き」を表します（前のキーフレームからの区間に適用）。elastic系はバネのように弾む動きになります。',
-    kfFirstKeyHint: 'これはこのトラックの最初のキーフレームです。手前に区間が無いため、ここで設定したeasingは見た目に反映されません。',
-    curveHold: 'ホールド', curveLinear: 'リニア', curveCubic: 'カーブ',
-    curveElasticRO: 'elastic区間はここでは編集できません（上のamplitude/periodを調整してください）',
-    curveUnknownRO: '未対応の補間器のため読み取り専用です',
-    curveDragHint: 'ハンドルをドラッグして制御点を調整、またはプリセットをクリック',
-    onionBtn: 'オニオンスキン', onionBtnT: '前後フレームを半透明表示（再生中は自動オフ）', onionRangeL: 'オニオンスキンの範囲（前後フレーム数）',
-    aiCtxCheckA: '選択/時刻/アートボードを添付', aiCtxChipT: 'クリックで送信への添付をオン/オフ',
-    ctxSelPrefix: '選択: ', ctxNone: '(コンテキストなし)',
-    dropHint: '画像をドロップしてアセットを差し替え', dropNoAssets: 'このファイルには埋め込み画像アセットがありません',
-    assetReplaced: 'アセットを差し替えました', assetReplaceFail: '差し替え失敗: ',
-    assetPickTitle: '差し替え先のアセットを選択', assetPickHint: '複数の埋め込み画像があります。クリックして差し替え先を選んでください。',
-    hSnap: 'スナップショット', snapHint: '名前を付けて .riv の状態を保存し、後で復元できます（undoとは別枠）',
-    snapNamePh: 'スナップショット名（省略可）', snapSave: '保存', snapNone: 'スナップショットなし',
-    snapRestoreBtn: '復元', snapDeleteBtn: '削除',
-    snapRestoreConfirm: 'この時点まで復元しますか？（今の変更は失われます）', snapDeleteConfirm: 'このスナップショットを削除しますか？',
-    snapConfirmYes: 'はい', snapConfirmNo: 'キャンセル',
-    snapSaved: 'スナップショットを保存しました', snapRestored: 'スナップショットを復元しました', snapDeleted: 'スナップショットを削除しました',
-    snapFail: 'スナップショット操作に失敗: ',
-    abTabsHint: 'アートボード',
-    kfSelectedSuffix: '個のキーフレームを選択中', kfScaleL: '時間スケール', kfScaleApply: '適用',
-    kfScaleInvalid: '倍率は0より大きい数値で指定してください', kfClearSel: '選択解除',
-    kfCopiedSuffix: '個のキーフレームをコピーしました', kfMoveUnsupportedProp: 'この種類のトラック（色など）はrivのみモードでの一括編集に非対応です',
-    kfMarqueeHint: 'ドラッグで矩形選択、Shift+クリックで追加/除外選択。Ctrl+C/V でコピー&ペースト',
-    boneBtn: 'ボーン', boneBtnT: 'ボーン骨格を重ね描画（一時停止中はドラッグでFK回転できます）',
-    boneKeyLabel: 'キーフレーム化', boneKeyT: 'ONの場合、アニメ単体再生中の確定操作は現在フレームにキーフレームを書き込みます（OFFの場合は定義値を直接書き換え）',
-    boneEditOk: 'ボーンを更新しました', boneEditNg: 'ボーン更新に失敗: ',
-    boneNoRiv: 'このファイルにボーンが見つかりません', bonePausedHint: '一時停止中のみドラッグで編集できます',
-  },
-  en: {
-    guideTitle: 'New here? 3 steps',
-    guide1: 'Ask Claude: "create a .riv of ... and open it with riv_studio" (already open)',
-    guide2: 'Click / drag objects on the canvas, fine-tune numbers & colors in the Inspector',
-    guide3: 'For bigger changes, write into the Agent panel (bottom left) and tell Claude "check the studio notes" — replies come back in the same panel',
-    close: 'Close', clear: 'Clear',
-    tabTree: 'Hierarchy', tabPlay: 'Play / SM', tabGraph: 'SM Graph',
-    modeDesign: 'Design', modeAnimate: 'Animate',
-    hHierarchy: 'Hierarchy', hierSearchT: 'Filter by name (Ctrl+F)', hierSearchPh: 'Filter by name…',
-    expandAll: 'Expand All', collapseAll: 'Collapse All',
-    deepExpand: 'Deep Expand', deepCollapse: 'Deep Collapse',
-    ctxIsolate: 'Isolate', ctxCopyName: 'Copy name',
-    treeNothingToCollapse: 'Nothing to collapse — no row here has children',
-    accData: 'Data', accDataHint: 'State machine inputs', accAssets: 'Assets',
-    accAssetsHint: 'Drop an image on the stage to replace an embedded asset', accAnimations: 'Animations', accAgent: 'Agent',
-    stStage: 'Stage', stGraph: 'State Machine',
-    dockConsole: 'Console', dockProblems: 'Problems', dockChanges: 'Changes', dockScene: 'Scene JSON',
-    probNone: 'No problems found', probRun: 'Check',
-    chatEmpty: 'What you write here is picked up by the connected AI. Its results come back in this pane.',
-    chatYou: 'You', chatAI: 'AI', chatPending: 'pending', chatTaken: 'picked up',
-    chatNew: 'The AI replied',
-    keyBtnAddT: 'Key this property at the playhead',
-    keyBtnRemoveT: 'Remove the key at the playhead',
-    keyBtnRivT: 'Jump to this property\\'s key',
-    tlPickAnim: 'Pick an animation to show the timeline',
-    tlOpenAnims: 'Open the animations list',
-    tlUnitFrames: 'Frames', tlUnitSeconds: 'Seconds',
-    tlCurrent: 'Current', tlDuration: 'Duration', tlSpeed: 'Playback Speed', tlSnap: 'Snap Keys',
-    tlToStart: 'Go to start', tlPrevKey: 'Previous key', tlNextKey: 'Next key',
-    ipPosition: 'Position', ipSize: 'Size', ipScale: 'Scale', ipTransform: 'Transform', ipFill: 'Fill', ipText: 'Text', ipEasing: 'Easing',
-    hGraph: 'SM Graph', graphHint: 'Drag nodes to arrange them (auto-saved). Click a node/edge for details below.',
-    graphReset: 'Reset layout',
-    graphLegendFixed: 'Entry / Any / Exit (fixed nodes)', graphLegendUnreachable: 'Unreachable state',
-    graphLegendSelfLoop: 'Self-transition with no condition/exitTime', graphLegendActive: 'Currently active state',
-    hGraphFindings: 'Lint findings', hGraphDetails: 'Details',
-    graphNoSel: 'Nothing selected — click a node or edge in the graph for details',
-    graphNoSm: 'This artboard has no state machine',
-    graphUnreachable: 'Unreachable', graphSelfLoopRisk: 'Infinite-loop risk (self-transition, no condition/exitTime)',
-    graphNoFindings: 'No issues', graphTransition: 'Transition',
-    graphDuration: 'duration', graphExitTime: 'exitTime', graphNoCondition: 'No condition (unconditional transition)',
-    hArtboard: 'Artboard / State Machine', hInputs: 'SM Inputs',
-    hAnim: 'Animation (solo play)', hAI: 'Instructions for AI', hLog: 'Event Log',
-    hScene: 'Scene JSON (advanced)', hInspector: 'Inspector',
-    noSel: 'Nothing selected — click an object in the hierarchy or on the canvas to edit position, size, colors here',
-    play: '▶ Play', backSM: 'Back to SM', rebuild: '⟳ Rebuild', format: 'Format',
-    aiSend: 'Send to AI', aiPlaceholder: 'e.g. bigger tail wag, blink every 2 seconds',
-    aiHint: 'Ctrl+Enter to send. Say "check the studio notes" in chat — the result comes back here.',
-    scenePlaceholder: 'Pass scenePath to riv_studio to edit the scene here',
-    scrubL: 'Seek', zoomL: 'Zoom', snapshot: 'Save PNG',
-    noInputs: 'No inputs — define stateMachine.inputs in riv_create to get controls here',
-    animOnly: 'Playing a single animation', fire: 'Fire',
-    helpTitle: 'How to use rive-mcp Studio',
-    helpIntro: 'Inspect, directly edit, and request fixes to .riv animations built by an AI (an MCP client such as Claude). The page hot-reloads whenever the file changes.',
-    helpFlowT: 'Basic workflow',
-    helpFlow1: 'Let the AI build: "create a bouncing-ball riv and open it with riv_studio"',
-    helpFlow2: 'Touch it: click-select and drag objects on the canvas; edit numbers/colors in the Inspector (applies live)',
-    helpFlow3: 'Ask the AI: use the Agent panel, then say "check the studio notes" in chat — its reply appears in the same panel',
-    helpFlow4: 'When the AI edits via riv_edit / riv_create, this page updates instantly',
-    helpPanelT: 'Panels',
-    helpP1: 'Hierarchy: the scene object tree; click to select (like the official editor)',
-    helpP2: 'Inspector: edit position, size, rotation, opacity, colors, text of the selection',
-    helpP3: 'Data / Animations: drive state machine inputs (trigger/bool/number) and solo-play animations',
-    helpP4: 'Timeline: switch to Animate (top right) to show it. ◆ = keyframe. You create keys with the ◇ button on each inspector row',
-    helpP5: 'Scene JSON: edit the riv_create spec directly and rebuild (needs scenePath)',
-    helpP6: 'Status bar: Console / Problems (riv_lint findings) / Changes (snapshots) / Scene JSON',
-    paused: 'Paused', resumed: 'Resumed',
-    notesSent: 'Instruction queued', notesTaken: 'AI picked up the instructions',
-    fileUpdated: 'File changed → reloading', jsonError: 'JSON error: ',
-    rebuildOk: 'Rebuild OK', rebuildNg: 'Rebuild failed: ', warn: ' warnings: ',
-    editOk: 'Edit applied', editNg: 'Edit failed: ',
-    rivOnlyHint: '(editing riv directly — raw properties)',
-    artboardSel: 'Artboard',
-    addRectBtn: '+ Rect', addEllipseBtn: '+ Ellipse', addTextBtn: '+ Text',
-    speedL: 'Playback speed', kfDeleteMin: 'Cannot delete the last keyframe',
-    undoDone: 'Undo', redoDone: 'Redo', objDeleted: 'Object deleted',
-    undoA: 'Undo (Ctrl+Z)', redoA: 'Redo (Ctrl+Y)', helpA: 'Help', pauseA: 'Play / Pause',
-    connT: 'Connected', connOffT: 'Disconnected — waiting to reconnect', dirtyT: 'Unsaved changes (auto-rebuild pending)',
-    expL: 'Export', expPng: 'PNG', expPngT: 'Save the current frame as PNG',
-    expProg: 'Exporting… ', expDone: 'Export complete', expFail: 'Export failed: ',
-    expNoAnim: 'No animation to export',
-    kfEasingHint: 'Easing describes the motion arriving at this keyframe (applied to the segment from the previous one). The elastic- options give a springy overshoot.',
-    kfFirstKeyHint: 'This is the first keyframe on this track. There is no incoming segment, so any easing set here has no visible effect.',
-    curveHold: 'Hold', curveLinear: 'Linear', curveCubic: 'Curve',
-    curveElasticRO: 'Elastic segments are read-only here (adjust amplitude/period above)',
-    curveUnknownRO: 'Unsupported interpolator type — read-only',
-    curveDragHint: 'Drag a handle to shape the curve, or click a preset',
-    onionBtn: 'Onion skin', onionBtnT: 'Ghost neighboring frames (auto-off while playing)', onionRangeL: 'Onion skin range (frames before/after)',
-    aiCtxCheckA: 'Attach selection / time / artboard', aiCtxChipT: 'Click to toggle attaching context to the sent note',
-    ctxSelPrefix: 'sel: ', ctxNone: '(no context)',
-    dropHint: 'Drop an image to replace an asset', dropNoAssets: 'This file has no embedded image assets',
-    assetReplaced: 'Asset replaced', assetReplaceFail: 'Replace failed: ',
-    assetPickTitle: 'Pick an asset to replace', assetPickHint: 'This file has multiple embedded images. Click one to replace it.',
-    hSnap: 'Snapshots', snapHint: 'Save a named copy of the .riv and restore it later (separate from undo)',
-    snapNamePh: 'Snapshot name (optional)', snapSave: 'Save', snapNone: 'No snapshots yet',
-    snapRestoreBtn: 'Restore', snapDeleteBtn: 'Delete',
-    snapRestoreConfirm: 'Restore to this snapshot? Current changes will be lost.', snapDeleteConfirm: 'Delete this snapshot?',
-    snapConfirmYes: 'Yes', snapConfirmNo: 'Cancel',
-    snapSaved: 'Snapshot saved', snapRestored: 'Snapshot restored', snapDeleted: 'Snapshot deleted',
-    snapFail: 'Snapshot operation failed: ',
-    abTabsHint: 'Artboard',
-    kfSelectedSuffix: ' keyframe(s) selected', kfScaleL: 'Time scale', kfScaleApply: 'Apply',
-    kfScaleInvalid: 'Scale factor must be a number greater than 0', kfClearSel: 'Clear selection',
-    kfCopiedSuffix: ' keyframe(s) copied', kfMoveUnsupportedProp: 'This track type (e.g. color) is not supported for bulk edits in riv-only mode',
-    kfMarqueeHint: 'Drag to box-select, Shift+click to add/remove. Ctrl+C/V to copy & paste',
-    boneBtn: 'Bones', boneBtnT: 'Overlay the bone skeleton (drag to FK-rotate while paused)',
-    boneKeyLabel: 'Keyframe on drop', boneKeyT: 'When on, committing a drag while solo-playing an animation writes a keyframe at the current frame (when off, it edits the definition value directly)',
-    boneEditOk: 'Bone updated', boneEditNg: 'Bone update failed: ',
-    boneNoRiv: 'No bones found in this file', bonePausedHint: 'Pause playback to drag-edit bones',
-  },
+// 辞書本体は src/studioI18n/ の言語ファイル。TS 側が JSON にしてここへ埋め込む（I18N_DATA）。
+// ここは言語の選択・切替・文言の引き当てだけを持つ。
+const I18N_DATA = ${I18N_DATA_JSON};
+const { dict: I18N, order: LANG_ORDER, names: LANG_NAMES } = I18N_DATA;
+const LANGS = LANG_ORDER.filter((c) => I18N[c]); // 辞書があり、切替ボタンに出す言語
+// 保存値 → navigator.language（完全一致 → 言語部分一致）の順に採る。辞書の無い言語は選ばない
+function matchLang(tag) {
+  const want = String(tag || '').toLowerCase();
+  if (!want) return null;
+  const exact = LANGS.find((c) => c.toLowerCase() === want);
+  if (exact) return exact;
+  const base = want.split('-')[0];
+  return LANGS.find((c) => c.toLowerCase().split('-')[0] === base) || null;
+}
+let lang = matchLang(localStorage.getItem('rive-mcp-lang')) || matchLang(navigator.language) || 'en';
+// 未翻訳キーは en、en にも無ければ ja、それも無ければキー名をそのまま出す
+const t = (k) => {
+  const v = (I18N[lang] || {})[k] ?? (I18N.en || {})[k] ?? (I18N.ja || {})[k];
+  return v ?? k;
 };
-let lang = localStorage.getItem('rive-mcp-lang') || (navigator.language.startsWith('ja') ? 'ja' : 'en');
-const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.ja[k] || k;
+const nextLang = () => LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length];
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
-  document.getElementById('langBtn').textContent = lang === 'ja' ? 'EN' : '日本語';
+  document.getElementById('langBtn').textContent = LANG_NAMES[nextLang()] || 'EN';
 }
 document.getElementById('langBtn').onclick = () => {
-  lang = lang === 'ja' ? 'en' : 'ja';
+  lang = nextLang();
   localStorage.setItem('rive-mcp-lang', lang);
   applyLang(); renderInputs(); buildTree(); renderInspector();
   renderGraphFindings(); renderGraphDetails();
