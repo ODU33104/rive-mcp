@@ -3,7 +3,7 @@
 
 **Create, edit, inspect, render and live-preview Rive (`.riv`) animations from Claude — no Rive editor, no cloud, no subscription.**
 
-[日本語 README はこちら](./README.ja.md)
+🌐 **English** | [日本語](./README.ja.md) | [简体中文](./README.zh-CN.md) | [한국어](./README.ko.md) | [Español](./README.es.md) | [Français](./README.fr.md) | [Deutsch](./README.de.md) | [Português (Brasil)](./README.pt-BR.md)
 
 rive-mcp is a free MCP (Model Context Protocol) server that gives Claude (or any MCP client) full control over `.riv` files. Unlike the official Rive MCP (which requires the editor running) or paid third-party servers, it works with nothing but a `.riv` file — and it can even **build `.riv` files from scratch** by serializing the binary format directly.
 
