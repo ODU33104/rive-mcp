@@ -52,7 +52,7 @@ ToC: varuint propertyKey... 0終端
 - アセットは **Backboard の直後・Artboard の前**に `ImageAsset`（name/width/height）+
   `FileAssetContents`（bytes=PNG生バイト）のペアで書く。**ローカルindexを消費しない**
 - `Image` drawable の `assetId` = ファイル内アセットの出現順 (0-based)
-- `Mesh` は Image の子（parentId）。`triangleIndexBytes` は **uint16 LE** の頂点index三つ組
+- `Mesh` は Image の子（parentId）。`triangleIndexBytes` は **varuint (LEB128) の列**の頂点index三つ組（uint16 固定長ではない。ランタイムは `readVarUintAs<uint16_t>` で読む。128 以上のindexは2バイト）
 - `MeshVertex` は Mesh の子。x/y は画像中心原点の natural pixel 空間、u/v は 0-1
 - MeshVertex の x/y は keyable。ただし propertyKey は **Vertex.x(24)/y(25)**（Node.x(13)/y(14) と別物）
 - StateTransition の exit time: `flags=4` + `exitTime`（ms）で「遷移元アニメを指定時間再生後に遷移」

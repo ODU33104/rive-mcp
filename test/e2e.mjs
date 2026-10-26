@@ -371,6 +371,31 @@ try {
     textOf(imgCreated).slice(0, 250)
   );
 
+  // 回帰: Mesh.triangleIndexBytes は varuint 列（uint16 固定長だと 128 頂点以上で崩れる）。14x14 = 225 頂点で index>=128 を含める
+  {
+    const cols = 14, rows = 14;
+    const outPath = join(root, "samples", "e2e-mesh-varuint.riv");
+    const meshCreated = await callTool("riv_create", {
+      outPath,
+      scene: {
+        artboard: { width: 100, height: 100 },
+        images: [{ id: "img", pngPath, x: 50, y: 50, scale: 40, mesh: { columns: cols, rows } }],
+      },
+    });
+    const expected = [];
+    const pushVar = (v) => { do { let b = v & 0x7f; v >>>= 7; if (v) b |= 0x80; expected.push(b); } while (v); };
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const tl = r * (cols + 1) + c, tr = tl + 1, bl = tl + cols + 1, br = bl + 1;
+      for (const t of [tl, bl, tr, tr, bl, br]) pushVar(t);
+    }
+    const fileBytes = await import("node:fs").then((m) => m.readFileSync(outPath));
+    check(
+      "riv_create writes Mesh.triangleIndexBytes as varuint (225 vertices)",
+      !meshCreated.isError && fileBytes.includes(Buffer.from(expected)),
+      textOf(meshCreated).slice(0, 250)
+    );
+  }
+
   // riv_extract_assets: e2e-image.riv には埋め込みPNG("img")が1つあるはず
   const extracted = await callTool("riv_extract_assets", {
     path: join(root, "samples", "e2e-image.riv"),

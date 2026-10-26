@@ -1095,9 +1095,10 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             tris.push(tl, bl, tr, tr, bl, br);
           }
         }
-        const triBytes = new Uint8Array(tris.length * 2);
-        const dv = new DataView(triBytes.buffer);
-        tris.forEach((t, i) => dv.setUint16(i * 2, t, true));
+        // ランタイム (Mesh::decodeTriangleIndexBytes) は varuint の列として読む。uint16 固定長だと 128 頂点以上で崩れる
+        const triWriter = new BinaryWriter();
+        for (const t of tris) triWriter.varuint(t);
+        const triBytes = triWriter.bytes();
         const mesh = push({ type: "Mesh", props: { parentId: image, triangleIndexBytes: triBytes } });
 
         const skinBones = img.mesh.bones ?? [];
