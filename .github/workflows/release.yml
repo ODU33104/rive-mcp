@@ -1,0 +1,47 @@
+name: Release
+
+# v* タグの push で起動する。npm は Trusted Publishing（OIDC）で公開するため、トークンも OTP も使わない。
+# 事前設定（一度だけ）: npmjs.com の rive-mcp-server → Settings → Trusted Publisher に
+# GitHub Actions / ODU33104 / rive-mcp / release.yml を登録する。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # GitHub Release の作成
+  id-token: write # npm と MCP Registry の OIDC 認証
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing には npm 11.5.1 以上が必要
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - run: node test/studio-security.mjs
+      - name: Tag matches package.json
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
+      - run: npm publish --provenance --access public
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes
+      # MCP Registry（io.github.ODU33104/rive-mcp）。npm 公開が済んだ後なので、失敗しても公開は取り消さない
+      - name: MCP Registry
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo modelcontextprotocol/registry --pattern 'mcp-publisher_*linux_amd64.tar.gz' --output mcp-publisher.tar.gz
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
