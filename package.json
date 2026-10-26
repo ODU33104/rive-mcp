@@ -42,6 +42,7 @@
     "dist",
     "assets",
     "vendor/rive-defs/defs.json",
+    "samples/vehicles.riv",
     "skills"
   ],
   "scripts": {

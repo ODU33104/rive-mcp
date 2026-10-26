@@ -3,7 +3,7 @@
 
 🌐 [English](./README.md) | **日本語** | [简体中文](./README.zh-CN.md) | [한국어](./README.ko.md) | [Español](./README.es.md) | [Français](./README.fr.md) | [Deutsch](./README.de.md) | [Português (Brasil)](./README.pt-BR.md)
 
-エディタ不要・完全無料・ローカル完結の Rive (`.riv`) MCP サーバー。
+エディタ不要・無料・ローカルで動く Rive (`.riv`) MCP サーバー。
 
 ![Studio スクリーンショット](docs/media/studio-overview-v05-ja.jpg)
 
@@ -16,7 +16,7 @@ Claude（や任意の MCP クライアント）から `.riv` アニメーショ�
 公式 Rive MCP（エディタ常駐が前提）や有料のサードパーティ MCP と違い、
 `.riv` ファイルさえあれば動く。レンダリングには公式 Rive ランタイム
 （`@rive-app/canvas-advanced` WASM）を headless Chromium 内で駆動するため、
-描画忠実度はエディタ・本番ランタイムと同一。
+描画は公式ランタイムと同じ WASM で行うが、このサーバーの Canvas2D プレビューには既知の表示差がある（[制約](#制約)）。
 
 ## セットアップ
 
@@ -30,9 +30,14 @@ Claude（や任意の MCP クライアント）から `.riv` アニメーショ�
 または npm からインストール:
 
 ```bash
-npm install -g rive-mcp-server
+# Claude Code に登録（ユーザースコープ = 全プロジェクトで利用可）。初回の起動時に npm から取得する
+claude mcp add --scope user rive -- npx -y rive-mcp-server
+```
 
-# Claude Code に登録（ユーザースコープ = 全プロジェクトで利用可）
+グローバルに入れてから登録する場合:
+
+```bash
+npm install -g rive-mcp-server
 claude mcp add --scope user rive -- rive-mcp
 ```
 
@@ -44,13 +49,30 @@ npm run build
 claude mcp add --scope user rive -- node /absolute/path/to/rive-mcp/dist/index.js
 ```
 
-ブラウザは以下の順で自動検出される（インストール不要のことが多い）:
+登録できたかは `claude mcp list` で確かめる。`rive` が Connected と出れば接続できている。登録後は Claude Code を開き直す。
+
+ブラウザは以下の順で自動検出される（Chrome か Edge が入っていればインストール不要）:
 
 1. 環境変数 `RIVE_MCP_CHROME`（Chrome/Edge 実行ファイルパス）
 2. Playwright キャッシュ（`%LOCALAPPDATA%\ms-playwright\chromium-*`）
 3. インストール済み Chrome → Edge
 
 動作には Node.js 20 以上が必要。ブラウザ（Chrome・Edge・Chromium のどれか）も必要で、見つからないときは環境変数 `RIVE_MCP_CHROME` に実行ファイルのパスを指定する。
+
+ツールに渡す相対パスは、MCP サーバーを起動したときの作業フォルダを基準に解決される。迷ったら絶対パスを使う。
+
+## 最初の 1 本（インストールから GIF まで）
+
+1. **登録を確かめる**: `claude mcp list` で `rive` が Connected と出るか見る。Claude Code 内では `/mcp` で rive の状態を見られる。
+2. **最初の 1 本を作る**: Claude に「ボールが跳ねる riv を作って、riv_studio で開いて」と頼む。`riv_create` が `.riv` を作り、`riv_studio` がブラウザで Studio を開く。
+3. **Studio で直す**: キャンバスの物をクリックして選び、インスペクタで数値や色を変える（即時反映）。大きな変更は左下の「エージェント」に書いて送り、Claude に「スタジオの指示を確認して」と伝える。
+4. **GIF に書き出す**: Studio のツールバーで GIF を押す。Claude に頼むなら「そのファイルを GIF にして」（`riv_render_gif`）。
+
+詰まりやすい点:
+
+- `No Chromium-based browser found` と出る: Chrome か Edge の実行ファイルのパスを環境変数 `RIVE_MCP_CHROME` に設定して登録し直す（`claude mcp add --scope user -e RIVE_MCP_CHROME=<パス> rive -- npx -y rive-mcp-server`）。
+- `rive` が一覧に無い: 登録が `--scope user` で実行されたか、`claude mcp list` で確かめる。
+- `File not found`: 相対パスの基準は作業フォルダ。絶対パスで指定する。
 
 ## ツール一覧
 
@@ -220,7 +242,7 @@ Studio のツールバーで PNG / APNG / GIF / WebM を押すだけで、その
 
 ## 使用例（Claude での指示）
 
-リポジトリを clone した場合の例。npm 版では自分の .riv のパスを使う。
+リポジトリを clone した場合の例。npm 版では、グローバルインストールなら `<npm root -g>/rive-mcp-server/samples/` にあるサンプルを使うか、自分の .riv のパスを使う。
 
 - 「`samples/` にある riv ファイルを一覧して」
 - 「`vehicles.riv` の中身を調べて」
@@ -238,9 +260,19 @@ npm run test:e2e   # 実サーバーを spawn して全ツールを JSON-RPC 実
 ## 制約
 
 - テキストラン列挙は Rive ランタイム API 制約により非対応（名前指定アクセスは可）
+- Canvas2D プレビューは、ファイル上には無いメッシュの継ぎ目を表示することがある（WebGL / Skia の描画では出ない）
 - GIF は透過非対応のため既定で白背景合成（`background` で変更可）
 - `fill.feather`/`stroke.feather`（ぼかし）は .riv には正しく書き込まれるが、このサーバーのCanvas2Dプレビューでは描画されない（GPU版Rive Rendererのみ対応）
 - スクリーンショット検出（`riv_ui_detect`）は小さな画素変化に敏感（無損失PNG再エンコードは完全一致だが、RGB±2 のノイズで大半のベクターパネルが再分類され要素数が3倍近くになりうる）。平坦塗りは出荷前に必ずスクリーンショットと突き合わせて実測されるため、生き残った塗りは一致が保証される — 代償として写真主体のページでは忠実度が編集性に勝ち、大半の要素がフェードのみのスライスになる。実測値と限界の全リストは [docs/ui-screenshot-to-prototype.md](docs/ui-screenshot-to-prototype.md)
+
+## ネットワーク通信
+
+このサーバーはローカルで動く。外部へ通信するのは次の場合だけ:
+
+- `riv_asset_search`: Iconify API（`api.iconify.design`）で検索・アイコン取得
+- `riv_ui_detect` / `riv_ui_prototype` の `figmaUrl`: Figma REST API（`api.figma.com`）から取得。環境変数 `FIGMA_TOKEN` を設定したときだけ。未設定ならリクエストは出ない
+- `riv_studio` の `share: true`: 同じ LAN の端末から読み取り専用ビューを開ける（外向きの通信ではなく待ち受け）
+- 初回の `npx -y rive-mcp-server`（npm からのパッケージ取得）
 
 ## ライセンス / 利用条件
 
