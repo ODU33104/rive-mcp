@@ -147,7 +147,10 @@ async function launchBrowser(): Promise<Browser> {
     }
   }
   throw new Error(
-    "No Chromium-based browser found. Set RIVE_MCP_CHROME to a Chrome/Edge executable path.\n" +
+    "No Chromium-based browser found. Install one, or set RIVE_MCP_CHROME to its executable path.\n" +
+      "  Windows: install Google Chrome or Microsoft Edge (Edge ships with Windows 11). Example: RIVE_MCP_CHROME=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\n" +
+      "  macOS: install Google Chrome or Microsoft Edge, or run: npx playwright-core install chromium\n" +
+      "  Linux: install google-chrome, chromium or microsoft-edge, or run: npx playwright-core install chromium\n" +
       errors.join("\n")
   );
 }

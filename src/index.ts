@@ -64,10 +64,10 @@ function err(message: string): ToolResult {
 
 function loadRiv(path: string): { bytes: Buffer; abs: string } {
   const abs = resolve(path);
-  if (!existsSync(abs)) throw new Error(`File not found: ${abs}`);
+  if (!existsSync(abs)) throw new Error(`File not found: ${abs}. Check the path (relative paths resolve against the working directory), or use riv_list to find .riv files in a folder.`);
   const bytes = readFileSync(abs);
   if (bytes.length < 4 || bytes.toString("latin1", 0, 4) !== "RIVE") {
-    throw new Error(`Not a .riv file (missing RIVE fingerprint): ${abs}`);
+    throw new Error(`Not a .riv file (missing RIVE fingerprint): ${abs}. This is not a Rive binary; export a .riv from the Rive editor or generate one with riv_create.`);
   }
   return { bytes, abs };
 }
@@ -123,7 +123,7 @@ server.registerTool(
   },
   wrap(async ({ dir }: { dir: string }) => {
     const root = resolve(dir);
-    if (!existsSync(root)) return err(`Directory not found: ${root}`);
+    if (!existsSync(root)) return err(`Directory not found: ${root}. Pass an existing folder (relative paths resolve against the working directory).`);
     const found: Array<{ path: string; sizeKB: number; format: string }> = [];
     const walk = (d: string, depth: number) => {
       if (depth > 6 || found.length >= 200) return;
@@ -212,8 +212,8 @@ server.registerTool(
       animation: z.string().optional().describe("Linear animation name"),
       stateMachine: z.string().optional().describe("State machine name (takes precedence)"),
       time: z.number().optional().describe("Seconds to advance before capturing (default 0)"),
-      width: z.number().int().positive().max(4096).optional(),
-      height: z.number().int().positive().max(4096).optional(),
+      width: z.number().int().positive().max(4096).optional().describe("Output width in px (default: artboard width)"),
+      height: z.number().int().positive().max(4096).optional().describe("Output height in px (default: keeps the artboard aspect ratio)"),
       background: z.string().optional().describe("CSS background color (default: transparent)"),
       outPath: z.string().optional().describe("Output PNG path (default: alongside the .riv)"),
     },
@@ -270,12 +270,12 @@ server.registerTool(
       "Render a .riv animation (or state machine idle playback) to an animated GIF file for preview.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
-      artboard: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
       animation: z.string().optional().describe("Animation name (default: first state machine or animation)"),
-      stateMachine: z.string().optional(),
+      stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
       duration: z.number().positive().max(30).optional().describe("Seconds to render (default 2)"),
       fps: z.number().int().positive().max(60).optional().describe("Frames per second (default 20)"),
-      width: z.number().int().positive().max(2048).optional().describe("Output width (default: artboard width, capped 800)"),
+      width: z.number().int().positive().max(2048).optional().describe("Output width in px (default 480)"),
       background: z.string().optional().describe("CSS background color (default white — GIF has no alpha)"),
       outPath: z.string().optional().describe("Output GIF path (default: alongside the .riv)"),
     },
@@ -343,13 +343,13 @@ server.registerTool(
       "Render a .riv animation (or state machine playback) to an animated PNG (APNG). Unlike GIF this supports 24-bit color plus full alpha transparency, and GitHub READMEs animate it like a regular image. Frames are rendered with a transparent background by default.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
-      artboard: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
       animation: z.string().optional().describe("Animation name (default: first state machine or animation)"),
-      stateMachine: z.string().optional(),
+      stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
       duration: z.number().positive().max(30).optional().describe("Seconds to render (default 2)"),
       fps: z.number().int().positive().max(60).optional().describe("Frames per second (default 20)"),
       width: z.number().int().positive().max(2048).optional().describe("Output width (default 480)"),
-      height: z.number().int().positive().max(2048).optional(),
+      height: z.number().int().positive().max(2048).optional().describe("Output height in px (default: keeps the artboard aspect ratio)"),
       transparent: z.boolean().optional().describe("Render on a transparent background to keep APNG alpha (default true). Set false to composite onto 'background'"),
       background: z.string().optional().describe("CSS background color when transparent=false (default #ffffff)"),
       loops: z.number().int().min(0).optional().describe("Loop count (0 = infinite, default 0)"),
@@ -429,10 +429,10 @@ server.registerTool(
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
       stateMachine: z.string().optional().describe("State machine name (default: first)"),
-      artboard: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
       steps: z.array(stepSchema).max(50).describe("Sequence of interaction steps"),
-      width: z.number().int().positive().max(2048).optional(),
-      background: z.string().optional(),
+      width: z.number().int().positive().max(2048).optional().describe("Output width in px (default 480)"),
+      background: z.string().optional().describe("CSS background color (default: transparent)"),
     },
   },
   wrap(
@@ -483,7 +483,7 @@ server.registerTool(
       "Generate ready-to-use integration code (React/Vue/Svelte/plain JS/Flutter) for a .riv file, using its real artboard, state machine and input names.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
-      framework: z.enum(["react", "js", "vue", "svelte", "flutter"]),
+      framework: z.enum(["react", "js", "vue", "svelte", "flutter"]).describe("Target: react, js (plain JavaScript), vue, svelte or flutter"),
     },
   },
   wrap(async ({ path, framework }: { path: string; framework: Framework }) => {
@@ -555,7 +555,7 @@ server.registerTool(
       "Deterministically generate professional design tokens for a scene BEFORE calling riv_create: an OKLCH-harmonized palette (with WCAG contrast ratios), gradient pairs, Material-Motion-derived durations & easing roles, spacing/radius/stroke scales and a type scale. Call this first, then use ONLY the returned values in the scene spec — never invent raw hex colors or ad-hoc durations. Inputs: optional seed color, mood (calm|playful|elegant|tech|warm|natural), scheme (dark|light).",
     inputSchema: {
       seed: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe("Brand/seed color #RRGGBB (optional; mood default hue otherwise)"),
-      mood: z.enum(["calm", "playful", "elegant", "tech", "warm", "natural"]).optional(),
+      mood: z.enum(["calm", "playful", "elegant", "tech", "warm", "natural"]).optional().describe("Sets the default hue when seed is absent (default calm)"),
       scheme: z.enum(["dark", "light"]).optional().describe("Default dark"),
     },
   },
@@ -574,9 +574,9 @@ server.registerTool(
       "One-call review bundle for the render→critique→revise loop. Returns (1) a FILMSTRIP image — N frames left→right across the duration, so motion is readable as a sequence, (2) an ONION-SKIN image — all frames ghost-overlaid so every mover leaves a visible trail (use it to check trajectories and travel direction vs the artwork's facing), (3) a MOTION REPORT — net displacement/rotation vector per animated object computed from the file data, (4) objective design metrics + lint findings, and (5) a fixed 7-axis scoring checklist (incl. spatial/directional coherence). LOOK at the images, score each axis 1-5, fix anything below 4 (riv_edit / regenerate), then re-run. Iterate at least twice before delivering any non-trivial scene.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
-      artboard: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
       animation: z.string().optional().describe("Animation to sample (default: first)"),
-      stateMachine: z.string().optional(),
+      stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
       frames: z.number().int().min(2).max(10).optional().describe("Frames to sample across the duration (default 6)"),
       width: z.number().int().min(120).max(480).optional().describe("Width of each filmstrip cell (default 200 — keep small, it saves tokens)"),
       individualFrames: z.boolean().optional().describe("Also return each sampled frame as a separate full-size image (default false)"),
@@ -690,7 +690,7 @@ server.registerTool(
       limit: z.number().int().min(1).max(64).optional().describe("Max results (default 24)"),
       icon: z.string().optional().describe("Icon to fetch, e.g. 'solar:rocket-bold' (from a previous search)"),
       outSpec: z.string().optional().describe("Required with icon: output scene-fragment JSON path"),
-      idPrefix: z.string().optional(),
+      idPrefix: z.string().optional().describe("Prefix for generated shape ids; applies when fetching an icon (default: the icon name with non-alphanumerics replaced, plus an underscore)"),
     },
   },
   wrap(async ({ query, limit, icon, outSpec, idPrefix }: { query?: string; limit?: number; icon?: string; outSpec?: string; idPrefix?: string }) => {
@@ -706,7 +706,7 @@ server.registerTool(
       const [prefix, name] = icon.split(":");
       if (!prefix || !name) return err("icon must be 'prefix:name' (e.g. 'solar:rocket-bold')");
       const svg = await get(`https://api.iconify.design/${prefix}/${name}.svg`);
-      if (!svg.includes("<svg")) return err(`Icon '${icon}' not found`);
+      if (!svg.includes("<svg")) return err(`Icon '${icon}' not found. Run riv_asset_search with a query first, then pass one of the returned names as icon.`);
       const out = await svgToSpecFile(svg, outSpec, idPrefix ?? name.replace(/[^a-z0-9]/gi, "_") + "_");
       return { content: [{ type: "text", text: out.text }, { type: "image", data: out.image, mimeType: "image/png" }] };
     }
@@ -733,7 +733,7 @@ server.registerTool(
   {
     title: "Import a Lottie/bodymovin JSON as a Rive scene fragment (art + timing + easing)",
     description:
-      "Convert a Lottie (bodymovin, .json) animation — the format used by LottieFiles' huge library of free, professionally animated assets — into a riv_create scene fragment. Unlike riv_import_svg (shapes only), this carries over the professional's actual choreography: keyframed position/rotation/scale/opacity with their exact bezier easing curves (not approximated to a named preset), shape/null/precomp layer hierarchy, solid layers, gradient fills, stroke trim-path animation, and layer in/out visibility windows. Writes a scene-fragment JSON with {groups,shapes,animations} plus a rendered preview and a coverage/warnings summary. Since the fragment includes animations (which riv_create's \"imports\" mechanism does not merge), splice its groups/shapes/animations arrays directly into your riv_create scene spec instead of using \"imports\". Supported: shape layers (path/ellipse/rect/star/polygon/fill/stroke/gradient/trim/nested groups), null layers, solid layers, one level of precomp inlining, parented layers, hold and bezier easing. Not imported (counted in coverage.skipped, not silently dropped): text layers, masks, track mattes, repeaters, merge-paths, path/gradient-position keyframe morphing (frozen to first frame + warning), time-remapped precomps, expressions.",
+      "Convert a Lottie (bodymovin, .json) animation — the format of LottieFiles' free animation library — into a riv_create scene fragment. Unlike riv_import_svg (shapes only), this keeps the keyframed timing: position, rotation, scale and opacity with their exact bezier easing (not mapped to a named preset), shape/null/precomp layer hierarchy, solid layers, gradient fills, stroke trim-path animation, and layer in/out visibility windows. Writes a scene-fragment JSON with {groups,shapes,animations} plus a rendered preview and a coverage/warnings summary. Since the fragment includes animations (which riv_create's \"imports\" mechanism does not merge), splice its groups/shapes/animations arrays directly into your riv_create scene spec instead of using \"imports\". Supported: shape layers (path/ellipse/rect/star/polygon/fill/stroke/gradient/trim/nested groups), null layers, solid layers, one level of precomp inlining, parented layers, hold and bezier easing. Not imported (counted in coverage.skipped, not silently dropped): text layers, masks, track mattes, repeaters, merge-paths, path/gradient-position keyframe morphing (frozen to first frame + warning), time-remapped precomps, expressions.",
     inputSchema: {
       path: z.string().optional().describe("Path to the Lottie .json file"),
       json: z.string().optional().describe("Inline Lottie JSON text (alternative to path)"),
@@ -817,7 +817,7 @@ server.registerTool(
   {
     title: "Create a .riv file from a scene spec",
     description: `Create a working .riv animation file from scratch (no Rive editor needed) and validate it with the official runtime. Returns a rendered preview frame.
-For non-flat, non-"AI placeholder" quality (gradients, organic bezier curves, proper easing, springy motion), read the "rive-design-guidelines" prompt this server exposes before designing a non-trivial scene.
+For polished results (gradients, organic bezier curves, easing, springy motion), read the "rive-design-guidelines" prompt this server exposes before designing a non-trivial scene.
 Scene spec example:
 {
   "artboard": {"name":"Demo","width":400,"height":300},
@@ -853,7 +853,7 @@ Character animation (images/groups/mesh):
 - texts[].followPath {"path":"<shapes[].id>","start":0,"end":1,"offset":0,"strength":1,"orient":true} bends the text along that shape's path (text on path; start/end/offset are 0-1 fractions of the path length). Needs fonts[] like any text.
 - groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
 - transitions support exitTimeMs (play source animation this long before transitioning).
-Motion presets — PREFER these over hand-authored keyframes (professionally tuned amplitudes/easings, ~10x fewer tokens):
+Motion presets (tuned amplitudes and easings; about 10x fewer tokens than hand-authored keyframes):
 "animations":[{"name":"intro","duration":90,"presets":[
   {"preset":"pop-in","target":"logo"},
   {"preset":"rise-in","targets":["c1","c2","c3"],"at":12,"stagger":4},
@@ -864,7 +864,7 @@ Pro features: stroke.trim {start,end,mode} + trimStart/trimEnd tracks (draw-on e
 "imports":[{"spec":"logo.scene.json","x":200,"y":150,"scale":0.8}] places riv_import_svg / riv_asset_search fragments under a wrapper group (id = file basename) — animate the wrapper or individual shape ids. PREFER imported real vector art over drawing with primitives for anything illustrative.
 Recommended flow: riv_design_tokens → (riv_import_svg / riv_asset_search for artwork) → riv_create (token values + presets + imports) → riv_critique → fix → re-critique.
 Shape z-order: later in array = on top; images render above shapes. properties for tracks: x,y,rotation(deg),scaleX,scaleY,opacity(0-1),width,height,fillColor(needs "color" in keyframes). Colors: #RRGGBB or #AARRGGBB. rotation in degrees. Easings include emphasized-decel (enters) / emphasized-accel (exits).
-Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (path resolved relative to cwd, or pass bytes directly). "events":[{"id":"beepEvent","type":"audio","audio":"beep"}] declares an AudioEvent bound to that clip. Trigger it either from a state machine state ("states":[{"name":"s1","fireEvent":"beepEvent"}]) or at specific frames inside a timeline via animations[].events: {"name":"anim1","duration":60,"tracks":[...],"events":[{"event":"beepEvent","frame":0},{"event":"beepEvent","frame":30}]}. NOTE: playback support depends on the runtime — this server's own preview (a Canvas2D-based renderer) does not play audio, so rendered PNG/GIF/video previews and riv_studio will stay silent even though the AudioAsset/AudioEvent are written correctly and will play in a GPU-backed Rive runtime (WebGL/Skia, e.g. rive.app or the production player).`,
+Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (path resolved relative to cwd, or pass bytes directly). "events":[{"id":"beepEvent","type":"audio","audio":"beep"}] declares an AudioEvent bound to that clip. Trigger it either from a state machine state ("states":[{"name":"s1","fireEvent":"beepEvent"}]) or at specific frames inside a timeline via animations[].events: {"name":"anim1","duration":60,"tracks":[...],"events":[{"event":"beepEvent","frame":0},{"event":"beepEvent","frame":30}]}. NOTE: this server's preview (Canvas2D) does not play audio, so PNG/GIF/video previews and riv_studio stay silent. The AudioAsset/AudioEvent are still written correctly and play in a GPU-backed Rive runtime (WebGL/Skia).`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
       scene: z.record(z.unknown()).describe("Scene spec (see tool description for schema)"),
@@ -882,7 +882,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
         spec.shapes = spec.shapes ?? [];
         for (const imp of spec.imports) {
           const p = resolve(imp.spec);
-          if (!existsSync(p)) return err(`import spec not found: ${p}`);
+          if (!existsSync(p)) return err(`import spec not found: ${p}. Create it first with riv_import_svg or riv_asset_search (outSpec), or fix the path.`);
           const frag = JSON.parse(readFileSync(p, "utf8")) as { shapes: NonNullable<SceneSpec["shapes"]> };
           const gid = imp.id ?? basename(p).replace(/\.(scene\.)?json$/i, "");
           spec.groups.push({
@@ -900,7 +900,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
       for (const img of imageLists.flat()) {
         if (!img.bytes && img.pngPath) {
           const p = resolve(img.pngPath);
-          if (!existsSync(p)) return err(`Image file not found: ${p}`);
+          if (!existsSync(p)) return err(`Image file not found: ${p}. Check the image pngPath (relative paths resolve against the working directory).`);
           img.bytes = new Uint8Array(readFileSync(p));
         }
       }
@@ -908,7 +908,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
       for (const clip of audioLists.flat()) {
         if (!clip.bytes && clip.path) {
           const p = resolve(clip.path);
-          if (!existsSync(p)) return err(`Audio file not found: ${p}`);
+          if (!existsSync(p)) return err(`Audio file not found: ${p}. Check the audio path (relative paths resolve against the working directory).`);
           clip.bytes = new Uint8Array(readFileSync(p));
         }
       }
@@ -918,7 +918,7 @@ Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (p
           const p = font.path
             ? resolve(font.path)
             : join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "inter.ttf");
-          if (!existsSync(p)) return err(`Font file not found: ${p}`);
+          if (!existsSync(p)) return err(`Font file not found: ${p}. Check the font path, or omit path to use the bundled Inter font.`);
           font.bytes = new Uint8Array(readFileSync(p));
         }
       }
@@ -964,7 +964,7 @@ server.registerTool(
       outPath: z.string().optional().describe("Output path (default: overwrite source)"),
       edits: z.array(
         z.object({
-          op: z.enum(["set", "setText", "delete", "setKeyframes"]),
+          op: z.enum(["set", "setText", "delete", "setKeyframes"]).describe("set: properties; setText: text run; delete: object; setKeyframes: animation track"),
           index: z.number().int().optional().describe("Target by riv_dump global index"),
           name: z.string().optional().describe("Target by object name (setText: run name; setKeyframes: animated object name)"),
           type: z.string().optional().describe("Filter by typeName when targeting by name"),
@@ -975,14 +975,14 @@ server.registerTool(
             .describe("op=setKeyframes: animated property (rotation in degrees)"),
           keyframes: z.array(
             z.object({
-              frame: z.number().int().min(0),
-              value: z.number().optional(),
-              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap", "emphasized-decel", "emphasized-accel"]).optional(),
+              frame: z.number().int().min(0).describe("Frame number within the animation"),
+              value: z.number().optional().describe("Value at this frame (required unless mode=remove)"),
+              easing: z.enum(["hold", "linear", "ease", "ease-in", "ease-out", "ease-in-out", "ease-out-back", "ease-in-back", "smooth", "snap", "emphasized-decel", "emphasized-accel"]).optional().describe("Easing for the segment from this keyframe to the next (default linear; hold = step)"),
             })
           ).optional().describe("op=setKeyframes: keyframe list (value required unless mode=remove)"),
           mode: z.enum(["replace", "add", "remove"]).optional().describe("op=setKeyframes: default replace"),
         })
-      ).min(1),
+      ).min(1).describe("Edit operations, applied in order"),
     },
   },
   wrap(async ({ path, outPath, edits }: { path: string; outPath?: string; edits: EditOp[] }) => {
@@ -1056,13 +1056,14 @@ server.registerTool(
       regions: z
         .array(
           z.object({
-            name: z.string(),
+            name: z.string().describe("Part name; the output file is <name>.png"),
             polygon: z.array(point2D()).min(3)
               .describe("Polygon vertices in source image pixel coords"),
             keepInBase: z.boolean().optional().describe("Don't erase this region from base.png"),
           })
         )
-        .min(1),
+        .min(1)
+        .describe("Polygon regions to cut out, one per part"),
     },
   },
   wrap(
@@ -1072,7 +1073,7 @@ server.registerTool(
       regions: Array<{ name: string; polygon: Array<[number, number]>; keepInBase?: boolean }>;
     }) => {
       const src = resolve(pngPath);
-      if (!existsSync(src)) return err(`PNG not found: ${src}`);
+      if (!existsSync(src)) return err(`PNG not found: ${src}. Check the path (relative paths resolve against the working directory).`);
       const dir = resolve(outDir);
       mkdirSync(dir, { recursive: true });
       const result = await host.sliceImage(readFileSync(src), regions);
@@ -1115,11 +1116,11 @@ server.registerTool(
         })
       ).optional().describe("Named cutout parts, e.g. {earL, earR, tail}. Names containing 'ear' attach to the head"),
       eyes: z.array(
-        z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
+        z.object({ x: z.number().describe("Left edge in image px"), y: z.number().describe("Top edge in image px"), width: z.number().describe("Width in image px"), height: z.number().describe("Height in image px") })
       ).optional().describe("Eye rects in image px coords (generates blink overlays)"),
-      artboardWidth: z.number().optional(),
-      artboardHeight: z.number().optional(),
-      backgroundColor: z.string().optional(),
+      artboardWidth: z.number().optional().describe("Artboard width in px (default 600)"),
+      artboardHeight: z.number().optional().describe("Artboard height in px (default 460)"),
+      backgroundColor: z.string().optional().describe("CSS background color (default: transparent)"),
       furColor: z.string().optional().describe("Eyelid/patch color matching the fur (default #f8eee2)"),
       headRatio: z.number().optional().describe("Top fraction of the image that is 'head' (default 0.45)"),
     },
@@ -1137,7 +1138,7 @@ server.registerTool(
       headRatio?: number;
     }) => {
       const src = resolve(a.pngPath);
-      if (!existsSync(src)) return err(`PNG not found: ${src}`);
+      if (!existsSync(src)) return err(`PNG not found: ${src}. Check the path (relative paths resolve against the working directory).`);
       const png = readFileSync(src);
       const regions = Object.entries(a.parts ?? {}).map(([name, def]) => ({ name, polygon: def.polygon }));
       const sliced = regions.length
@@ -1183,8 +1184,8 @@ server.registerTool(
     title: "Diff two .riv files",
     description: "Structural diff between two .riv files: type count changes and per-object property differences.",
     inputSchema: {
-      pathA: z.string(),
-      pathB: z.string(),
+      pathA: z.string().describe("Path to the first .riv file"),
+      pathB: z.string().describe("Path to the second .riv file"),
       maxDiffs: z.number().int().optional().describe("Max object diffs to list (default 30)"),
     },
   },
@@ -1244,13 +1245,13 @@ server.registerTool(
       "Render a .riv animation (or state machine) to a real-time WebM video using canvas.captureStream() + MediaRecorder (VP9, falls back to VP8/generic webm). Default duration is one loop of the animation (2s for a bare state machine or when the animation's length can't be determined).",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
-      artboard: z.string().optional(),
-      animation: z.string().optional(),
-      stateMachine: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
+      animation: z.string().optional().describe("Animation name; ignored when stateMachine is set (default: the first state machine, else the first animation)"),
+      stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
       duration: z.number().positive().max(30).optional().describe("Seconds to record (default: one animation loop, or 2s)"),
       fps: z.number().int().positive().max(60).optional().describe("captureStream() frame rate (default 30)"),
-      width: z.number().int().positive().max(2048).optional(),
-      height: z.number().int().positive().max(2048).optional(),
+      width: z.number().int().positive().max(2048).optional().describe("Output width in px (default: artboard width)"),
+      height: z.number().int().positive().max(2048).optional().describe("Output height in px (default: keeps the artboard aspect ratio)"),
       background: z.string().optional().describe("CSS background color (default: transparent)"),
       out: z.string().optional().describe("Output .webm path (default: alongside the .riv)"),
     },
@@ -1316,15 +1317,15 @@ server.registerTool(
       "Render N evenly-spaced frames of a .riv animation/state machine into a single grid sprite sheet PNG (columns = ceil(sqrt(N))). Writes the PNG plus a JSON metadata file (cellW/cellH/cols/rows/count/fps) alongside.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
-      artboard: z.string().optional(),
-      animation: z.string().optional(),
-      stateMachine: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
+      animation: z.string().optional().describe("Animation name; ignored when stateMachine is set (default: the first state machine, else the first animation)"),
+      stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
       count: z.number().int().positive().max(256).optional().describe("Number of frames (default 16)"),
       duration: z.number().positive().max(30).optional().describe("Seconds spanned by the frames (default: one animation loop, or 2s)"),
       fps: z.number().int().positive().max(60).optional().describe("Metadata playback fps (default: count/duration)"),
-      width: z.number().int().positive().max(2048).optional(),
-      height: z.number().int().positive().max(2048).optional(),
-      background: z.string().optional(),
+      width: z.number().int().positive().max(2048).optional().describe("Output width in px (default: artboard width)"),
+      height: z.number().int().positive().max(2048).optional().describe("Output height in px (default: keeps the artboard aspect ratio)"),
+      background: z.string().optional().describe("CSS background color (default: transparent)"),
       out: z.string().optional().describe("Output PNG path (default: alongside the .riv); metadata is written next to it with a .json extension"),
     },
   },
@@ -1390,17 +1391,17 @@ server.registerTool(
 // batchJobSchema and `defaults` would make the JSON-schema converter emit
 // $ref dedup pointers, which some MCP clients' validators reject.
 const batchDefaultsShape = () => ({
-  format: z.enum(["png", "gif", "apng", "webm", "sprites"]).optional().describe("Output format for this job"),
+  format: z.enum(["png", "gif", "apng", "webm", "sprites"]).optional().describe("Output format: png, gif, apng, webm or sprites. Required on every job, set here or in defaults"),
   outDir: z.string().optional().describe("Output directory (default: alongside the source .riv)"),
-  artboard: z.string().optional(),
-  animation: z.string().optional(),
-  stateMachine: z.string().optional(),
-  width: z.number().int().positive().max(2048).optional(),
-  height: z.number().int().positive().max(2048).optional(),
+  artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
+  animation: z.string().optional().describe("Animation name; ignored when stateMachine is set (default: the first state machine, else the first animation)"),
+  stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
+  width: z.number().int().positive().max(2048).optional().describe("Output width in px (default: artboard width; 480 for gif and apng)"),
+  height: z.number().int().positive().max(2048).optional().describe("Output height in px (default: keeps the artboard aspect ratio)"),
   background: z.string().optional().describe("CSS background color"),
   time: z.number().optional().describe("format=png: seconds to advance before capture (default 0)"),
   duration: z.number().positive().max(30).optional().describe("format=gif/apng/webm/sprites: seconds to render (default: one animation loop, or 2s)"),
-  fps: z.number().int().positive().max(60).optional(),
+  fps: z.number().int().positive().max(60).optional().describe("Frames per second (default 20; 30 for webm)"),
   transparent: z.boolean().optional().describe("format=apng: render on a transparent background (default true)"),
   loops: z.number().int().min(0).optional().describe("format=apng: loop count, 0=infinite (default 0)"),
   count: z.number().int().positive().max(256).optional().describe("format=sprites: frame count (default 16)"),
@@ -1416,7 +1417,7 @@ server.registerTool(
   {
     title: "Batch-render many .riv files/formats in one call",
     description:
-      "Render a list of jobs — each a single .riv (rivPath) or a glob of .riv files (glob) — to png/gif/apng/webm/sprites, sequentially reusing the same headless Chromium page (no parallel pages). Built for CI/scripts: call this tool repeatedly from your pipeline instead of expecting a live watch mode — none is provided, since MCP's request/response model doesn't fit a background file watcher. 'defaults' holds options shared across every job; each job's own fields override them. One job's failure does not stop the batch — every job (and every file a glob expands to) gets its own success/error/outPath/durationMs entry in the returned report.",
+      "Render a list of jobs — each a single .riv (rivPath) or a glob of .riv files (glob) — to png/gif/apng/webm/sprites, sequentially reusing the same headless Chromium page (no parallel pages). Built for CI/scripts: call this tool repeatedly from your pipeline instead of expecting a live watch mode — none is provided, since MCP's request/response model doesn't fit a background file watcher. 'defaults' holds options shared across every job; each job's own fields override them. Every job needs a format (in the job or in defaults), or that job fails. One job's failure does not stop the batch — every job (and every file a glob expands to) gets its own success/error/outPath/durationMs entry in the returned report.",
     inputSchema: {
       jobs: z.array(batchJobSchema).min(1).max(200).describe("Jobs to render, in order"),
       defaults: z.object(batchDefaultsShape()).optional().describe("Shared defaults merged under each job (job-level values win)"),
@@ -1487,14 +1488,14 @@ server.registerTool(
     inputSchema: {
       pathA: z.string().describe("Path to the first .riv file"),
       pathB: z.string().describe("Path to the second .riv file"),
-      artboard: z.string().optional(),
-      animation: z.string().optional(),
-      stateMachine: z.string().optional(),
+      artboard: z.string().optional().describe("Artboard name (default: first artboard)"),
+      animation: z.string().optional().describe("Animation name; ignored when stateMachine is set (default: the first state machine, else the first animation)"),
+      stateMachine: z.string().optional().describe("State machine name (takes precedence over animation)"),
       time: z.number().optional().describe("Seconds to advance before capturing (default 0)"),
       threshold: z.number().min(0).max(255).optional().describe("Max per-channel diff (0-255) still counted as a match (default 16)"),
-      width: z.number().int().positive().max(2048).optional(),
-      height: z.number().int().positive().max(2048).optional(),
-      background: z.string().optional(),
+      width: z.number().int().positive().max(2048).optional().describe("Output width in px (default: artboard width)"),
+      height: z.number().int().positive().max(2048).optional().describe("Output height in px (default: keeps the artboard aspect ratio)"),
+      background: z.string().optional().describe("CSS background color (default: transparent)"),
       out: z.string().optional().describe("Output diff PNG path (default: alongside pathA)"),
     },
   },
@@ -1634,9 +1635,9 @@ server.registerTool(
   {
     title: "Read the Studio chat and reply into it",
     description:
-      "The Studio web UI's Agent panel is a two-way chat. Use this tool for both halves of it.\n" +
+      "Read the Studio web UI's Agent chat and reply into it.\n" +
       "1) READ: call with no `reply` to fetch the messages the user typed (consumes the queue; the Studio shows them as picked up). Trigger on 'check the studio notes' / 「スタジオの指示を確認して」, or after opening riv_studio when the user mentions they left notes. Act on each instruction — usually riv_edit or riv_create on the watched file, which hot-reloads the browser.\n" +
-      "2) REPLY: after doing the work, call again with `reply` set to a short summary of what you changed (and anything you could not do). It appears as your message in the same chat. ALWAYS reply — otherwise the user is left staring at the Studio with no idea whether you acted. Both can be done in one call: pass `reply` together with the read to answer and pick up anything new at the same time.",
+      "2) REPLY: after doing the work, call again with `reply` set to a short summary of what you changed (and anything you could not do). It appears as your message in the same chat. Always reply: without a reply the user cannot tell whether you acted. Both can be done in one call: pass `reply` together with the read to answer and pick up anything new at the same time.",
     inputSchema: {
       port: z.number().int().optional().describe("Studio port (default 8787)"),
       peek: z.boolean().optional().describe("Read without consuming"),
@@ -1713,7 +1714,7 @@ function vectorSceneOf(
 ) {
   const userFonts: VectorFont[] = (fonts ?? []).map((f) => {
     const p = resolve(f.path);
-    if (!existsSync(p)) throw new Error(`Font file not found: ${p}`);
+    if (!existsSync(p)) throw new Error(`Font file not found: ${p}. Check the path in fonts[].`);
     return { label: basename(p), bytes: new Uint8Array(readFileSync(p)), family: f.family };
   });
   const scene = parseVectorScene(svgText, {
@@ -1740,7 +1741,7 @@ function vectorSceneFrom(
   fonts?: Array<{ family?: string; path: string }>
 ) {
   const src = resolve(svgPath);
-  if (!existsSync(src)) throw new Error(`SVG not found: ${src}`);
+  if (!existsSync(src)) throw new Error(`SVG not found: ${src}. Check svgPath (relative paths resolve against the working directory).`);
   return vectorSceneOf(readFileSync(src, "utf8"), dirname(src), src, maxElements, fonts);
 }
 
@@ -1859,7 +1860,7 @@ server.registerTool(
   {
     title: "Detect UI elements in a screenshot",
     description:
-      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates come back in the source resolution but are recovered from a downscaled analysis, so expect a pixel or two, and corner radii within about a pixel. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Look at the overlay, give each element a role, and pass the result to riv_ui_prototype to get an animated .riv. This is geometry only — it does not know a button from a card. If you have the vector source, pass svgPath instead of imagePath: nothing is estimated, the element tree is the SVG's own group nesting, non-rectangular artwork comes through as \"vector-shape\" with its real bezier vertices, <text> becomes \"vector-text\" (editable Rive text — the bundled Inter is substituted unless you pass fonts, and a run whose glyphs are missing is baked as a picture instead, always with a warning), embedded <image> data comes through as its own pixels, and Figma layer names arrive as roleHint.",
+      "Find the rectangles, text runs and images in a UI screenshot or design comp. Returns a nested element tree with rects, corner radii and fill colours, plus a numbered overlay PNG. Coordinates are in source pixels (accurate to about 1-2 px); corner radii to about 1 px. Each element carries renderMode (\"vector-panel\" | \"raster\" — how it would be reconstructed; flat fills are test-rendered and turned into crops when more than 2% of their visible pixels would differ, the measured share is returned as renderRisk) and semanticHint (\"panel\" | \"text\" | \"image\" | \"line\" — what it looks like) as independent fields. Next, give each element a role and pass the result to riv_ui_prototype. This is geometry only: it does not know a button from a card. If you have the vector source, pass svgPath instead of imagePath: nothing is estimated, the element tree is the SVG's own group nesting, non-rectangular artwork comes through as \"vector-shape\" with its real bezier vertices, <text> becomes \"vector-text\" (editable Rive text — the bundled Inter is substituted unless you pass fonts, and a run whose glyphs are missing is baked as a picture instead, always with a warning), embedded <image> data comes through as its own pixels, and Figma layer names arrive as roleHint.",
     inputSchema: {
       imagePath: z.string().optional().describe("Screenshot or design comp (PNG/JPEG)"),
       svgPath: z.string().optional().describe("Vector source instead of a screenshot (Figma/Illustrator SVG export). Nothing is estimated: rects, fills, corner radii and nesting come straight from the file"),
@@ -1913,7 +1914,7 @@ server.registerTool(
     }
     if (!a.imagePath) return err("Provide imagePath (screenshot), svgPath (vector source) or figmaUrl");
     const src = resolve(a.imagePath);
-    if (!existsSync(src)) return err(`Image not found: ${src}`);
+    if (!existsSync(src)) return err(`Image not found: ${src}. Check imagePath (relative paths resolve against the working directory).`);
     const png = readFileSync(src);
     const det = await detectUiElements(host, png, { minArea: a.minArea ?? 576, maxElements: a.maxElements ?? 120 });
     if (!det.regions.length) {
@@ -1961,7 +1962,7 @@ server.registerTool(
     description:
       "Take the elements from riv_ui_detect, assign each one a role, and get back a working .riv: every element becomes a shape or an image asset, each gets an entrance appropriate to its role, and buttons and cards get hover and press states. Roles: " +
       (Object.keys(ROLE_MOTION) as Role[]).join(", ") +
-      ". Elements you leave unassigned animate as a generic panel. Pass the same imagePath (or svgPath), minArea and maxElements you gave riv_ui_detect, or the ids will not line up. With svgPath no screenshot is embedded, every element stays editable, and the file reproduces the SVG; its <text> becomes real Rive text you can re-type at runtime, and its embedded <image> data becomes an image asset. figmaUrl fetches the same thing straight from Figma, and needs FIGMA_TOKEN.",
+      ". Elements you leave unassigned animate as a generic panel. Pass exactly one of imagePath, svgPath or figmaUrl, the same one you gave riv_ui_detect. If you changed minArea or maxElements there, pass the same values here so the ids match. With svgPath no screenshot is embedded, every element stays editable, and the file reproduces the SVG; its <text> becomes real Rive text you can re-type at runtime, and its embedded <image> data becomes an image asset. figmaUrl fetches the same thing straight from Figma, and needs FIGMA_TOKEN.",
     inputSchema: {
       imagePath: z.string().optional().describe("The same screenshot you passed to riv_ui_detect"),
       svgPath: z.string().optional().describe("The same SVG you passed to riv_ui_detect (instead of imagePath)"),
@@ -1976,8 +1977,8 @@ server.registerTool(
           })
         )
         .describe("Role for each element. Ids you omit fall back to a generic panel."),
-      minArea: z.number().optional().describe("Must match the riv_ui_detect call (default 576)"),
-      maxElements: z.number().optional().describe("Must match the riv_ui_detect call (default 120)"),
+      minArea: z.number().optional().describe("Must match the riv_ui_detect call. imagePath only (default 576)"),
+      maxElements: z.number().optional().describe("Must match the riv_ui_detect call (default 120, or 300 for svgPath)"),
       interactions: z.boolean().optional().describe("Add hover and press states where the role has them (default true)"),
       entranceMs: z.number().optional().describe("How long the whole entrance takes, in milliseconds"),
       stagger: z.number().optional().describe("Delay between elements entering, in milliseconds"),
@@ -2004,7 +2005,7 @@ server.registerTool(
     if (a.svgPath || a.figmaUrl) return svgPrototype(a);
     if (!a.imagePath) return err("Provide imagePath (screenshot), svgPath (vector source) or figmaUrl");
     const src = resolve(a.imagePath);
-    if (!existsSync(src)) return err(`Image not found: ${src}`);
+    if (!existsSync(src)) return err(`Image not found: ${src}. Check imagePath (relative paths resolve against the working directory).`);
     const png = readFileSync(src);
     const det = await detectUiElements(host, png, { minArea: a.minArea ?? 576, maxElements: a.maxElements ?? 120 });
     if (!det.regions.length) {
