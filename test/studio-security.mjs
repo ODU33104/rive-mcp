@@ -80,6 +80,66 @@ try {
   check("16MiB を超える本文は 413 か切断", big.status === 413 || big.status === 0, String(big.status));
   const after = await call("GET", "/state", { headers: auth });
   check("巨大本文の後もサーバーは生きている", after.status === 200, `${after.status} ${after.status === 200 ? "" : after.text}`);
+
+  const secret = "studio-agent-test-" + "x".repeat(48);
+  const configure = await call("POST", "/agent/config", {
+    headers: auth,
+    body: JSON.stringify({
+      enabled: true,
+      provider: "openai",
+      endpoint: "https://api.openai.com/v1",
+      model: "test-model",
+      apiKey: secret,
+    }),
+  });
+  check("直接接続を設定できる", configure.status === 200);
+
+  for (const path of ["/agent/config", "/state", "/chat"]) {
+    const response = await call("GET", path, { headers: auth });
+    check(`${path} に API キーが出ない`,
+      response.status === 200 && !response.text.includes(secret));
+  }
+
+  const configWithoutAuth = await call("GET", "/agent/config");
+  check("認証なしで接続設定を読めない",
+    configWithoutAuth.status === 401);
+
+  const requestWithoutAuth = await call("POST", "/agent/ask", {
+    body: JSON.stringify({ text: "test" }),
+  });
+  check("認証なしで直接モデルを呼べない",
+    requestWithoutAuth.status === 401);
+
+  const malformed = await call("POST", "/agent/config", {
+    headers: auth,
+    body: JSON.stringify({
+      enabled: true,
+      provider: "openai",
+      endpoint: "http://127.0.0.1:11434/?key=" + secret,
+      model: "test-model",
+      apiKey: secret,
+    }),
+  });
+  check("不正 URL のエラーに API キーが出ない",
+    malformed.status === 400 && !malformed.text.includes(secret));
+
+  const forbiddenOrigin = await call("POST", "/agent/config", {
+    headers: { ...auth, Origin: "https://evil.example" },
+    body: JSON.stringify({ enabled: false }),
+  });
+  check("別 Origin から直接接続の設定を変更できない",
+    forbiddenOrigin.status === 403);
+
+  const disabled = await call("POST", "/agent/config", {
+    headers: auth,
+    body: JSON.stringify({ enabled: false }),
+  });
+  const disabledRequest = await call("POST", "/agent/ask", {
+    headers: auth,
+    body: JSON.stringify({ text: "test" }),
+  });
+  check("無効化後のモデル呼び出しは 403",
+    disabled.status === 200 && disabledRequest.status === 403);
 } finally {
   stopStudio();
 }

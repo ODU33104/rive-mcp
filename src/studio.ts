@@ -22,6 +22,14 @@ import { extractAssets, replaceAssetBytes } from "./rivAssets.js";
 import { encodeApng } from "./apng.js";
 import { encodeGif } from "./gif.js";
 import { I18N, LANG_ORDER, LANG_NAMES } from "./studioI18n.js";
+import {
+  askAgent,
+  AgentError,
+  validateAgentConfig,
+  validateAgentEndpoint,
+  type AgentConfig,
+  type AgentMessage,
+} from "./agentProviders.js";
 
 const ASSETS_DIR = join(dirname(dirname(fileURLToPath(import.meta.url))), "assets");
 
@@ -628,6 +636,20 @@ export function startStudio(opts: StudioOptions): StudioHandle {
   }
   const notes: StudioNote[] = [];
   const chat: StudioChatMessage[] = [];
+  let agentConfig: AgentConfig | null = null;
+  let agentHistory: AgentMessage[] = [];
+  let agentBusy = false;
+  let agentGeneration = 0;
+  const agentControllers = new Set<AbortController>();
+
+  const resetAgent = () => {
+    agentGeneration++;
+    for (const controller of agentControllers) controller.abort();
+    agentControllers.clear();
+    agentConfig = null;
+    agentHistory = [];
+    agentBusy = false;
+  };
   // スナップショット履歴: undoとは別に名前付きで .riv 全体をコピー保存する作業ディレクトリ（セッション終了時にrmSync）
   const snapDir = join(tmpdir(), `rive-mcp-studio-${randomUUID()}`);
   const snapshots: StudioSnapshot[] = [];
@@ -687,6 +709,118 @@ export function startStudio(opts: StudioOptions): StudioHandle {
       req.on("end", () => { if (total <= MAX_BODY_BYTES) cb(decodeRequestBody(Buffer.concat(chunks))); });
     };
     try {
+      if (url.pathname === "/agent/config") {
+        if (req.method === "GET") {
+          return send(200, "application/json; charset=utf-8", JSON.stringify({
+            enabled: agentConfig !== null,
+            provider: agentConfig?.provider ?? null,
+            endpoint: agentConfig?.endpoint ?? null,
+            model: agentConfig?.model ?? null,
+          }));
+        }
+        if (req.method === "POST") {
+          readBody((body) => {
+            try {
+              const value = JSON.parse(body);
+              if (value?.enabled === false) {
+                resetAgent();
+                return send(200, "application/json; charset=utf-8",
+                  JSON.stringify({ ok: true, enabled: false }));
+              }
+              if (value?.enabled !== true) throw new AgentError("invalid_config");
+              const config = validateAgentConfig(value);
+              const { insecure } = validateAgentEndpoint(config.endpoint);
+              if (insecure && value.allowInsecureHttp !== true) {
+                throw new AgentError("insecure_http_confirmation_required");
+              }
+              resetAgent();
+              agentConfig = config;
+              return send(200, "application/json; charset=utf-8",
+                JSON.stringify({ ok: true, enabled: true }));
+            } catch (error) {
+              const status = error instanceof AgentError ? error.status : 400;
+              const code = error instanceof AgentError
+                ? error.code : "invalid_config";
+              send(status, "application/json; charset=utf-8",
+                JSON.stringify({ ok: false, error: code }));
+            }
+          });
+          return;
+        }
+      }
+      if (url.pathname === "/agent/ask" && req.method === "POST") {
+        readBody((body) => {
+          void (async () => {
+            if (!agentConfig) {
+              return send(403, "application/json; charset=utf-8",
+                JSON.stringify({ ok: false, error: "agent_disabled" }));
+            }
+            if (agentBusy) {
+              return send(409, "application/json; charset=utf-8",
+                JSON.stringify({ ok: false, error: "agent_busy" }));
+            }
+            let text: string;
+            let spec: unknown;
+            try {
+              const value = JSON.parse(body);
+              if (
+                typeof value?.text !== "string" ||
+                !value.text.trim() || value.text.length > 16000
+              ) {
+                throw new AgentError("invalid_messages");
+              }
+              text = value.text.trim();
+              // The authoritative document is read on the server, not supplied by the model.
+              spec = scenePath && existsSync(scenePath)
+                ? JSON.parse(readFileSync(scenePath, "utf8"))
+                : existsSync(rivPath)
+                  ? buildTreeJson(new Uint8Array(readFileSync(rivPath)))
+                  : { artboards: [] };
+            } catch {
+              return send(400, "application/json; charset=utf-8",
+                JSON.stringify({ ok: false, error: "invalid_messages" }));
+            }
+            const config = agentConfig;
+            const generation = agentGeneration;
+            const controller = new AbortController();
+            agentControllers.add(controller);
+            agentBusy = true;
+            try {
+              const history: AgentMessage[] = [
+                ...agentHistory.slice(-28),
+                { role: "user", content: text },
+              ];
+              const result = await askAgent(config, history, spec, controller.signal);
+              if (generation !== agentGeneration || !agentConfig) {
+                throw new AgentError("agent_disabled", 403);
+              }
+              agentHistory = [
+                ...history,
+                { role: "assistant" as const, content: result.text },
+              ].slice(-28);
+              const now = new Date().toISOString();
+              chat.push({ role: "user", text, time: now });
+              chat.push({ role: "assistant", text: result.text, time: now });
+              notify("chat");
+              send(200, "application/json; charset=utf-8", JSON.stringify({
+                ok: true,
+                text: result.text,
+                usage: result.usage,
+              }));
+            } catch (error) {
+              const status = error instanceof AgentError ? error.status : 502;
+              const code = error instanceof AgentError
+                ? error.code : "provider_unavailable";
+              send(status, "application/json; charset=utf-8",
+                JSON.stringify({ ok: false, error: code }));
+            } finally {
+              agentControllers.delete(controller);
+              if (generation === agentGeneration) agentBusy = false;
+            }
+          })();
+        });
+        return;
+      }
       if (url.pathname === "/") {
         return send(200, "text/html; charset=utf-8", STUDIO_HTML);
       }
@@ -1316,6 +1450,12 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   textarea { font:var(--fs-body)/1.4 var(--mono); resize:vertical; }
   #scene { min-height:140px; }
   #aiText { min-height:60px; font-family:var(--font); font-size:var(--fs-body); }
+  #agentSettings { display:flex; flex-direction:column; gap:5px; margin-bottom:8px; }
+  #agentSettings input:not([type=checkbox]), #agentSettings select {
+    width:100%; min-width:0; box-sizing:border-box;
+  }
+  #agentSettings label { font-size:var(--fs-small); color:var(--text-dim); }
+  #agentSettings .row { align-items:center; }
   /* ---- ボタン ---- */
   button { height:24px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:var(--radius-s);
     padding:0 12px; font:inherit; font-size:var(--fs-body); cursor:pointer; margin:2px 4px 2px 0;
@@ -1664,6 +1804,31 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
     <div class="accItem" id="accAgentItem">
       <div class="accHead" data-acc="Agent"><svg class="accChev" viewBox="0 0 8 8" fill="currentColor"><path d="M2 0l4 4-4 4z"/></svg><span data-i18n="accAgent"></span><span class="accBadge" id="notesBadge">0</span></div>
       <div class="accBody" id="agentBody">
+        <div id="agentSettings">
+          <label>
+            <input id="agentDirect" type="checkbox">
+            <span data-i18n="agentDirect"></span>
+          </label>
+          <div id="agentDirectFields" hidden>
+            <label for="agentProvider" data-i18n="agentProvider"></label>
+            <select id="agentProvider">
+              <option value="openai" data-i18n="agentOpenai"></option>
+              <option value="anthropic" data-i18n="agentAnthropic"></option>
+              <option value="ollama" data-i18n="agentOllama"></option>
+            </select>
+            <label for="agentEndpoint" data-i18n="agentEndpoint"></label>
+            <input id="agentEndpoint" type="url"
+              autocomplete="off" spellcheck="false">
+            <label for="agentModel" data-i18n="agentModel"></label>
+            <input id="agentModel" autocomplete="off" spellcheck="false">
+            <label for="agentKey" data-i18n="agentKey"></label>
+            <input id="agentKey" type="password"
+              autocomplete="new-password" spellcheck="false">
+            <div class="hint" data-i18n="agentDisclosure"></div>
+            <button id="agentConnect" data-i18n="agentConnect"></button>
+            <span class="hint" id="agentUsage"></span>
+          </div>
+        </div>
         <div id="chatLog"></div>
         <div class="row">
           <input type="checkbox" id="aiCtxCheck" data-i18n-aria="aiCtxCheckA">
@@ -5126,9 +5291,135 @@ $('aiCtxCheck').onchange = () => {
   updateAiContextChip();
 };
 updateAiContextChip();
+
+let agentConnected = false;
+let agentConfigured = false;
+const agentDefaults = {
+  openai: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com',
+  ollama: 'http://127.0.0.1:11434',
+};
+
+function agentFieldVisibility() {
+  $('agentDirectFields').hidden = !$('agentDirect').checked;
+  if (!$('agentDirect').checked) {
+    $('aiState').textContent = '';
+  }
+}
+
+async function agentDisconnect() {
+  agentConnected = false;
+  agentConfigured = false;
+  $('agentKey').value = '';
+  $('agentUsage').textContent = '';
+  try {
+    await fetch('/agent/config', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: false }),
+    });
+  } catch {
+    $('aiState').textContent = t('agentRequestFailed');
+  }
+}
+
+$('agentProvider').onchange = () => {
+  $('agentEndpoint').value = agentDefaults[$('agentProvider').value];
+  agentConnected = false;
+  agentConfigured = false;
+};
+
+$('agentDirect').onchange = async () => {
+  if (!$('agentDirect').checked) await agentDisconnect();
+  agentFieldVisibility();
+};
+
+for (const id of ['agentEndpoint', 'agentModel', 'agentKey']) {
+  $(id).addEventListener('input', () => {
+    agentConnected = false;
+  });
+}
+
+$('agentConnect').onclick = async () => {
+  const provider = $('agentProvider').value;
+  const endpoint = $('agentEndpoint').value.trim();
+  const model = $('agentModel').value.trim();
+  const apiKey = $('agentKey').value;
+
+  let url;
+  try {
+    url = new URL(endpoint);
+    if (!['https:', 'http:'].includes(url.protocol) ||
+        url.username || url.password || url.search || url.hash) {
+      throw new Error();
+    }
+  } catch {
+    $('aiState').textContent = t('agentInvalidEndpoint');
+    return;
+  }
+
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  const insecure = url.protocol === 'http:' && !local;
+  const disclosure = t('agentConfirmDestination') + '\\n' +
+    url.origin + url.pathname + '\\n' +
+    (insecure ? t('agentHttpWarning') + '\\n' : '') +
+    t('agentConfirmData');
+
+  if (!confirm(disclosure)) return;
+  try {
+    const response = await fetch('/agent/config', {
+      method: 'POST',
+      body: JSON.stringify({
+        enabled: true,
+        provider,
+        endpoint,
+        model,
+        apiKey,
+        allowInsecureHttp: insecure,
+      }),
+    });
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error);
+    agentConnected = true;
+    agentConfigured = true;
+    $('agentKey').value = '';
+    $('aiState').textContent = t('agentConnected');
+  } catch {
+    agentConnected = false;
+    $('aiState').textContent = t('agentRequestFailed');
+  }
+};
+
+$('agentEndpoint').value = agentDefaults.openai;
+agentFieldVisibility();
+
 $('aiSend').onclick = async () => {
   const text = $('aiText').value.trim();
   if (!text) return;
+  if ($('agentDirect').checked) {
+    if (!agentConnected) {
+      $('aiState').textContent = t('agentNotConnected');
+      return;
+    }
+    $('aiSend').disabled = true;
+    try {
+      const response = await fetch('/agent/ask', {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      });
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.error);
+      $('aiText').value = '';
+      $('agentUsage').textContent = t('agentUsage') + ': ' +
+        result.usage.inputTokens + ' / ' + result.usage.outputTokens +
+        (result.usage.estimated ? ' ' + t('agentEstimated') : '');
+      await loadChat();
+    } catch (error) {
+      $('aiState').textContent = t('agentRequestFailed');
+    } finally {
+      $('aiSend').disabled = false;
+    }
+    return;
+  }
   const payload = { text };
   if (aiAttachContext) payload.context = buildAiContext();
   const res = await (await fetch('/notes', { method: 'POST', body: JSON.stringify(payload) })).json();
