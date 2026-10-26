@@ -674,7 +674,10 @@ export function startStudio(opts: StudioOptions): StudioHandle {
         total += b.length;
         if (total > MAX_BODY_BYTES) {
           // 上限超過: 以降は読まずに切る（巨大 POST によるメモリ枯渇の対策）
-          if (!res.headersSent) send(413, "text/plain", "payload too large");
+          if (!res.headersSent) {
+            res.setHeader("Connection", "close"); // クライアントがこの接続を使い回さないようにする
+            send(413, "text/plain", "payload too large");
+          }
           req.destroy();
           return;
         }

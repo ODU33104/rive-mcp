@@ -21,7 +21,7 @@ const check = (name, ok, detail = "") => {
 // fetch は Host / Origin を自由に付けられないので http.request を使う
 const call = (method, path, { headers = {}, body } = {}) =>
   new Promise((resolve, reject) => {
-    const req = request({ host: "127.0.0.1", port: PORT, method, path, headers: { Host: `127.0.0.1:${PORT}`, ...headers } }, (res) => {
+    const req = request({ host: "127.0.0.1", port: PORT, method, path, agent: false, headers: { Host: `127.0.0.1:${PORT}`, ...headers } }, (res) => {
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString("utf8") }));
@@ -79,7 +79,7 @@ try {
   const big = await call("POST", "/chat", { headers: { ...auth, "Content-Type": "application/json" }, body: Buffer.alloc(17 * 1024 * 1024, 0x20) });
   check("16MiB を超える本文は 413 か切断", big.status === 413 || big.status === 0, String(big.status));
   const after = await call("GET", "/state", { headers: auth });
-  check("巨大本文の後もサーバーは生きている", after.status === 200, String(after.status));
+  check("巨大本文の後もサーバーは生きている", after.status === 200, `${after.status} ${after.status === 200 ? "" : after.text}`);
 } finally {
   stopStudio();
 }
