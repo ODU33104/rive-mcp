@@ -154,6 +154,19 @@ export interface GradientSpec {
   start?: { x: number; y: number };
   end?: { x: number; y: number };
 }
+export interface LayoutSpec {
+  id: string;
+  parent?: string; // 先に定義した layouts[].id（省略時は Artboard）
+  width: number;
+  height: number;
+  direction?: "row" | "column";
+  justifyContent?: "start" | "center" | "end" | "space-between";
+  alignItems?: "start" | "center" | "end";
+  wrap?: boolean;
+  gap?: number; // px。横・縦両方の gap に設定
+  padding?: number; // px。四辺共通
+  fillColor?: string;
+}
 export interface GroupSpec {
   id: string;
   x: number;
@@ -400,6 +413,7 @@ export interface ArtboardSpec {
   width: number;
   height: number;
   backgroundColor?: string;
+  layouts?: LayoutSpec[];
   groups?: GroupSpec[];
   bones?: BoneSpec[];
   constraints?: ConstraintSpec[];
@@ -606,6 +620,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       width: spec.artboard?.width ?? 400,
       height: spec.artboard?.height ?? 300,
       backgroundColor: spec.backgroundColor,
+      layouts: spec.layouts,
       groups: spec.groups,
       bones: spec.bones,
       constraints: spec.constraints,
@@ -880,10 +895,11 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
       artboardVmProps.viewModelId = vmIdx;
       artboardVmProps.viewModelInstanceId = instLocalIndex;
     }
-    objects.push({
+    const artboardObject: WriterObject = {
       type: "Artboard",
       props: { name: ab.name ?? "Artboard", width: ab.width, height: ab.height, ...artboardVmProps },
-    });
+    };
+    objects.push(artboardObject);
 
     // データバインディング: 直前に push したオブジェクトに propKey を配線する。
     // DataBindContext.target は「ストリーム上でこのDataBindContextの直前にある非DataBindオブジェクト」で
@@ -952,6 +968,78 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         },
       });
     };
+
+    // レイアウト指定時のみオブジェクトを増やす。非指定のレガシー出力は一切変更しない。
+    const layoutIds = new Map<string, number>();
+    if (ab.layouts?.length) {
+      // YGUnitPoint=1。7.0 のエディタ書き出しに合わせ、各辺と gap の単位も明示する。
+      const pointUnits = {
+        marginLeftUnitsValue: 1, marginRightUnitsValue: 1,
+        marginTopUnitsValue: 1, marginBottomUnitsValue: 1,
+        paddingLeftUnitsValue: 1, paddingRightUnitsValue: 1,
+        paddingTopUnitsValue: 1, paddingBottomUnitsValue: 1,
+        gapHorizontalUnitsValue: 1, gapVerticalUnitsValue: 1,
+      };
+      // LayoutScaleType::fixed=0。Artboard自身にも styleId が必要。
+      const fixedStyle = {
+        ...pointUnits,
+        layoutWidthScaleType: 0, layoutHeightScaleType: 0,
+        widthUnitsValue: 1, heightUnitsValue: 1,
+      };
+      artboardObject.props.styleId = push({
+        type: "LayoutComponentStyle",
+        props: { parentId: 0, ...fixedStyle, flexDirectionValue: 0, layoutAlignmentType: 0 },
+      });
+      const occupied = new Set([
+        ...(ab.groups ?? []), ...(ab.bones ?? []), ...(ab.shapes ?? []),
+        ...(ab.images ?? []), ...(ab.texts ?? []), ...(ab.nested ?? []),
+      ].map((item) => item.id));
+      const alignIndex = { start: 0, center: 1, end: 2 } as const;
+      for (const l of ab.layouts) {
+        if (!l.id || layoutIds.has(l.id) || occupied.has(l.id)) {
+          throw new Error(`Layout id '${l.id}' is empty or duplicated`);
+        }
+        for (const [key, value] of Object.entries({ width: l.width, height: l.height, gap: l.gap, padding: l.padding })) {
+          if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+            throw new Error(`Layout '${l.id}' ${key} must be a non-negative finite number`);
+          }
+        }
+        const parentId = l.parent === undefined ? 0 : layoutIds.get(l.parent);
+        if (parentId === undefined) {
+          throw new Error(`Layout '${l.id}' parent '${l.parent}' must precede its child`);
+        }
+        const dir = l.direction ?? "column";
+        const main = l.justifyContent ?? "start";
+        const cross = alignIndex[l.alignItems ?? "start"];
+        const alignment = main === "space-between" ? 9 + cross
+          : dir === "row" ? cross * 3 + alignIndex[main]
+          : alignIndex[main] * 3 + cross;
+        const component: WriterObject = {
+          type: "LayoutComponent",
+          props: { name: l.id, parentId, width: l.width, height: l.height },
+        };
+        const id = push(component);
+        layoutIds.set(l.id, id);
+        component.props.styleId = push({
+          type: "LayoutComponentStyle",
+          props: {
+            parentId: id, ...fixedStyle,
+            flexDirectionValue: dir === "row" ? 2 : 0,
+            layoutAlignmentType: alignment,
+            ...(l.wrap ? { flexWrapValue: 1 } : {}),
+            ...(l.gap !== undefined ? { gapHorizontal: l.gap, gapVertical: l.gap } : {}),
+            ...(l.padding !== undefined ? {
+              paddingLeft: l.padding, paddingRight: l.padding,
+              paddingTop: l.padding, paddingBottom: l.padding,
+            } : {}),
+          },
+        });
+        if (l.fillColor !== undefined) {
+          const fill = push({ type: "Fill", props: { parentId: id } });
+          push({ type: "SolidColor", props: { parentId: fill, colorValue: parseColor(l.fillColor) } });
+        }
+      }
+    }
 
     // グループ（ボーン親のものはボーン定義後に遅延emit）
     const groupIds = new Map<string, number>();
@@ -1041,7 +1129,7 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
 
     const parentOf = (parent?: string): number => {
       if (parent === undefined) return 0;
-      const pid = groupIds.get(parent) ?? boneIds.get(parent);
+      const pid = layoutIds.get(parent) ?? groupIds.get(parent) ?? boneIds.get(parent);
       if (pid === undefined) {
         throw new Error(`Parent '${parent}' not found. Groups: ${[...groupIds.keys()].join(", ") || "-"} / Bones: ${[...boneIds.keys()].join(", ") || "-"}`);
       }

@@ -19,6 +19,19 @@ ToC: varuint propertyKey... 0終端
   旧フォーマット互換キーは `alternates` 由来で `x@xArtboard` のような名前で登録）
 - defs の型名 `String` は大文字 — フィールドタイプ判定は小文字正規化必須
 
+## LayoutComponent / Flex（riv_create、7.0 登録キーのみ）
+
+- `scene.layouts[]`（または `artboards[].layouts[]`）は出現順に生成する。`parent` は既出の layout ID、省略時は Artboard ID=0。
+- `LayoutComponent` (409) は `name(4)`, `parentId(5)`, `width(7)`, `height(8)`, `styleId(494)` を持つ。
+- `LayoutComponentStyle` (420) の `parentId(5)` は担当 Component/Artboard を指す。逆向きには `styleId(494)` を設定する。Artboard も style を持つ。
+- `LayoutScaleType::fixed=0` と `YGUnitPoint=1` を使う。margin/padding/gap の単位(613–620,625–626)は point(1)。
+- `flexDirectionValue(598)` は column=0、row=2。`flexWrapValue(604)=1` は wrap。
+- `layoutAlignmentType(632)` は row なら `cross*3+main`、column なら `main*3+cross`。`start/center/end` は各 0/1/2。`justifyContent=space-between` なら `9+cross`。
+- `gap` は horizontal(498)/vertical(499) に同じ数値を設定。`padding` は四辺(512–515)に同じ数値を設定する。
+- `fillColor` は `Fill(parentId=LayoutComponent)` → `SolidColor(parentId=Fill)` で背景色を付ける。
+- Layout 指定なし、空配列では追加オブジェクトも Artboard.styleId も出さない。既存経路はそのまま。
+- 未対応: Hug/Fill、percent/auto サイズ、独立した `alignItemsValue`/`justifyContentValue` の直接指定、grid/stack、7.3 の未登録型 1058/1059/1066。Shape を Layout の子に置けるが、Shape 自身は Flex item にはならない。
+
 ## 参照 semantics（vehicles.riv で実証）
 
 | 参照 | 意味 |

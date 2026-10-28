@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { connect as netConnect } from "node:net";
 import { request as httpRequest } from "node:http";
 import { networkInterfaces } from "node:os";
+import { inflateSync } from "node:zlib";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const RIV = join(root, "samples", "vehicles.riv");
@@ -42,6 +43,49 @@ function rawRequest({ host, port, path, method = "GET", headers = {} }) {
 
 function fsMod2Sig(path) {
   return readFileSync(path).subarray(0, 4).toString("hex");
+}
+
+// Canvas2D PNG (8bit RGBA) を展開し、描画後の Flex 子の実位置をピクセルで確認する。
+function pngPixelReader(path) {
+  const png = readFileSync(path);
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  if (png[24] !== 8 || png[25] !== 6) throw new Error("Expected 8-bit RGBA PNG");
+  const idat = [];
+  for (let pos = 8; pos + 12 <= png.length;) {
+    const length = png.readUInt32BE(pos);
+    const type = png.toString("ascii", pos + 4, pos + 8);
+    if (type === "IDAT") idat.push(png.subarray(pos + 8, pos + 8 + length));
+    pos += 12 + length;
+    if (type === "IEND") break;
+  }
+  const data = inflateSync(Buffer.concat(idat));
+  const stride = width * 4;
+  const rows = [];
+  let prev = Buffer.alloc(stride);
+  let at = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = data[at++];
+    const row = Buffer.from(data.subarray(at, at + stride));
+    at += stride;
+    for (let i = 0; i < stride; i++) {
+      const left = i >= 4 ? row[i - 4] : 0;
+      const up = prev[i];
+      const upLeft = i >= 4 ? prev[i - 4] : 0;
+      const p = left + up - upLeft;
+      const paeth = Math.abs(p - left) <= Math.abs(p - up) && Math.abs(p - left) <= Math.abs(p - upLeft) ? left
+        : Math.abs(p - up) <= Math.abs(p - upLeft) ? up : upLeft;
+      const predictor = [0, left, up, Math.floor((left + up) / 2), paeth][filter];
+      if (predictor === undefined) throw new Error(`Unsupported PNG filter ${filter}`);
+      row[i] = (row[i] + predictor) & 255;
+    }
+    rows.push(row);
+    prev = row;
+  }
+  return (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) throw new Error("Pixel outside PNG");
+    return [...rows[y].subarray(x * 4, x * 4 + 4)];
+  };
 }
 
 // FIGMA_TOKEN は**必ず外して**起動する。開発機に鍵が置いてあるかどうかで e2e の
@@ -352,6 +396,56 @@ try {
     "riv_create SM structure recognized",
     createdText.includes('"Flow"') && createdText.includes('"active"')
   );
+
+  // Layout はオプトイン: 省略/空配列のバイト列は完全一致する。
+  const { createRiv } = await import(pathToFileURL(join(root, "dist", "rivWriter.js")).href);
+  const legacySpec = {
+    artboard: { name: "Legacy", width: 120, height: 100 },
+    shapes: [{ id: "rect", type: "rect", x: 30, y: 30, width: 20, height: 20, fill: { color: "#ff0000" } }],
+  };
+  check("layout absent / [] are byte-identical",
+    Buffer.from(createRiv(legacySpec).bytes).equals(Buffer.from(createRiv({ ...legacySpec, layouts: [] }).bytes)));
+
+  const flexScene = (direction) => ({
+    artboard: { name: "Flex", width: 120, height: 100 },
+    layouts: [
+      { id: "root", width: 120, height: 100, direction, gap: 10 },
+      { id: "red", parent: "root", width: 20, height: 20, fillColor: "#ff0000" },
+      { id: "green", parent: "root", width: 20, height: 20, fillColor: "#00ff00" },
+      { id: "blue", parent: "root", width: 20, height: 20, fillColor: "#0000ff" },
+    ],
+  });
+  for (const direction of ["row", "column"]) {
+    const outPath = join(root, "test", "tmp", `flex-${direction}.riv`);
+    const pngPath = join(root, "test", "tmp", `flex-${direction}.png`);
+    mkdirSync(dirname(outPath), { recursive: true });
+    const made = await callTool("riv_create", { outPath, scene: flexScene(direction) });
+    check(`riv_create ${direction} layout accepted`, !made.isError && textOf(made).includes("validated"), textOf(made).slice(0, 200));
+    if (made.isError) continue;
+    const dump = await callTool("riv_dump", { path: outPath, full: true });
+    const parsed = JSON.parse(textOf(dump));
+    const nodes = parsed.objects.filter((o) => o.typeName === "LayoutComponent");
+    const styles = parsed.objects.filter((o) => o.typeName === "LayoutComponentStyle");
+    const board = parsed.objects.find((o) => o.typeName === "Artboard");
+    const byName = Object.fromEntries(nodes.map((o) => [o.properties.name, o]));
+    const local = (o) => o.index - board.index;
+    check(`riv_dump ${direction} layout object types`,
+      !dump.isError && parsed.parseError === null && nodes.length === 4 && styles.length === 5 &&
+      parsed.typeCounts.Fill === 3 && parsed.typeCounts.SolidColor === 3);
+    check(`riv_dump ${direction} parentId/styleId references`,
+      !!board && !!byName.root && board.properties.styleId === local(styles.find((s) => s.properties.parentId === 0)) &&
+      ["red", "green", "blue"].every((name) => byName[name]?.properties.parentId === local(byName.root)) &&
+      nodes.every((n) => styles.some((s) => s.properties.parentId === local(n) && n.properties.styleId === local(s))));
+    const frame = await callTool("riv_render_frame", { path: outPath, outPath: pngPath, width: 120, height: 100 });
+    check(`riv_render_frame ${direction} layout`, !frame.isError);
+    if (frame.isError) continue;
+    const pixel = pngPixelReader(pngPath);
+    const coords = direction === "row" ? [[10, 10], [40, 10], [70, 10]] : [[10, 10], [10, 40], [10, 70]];
+    const colors = [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]];
+    check(`Flex ${direction} children at computed positions with 10px gap`,
+      coords.every(([x, y], i) => JSON.stringify(pixel(x, y)) === JSON.stringify(colors[i])),
+      coords.map(([x, y]) => pixel(x, y).join(",")).join(" / "));
+  }
 
   // riv_create: 画像埋め込み + グループ + メッシュ頂点アニメ
   const tinyPng = Buffer.from(
@@ -795,7 +889,6 @@ try {
 
   // riv_optimize: rivWriter.createRiv を直接importして生成した「冗長キーフレーム入り」ファイルの間引き検証
   // (Windows の ESM import は file:// 絶対パス必須 -> pathToFileURL 経由。CLAUDE.md 落とし穴7 参照)
-  const { createRiv } = await import(pathToFileURL(join(root, "dist", "rivWriter.js")).href);
   const redundantKeyframes = [];
   for (let f = 0; f <= 100; f += 5) redundantKeyframes.push({ frame: f, value: f * 2 }); // 完全な直線 y=2x -> 中間点は全て冗長
   const redundantScene = createRiv({

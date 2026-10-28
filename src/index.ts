@@ -849,6 +849,7 @@ Character animation (images/groups/mesh):
     {"target":"chara#v0_3","property":"x","keyframes":[{"frame":0,"value":0},{"frame":120,"value":40,"easing":"ease-in-out"},{"frame":240,"value":0,"easing":"ease-in-out"}]}
   ]}]
 }
+- layouts[]: fixed Flex nodes {id,parent?,width,height,direction?:"row"|"column",justifyContent?:"start"|"center"|"end"|"space-between",alignItems?:"start"|"center"|"end",gap?,padding?,wrap?,fillColor?:"#RRGGBB"}. parent must be an earlier layout id. No Hug/Fill.
 - images[].pngPath: PNG file embedded into the .riv. mesh enables vertex deformation; vertices addressed as "<imageId>#v<row>_<col>" (row 0 = top), coordinates in the image's natural pixel space centered at origin. Mesh vertex tracks support x/y only.
 - texts[].followPath {"path":"<shapes[].id>","start":0,"end":1,"offset":0,"strength":1,"orient":true} bends the text along that shape's path (text on path; start/end/offset are 0-1 fractions of the path length). Needs fonts[] like any text.
 - groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
