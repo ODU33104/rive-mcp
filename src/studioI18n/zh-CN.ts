@@ -74,7 +74,7 @@ export const dict: Record<string, string> = {
   addRectBtn: '+ 矩形', addEllipseBtn: '+ 椭圆', addTextBtn: '+ 文字',
   speedL: '播放速度', kfDeleteMin: '无法删除最后一个关键帧',
   undoDone: '已撤销', redoDone: '已重做', objDeleted: '已删除对象',
-  undoA: '撤销 (Ctrl+Z)', redoA: '重做 (Ctrl+Y)', helpA: '帮助', pauseA: '播放 / 暂停',
+  undoA: '撤销 (Ctrl+Z)', redoA: '重做 (Ctrl+Y)', helpA: '帮助', langA: '语言', pauseA: '播放 / 暂停',
   connT: '已连接', connOffT: '已断开，等待重新连接', dirtyT: '有未保存的修改（等待自动重新构建）',
   expL: '导出', expPng: 'PNG', expPngT: '将当前帧保存为 PNG',
   expProg: '导出中… ', expDone: '导出完成', expFail: '导出失败：',

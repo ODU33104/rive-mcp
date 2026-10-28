@@ -74,7 +74,7 @@ export const dict: Record<string, string> = {
   addRectBtn: '+ 사각형', addEllipseBtn: '+ 타원', addTextBtn: '+ 텍스트',
   speedL: '재생 속도', kfDeleteMin: '마지막 키프레임은 삭제할 수 없습니다',
   undoDone: '실행 취소했습니다', redoDone: '다시 실행했습니다', objDeleted: '오브젝트를 삭제했습니다',
-  undoA: '실행 취소 (Ctrl+Z)', redoA: '다시 실행 (Ctrl+Y)', helpA: '도움말', pauseA: '재생 / 일시 정지',
+  undoA: '실행 취소 (Ctrl+Z)', redoA: '다시 실행 (Ctrl+Y)', helpA: '도움말', langA: '언어', pauseA: '재생 / 일시 정지',
   connT: '연결됨', connOffT: '연결 끊김 — 다시 연결을 기다리는 중', dirtyT: '저장되지 않은 변경(자동 다시 빌드 대기 중)',
   expL: '내보내기', expPng: 'PNG', expPngT: '현재 프레임을 PNG로 저장',
   expProg: '내보내는 중… ', expDone: '내보내기 완료', expFail: '내보내기 실패: ',

@@ -1302,7 +1302,7 @@ const RO_HEAD = String.raw`<style>
 /* 読み取り専用ビュー: 編集・保存・チャット・書き出し(サーバー合成)の入口を隠す */
 body.ro #undoBtn, body.ro #redoBtn, body.ro #addRect, body.ro #addEllipse, body.ro #addText,
 body.ro #modeSeg, body.ro #helpBtn, body.ro #helpWrap, body.ro #guide,
-body.ro #accAssetsItem, body.ro #accAgentItem, body.ro #assetPickWrap, body.ro #dropOverlay,
+body.ro #accAssetsItem, body.ro #rightTabs, body.ro #agentPane, body.ro #assetPickWrap, body.ro #dropOverlay,
 body.ro #inspector, body.ro #timeline, body.ro #boneCv, body.ro #selBox, body.ro #gutterR,
 body.ro #expApng, body.ro #expGif, body.ro #boneToggle, body.ro #toolbar label,
 body.ro .sbTab[data-dock="Changes"], body.ro #sbScene, body.ro #dockChanges, body.ro #dockScene { display:none !important; }
@@ -1406,7 +1406,15 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   /* ---- レイアウト ---- */
   #main { flex:1; display:flex; min-height:0; }
   #left { width:248px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
-  #right { width:300px; background:var(--panel); border-left:1px solid var(--border); padding:0; overflow-y:auto; flex-shrink:0; }
+  #right { width:300px; background:var(--panel); border-left:1px solid var(--border); padding:0; display:flex; flex-direction:column; min-height:0; flex-shrink:0; }
+  #rightTabs { display:flex; flex-shrink:0; border-bottom:1px solid var(--border); }
+  .rtTab { flex:1; height:30px; display:flex; align-items:center; justify-content:center; gap:6px; background:transparent; border:0;
+    border-bottom:2px solid transparent; border-radius:0; color:var(--text-dim); font-size:var(--fs-head); cursor:pointer; }
+  .rtTab:hover { background:var(--panel-2); color:var(--text); }
+  .rtTab.on { color:var(--text); border-bottom-color:var(--accent); }
+  #rightBody { flex:1; min-height:0; overflow-y:auto; }
+  #agentPane { flex:1; min-height:0; display:flex; flex-direction:column; padding:8px 10px 10px; overflow-y:auto; }
+  #right.tab-agent #rightBody, #right.tab-inspector #agentPane { display:none; }
   #inspector, #graphDetails { padding:8px 10px 14px; }
   #center { flex:1; display:flex; flex-direction:column; min-width:0; }
   .gutter { width:5px; margin:0 -2px; cursor:col-resize; flex-shrink:0; z-index:5; }
@@ -1467,6 +1475,12 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   button.primary:hover { background:#6fb2ff; }
   button.danger { background:transparent; border-color:var(--accent-2); color:var(--accent-2); }
   button.mini { height:22px; padding:0 8px; font-size:var(--fs-body); }
+  #langWrap { position:relative; display:inline-flex; }
+  #langMenu { position:absolute; top:calc(100% + 4px); right:0; min-width:150px; background:var(--panel-2); border:1px solid var(--border);
+    border-radius:6px; padding:4px; z-index:60; box-shadow:0 6px 18px rgba(0,0,0,.45); }
+  #langMenu button { display:flex; width:100%; height:28px; align-items:center; gap:8px; padding:0 8px; background:transparent; border:0; text-align:left; }
+  #langMenu button:hover { background:var(--panel-3); }
+  #langMenu .chk { width:12px; color:var(--accent); }
   button.icon { width:24px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
   button.icon svg { width:14px; height:14px; }
   .row { display:flex; align-items:center; gap:8px; margin:6px 0; }
@@ -1649,8 +1663,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   .tlPopRow input:disabled { color:var(--text-faint); }
   .tlPopUnit { color:var(--text-faint); font-size:var(--fs-small); }
   /* ---- Agent パネルの会話 ---- */
-  .accItem.open > #agentBody { display:flex; flex-direction:column; }
-  #chatLog { flex:1; min-height:80px; max-height:260px; overflow-y:auto; margin-bottom:8px;
+  #chatLog { flex:1; min-height:120px; overflow-y:auto; margin-bottom:8px;
     display:flex; flex-direction:column; gap:8px; }
   .chatMsg { border-radius:var(--radius); padding:6px 8px; background:var(--panel-2); }
   .chatMsg.assistant { background:rgba(61,139,253,.10); border-left:2px solid var(--accent); }
@@ -1757,7 +1770,7 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   </div>
   <div class="ab-right">
     <span class="badge" id="status">…</span>
-    <button class="mini" id="langBtn">EN</button>
+    <div id="langWrap"><button class="mini icon" id="langBtn" data-i18n-aria="langA" data-i18n-title="langA" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.8 1.8 2.7 3.9 2.7 6.2S9.8 12.4 8 14.2C6.2 12.4 5.3 10.3 5.3 8S6.2 3.6 8 1.8z"/></svg></button><div id="langMenu" role="menu" hidden></div></div>
     <button class="mini icon" id="helpBtn" data-i18n-aria="helpA">?</button>
     <span id="connDot" data-i18n-title="connT"></span>
     <span class="toolbarSep"></span>
@@ -1799,47 +1812,6 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
           <button id="playAnim" class="primary" data-i18n="play"></button>
           <button id="backSM" data-i18n="backSM"></button>
         </div>
-      </div>
-    </div>
-    <div class="accItem" id="accAgentItem">
-      <div class="accHead" data-acc="Agent"><svg class="accChev" viewBox="0 0 8 8" fill="currentColor"><path d="M2 0l4 4-4 4z"/></svg><span data-i18n="accAgent"></span><span class="accBadge" id="notesBadge">0</span></div>
-      <div class="accBody" id="agentBody">
-        <div id="agentSettings">
-          <label>
-            <input id="agentDirect" type="checkbox">
-            <span data-i18n="agentDirect"></span>
-          </label>
-          <div id="agentDirectFields" hidden>
-            <label for="agentProvider" data-i18n="agentProvider"></label>
-            <select id="agentProvider">
-              <option value="openai" data-i18n="agentOpenai"></option>
-              <option value="anthropic" data-i18n="agentAnthropic"></option>
-              <option value="ollama" data-i18n="agentOllama"></option>
-            </select>
-            <label for="agentEndpoint" data-i18n="agentEndpoint"></label>
-            <input id="agentEndpoint" type="url"
-              autocomplete="off" spellcheck="false">
-            <label for="agentModel" data-i18n="agentModel"></label>
-            <input id="agentModel" autocomplete="off" spellcheck="false">
-            <label for="agentKey" data-i18n="agentKey"></label>
-            <input id="agentKey" type="password"
-              autocomplete="new-password" spellcheck="false">
-            <div class="hint" data-i18n="agentDisclosure"></div>
-            <button id="agentConnect" data-i18n="agentConnect"></button>
-            <span class="hint" id="agentUsage"></span>
-          </div>
-        </div>
-        <div id="chatLog"></div>
-        <div class="row">
-          <input type="checkbox" id="aiCtxCheck" data-i18n-aria="aiCtxCheckA">
-          <span class="badge" id="aiCtxChip" style="flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-i18n-title="aiCtxChipT"></span>
-        </div>
-        <textarea id="aiText" data-i18n-ph="aiPlaceholder"></textarea>
-        <div class="row">
-          <button id="aiSend" class="primary" data-i18n="aiSend"></button>
-          <span class="hint" id="aiState"></span>
-        </div>
-        <div class="hint" data-i18n="aiHint"></div>
       </div>
     </div>
   </div>
@@ -1899,9 +1871,53 @@ const STUDIO_HTML = /* html */ `<!DOCTYPE html>
   </div>
 </div>
 <div class="gutter" id="gutterR"></div>
-<div id="right">
-  <div id="inspector"><div class="hint" data-i18n="noSel"></div></div>
-  <div id="graphDetails" style="display:none"><div class="hint" data-i18n="graphNoSel"></div></div>
+<div id="right" class="tab-agent">
+  <div id="rightTabs" role="tablist">
+    <button class="rtTab" id="rtInspector" role="tab" data-i18n="hInspector"></button>
+    <button class="rtTab on" id="rtAgent" role="tab"><span data-i18n="accAgent"></span><span class="accBadge" id="notesBadge">0</span></button>
+  </div>
+  <div id="rightBody">
+    <div id="inspector"><div class="hint" data-i18n="noSel"></div></div>
+    <div id="graphDetails" style="display:none"><div class="hint" data-i18n="graphNoSel"></div></div>
+  </div>
+  <div id="agentPane">
+    <div id="agentSettings">
+      <label>
+        <input id="agentDirect" type="checkbox">
+        <span data-i18n="agentDirect"></span>
+      </label>
+      <div id="agentDirectFields" hidden>
+        <label for="agentProvider" data-i18n="agentProvider"></label>
+        <select id="agentProvider">
+          <option value="openai" data-i18n="agentOpenai"></option>
+          <option value="anthropic" data-i18n="agentAnthropic"></option>
+          <option value="ollama" data-i18n="agentOllama"></option>
+        </select>
+        <label for="agentEndpoint" data-i18n="agentEndpoint"></label>
+        <input id="agentEndpoint" type="url"
+          autocomplete="off" spellcheck="false">
+        <label for="agentModel" data-i18n="agentModel"></label>
+        <input id="agentModel" autocomplete="off" spellcheck="false">
+        <label for="agentKey" data-i18n="agentKey"></label>
+        <input id="agentKey" type="password"
+          autocomplete="new-password" spellcheck="false">
+        <div class="hint" data-i18n="agentDisclosure"></div>
+        <button id="agentConnect" data-i18n="agentConnect"></button>
+        <span class="hint" id="agentUsage"></span>
+      </div>
+    </div>
+    <div id="chatLog"></div>
+    <div class="row">
+      <input type="checkbox" id="aiCtxCheck" data-i18n-aria="aiCtxCheckA">
+      <span class="badge" id="aiCtxChip" style="flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-i18n-title="aiCtxChipT"></span>
+    </div>
+    <textarea id="aiText" data-i18n-ph="aiPlaceholder"></textarea>
+    <div class="row">
+      <button id="aiSend" class="primary" data-i18n="aiSend"></button>
+      <span class="hint" id="aiState"></span>
+    </div>
+    <div class="hint" data-i18n="aiHint"></div>
+  </div>
 </div>
 </div>
 <div id="dockGutter"></div>
@@ -1993,22 +2009,60 @@ const t = (k) => {
   const v = (I18N[lang] || {})[k] ?? (I18N.en || {})[k] ?? (I18N.ja || {})[k];
   return v ?? k;
 };
-const nextLang = () => LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length];
+// data-i18n の静的文言に加え、JS が組み立てた動的部分（一覧・チャット・ステータス・タイムライン等）も
+// 毎回すべて作り直す。閉じたアコーディオンの中身も DOM には在るので、ここで更新しておけば開いたとき最新の言語になる。
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
-  document.getElementById('langBtn').textContent = LANG_NAMES[nextLang()] || 'EN';
+  renderLangMenu();
 }
-document.getElementById('langBtn').onclick = () => {
-  lang = nextLang();
-  localStorage.setItem('rive-mcp-lang', lang);
-  applyLang(); renderInputs(); buildTree(); renderInspector();
-  renderGraphFindings(); renderGraphDetails();
-  if (graphMode) renderSmGraph();
+// 動的描画。まだ定義されていない初回呼び出しや、状態が無い間の例外で全体が止まらないよう 1 件ずつ守る
+function rerenderDynamic() {
+  const steps = [
+    () => renderInputs(), () => buildTree(), () => renderInspector(), () => renderTimeline(),
+    () => renderGraphFindings(), () => renderGraphDetails(), () => { if (graphMode) renderSmGraph(); },
+    () => renderChat(), () => loadSnapshots(), () => updateAiContextChip(),
+    () => { const sel = $('artboardSel'); renderArtboardTabs(Array.from(sel.options).map((o) => o.value), sel.value); },
+    () => { $('connDot').title = t($('connDot').classList.contains('off') ? 'connOffT' : 'connT'); },
+  ];
+  for (const f of steps) { try { f(); } catch (e) { console.error('i18n rerender', e); } }
+}
+function renderLangMenu() {
+  const menu = document.getElementById('langMenu');
+  menu.textContent = '';
+  for (const c of LANGS) {
+    const b = document.createElement('button');
+    b.setAttribute('role', 'menuitemradio');
+    b.setAttribute('aria-checked', c === lang ? 'true' : 'false');
+    const chk = document.createElement('span'); chk.className = 'chk'; chk.textContent = c === lang ? '✓' : '';
+    const nm = document.createElement('span'); nm.textContent = LANG_NAMES[c] || c;
+    b.appendChild(chk); b.appendChild(nm);
+    b.onclick = () => { setLang(c); closeLangMenu(); };
+    menu.appendChild(b);
+  }
+}
+function setLang(c) {
+  lang = c;
+  try { localStorage.setItem('rive-mcp-lang', lang); } catch { /* 保存できなくても切替は有効 */ }
+  applyLang();
+  rerenderDynamic();
+}
+function closeLangMenu() {
+  document.getElementById('langMenu').hidden = true;
+  document.getElementById('langBtn').setAttribute('aria-expanded', 'false');
+}
+document.getElementById('langBtn').onclick = (e) => {
+  e.stopPropagation();
+  const menu = document.getElementById('langMenu');
+  const open = menu.hidden;
+  menu.hidden = !open;
+  document.getElementById('langBtn').setAttribute('aria-expanded', open ? 'true' : 'false');
 };
+document.addEventListener('click', (e) => { if (!e.target.closest('#langWrap')) closeLangMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLangMenu(); });
 
 // ---- 基本状態 ----------------------------------------------------------------
 const logEl = document.getElementById('log');
@@ -2658,8 +2712,8 @@ window.addEventListener('click', closeTreeMenu);
 window.addEventListener('blur', closeTreeMenu);
 
 // ---- 選択 & インスペクタ --------------------------------------------------------
-function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; clearKeySel(); guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
-function selectRiv(node) { sel = { src: 'riv', node }; clearKeySel(); buildTree(); renderInspector(); drawSelBox(); }
+function selectScene(kind, obj) { sel = { src: 'scene', kind, obj }; showRightTab('inspector'); clearKeySel(); guideStep(2); buildTree(); renderInspector(); drawSelBox(); }
+function selectRiv(node) { sel = { src: 'riv', node }; showRightTab('inspector'); clearKeySel(); buildTree(); renderInspector(); drawSelBox(); }
 
 let rebuildTimer = null;
 function scheduleRebuild(delay = 300) {
@@ -5041,6 +5095,18 @@ document.querySelectorAll('#leftAcc .accHead').forEach((h) => {
   };
 });
 
+// 右ペインのタブ（Inspector / Agent）。AI を前面に出すため、起動時は Agent を表示する。
+// オブジェクトを選んだときは Inspector へ自動で切り替える（selectScene / selectRiv）
+function showRightTab(name) {
+  const r = $('right');
+  r.classList.toggle('tab-agent', name === 'agent');
+  r.classList.toggle('tab-inspector', name === 'inspector');
+  $('rtAgent').classList.toggle('on', name === 'agent');
+  $('rtInspector').classList.toggle('on', name === 'inspector');
+}
+$('rtInspector').onclick = () => showRightTab('inspector');
+$('rtAgent').onclick = () => showRightTab('agent');
+
 let dockOpen = null;
 function showDock(name) {
   dockOpen = dockOpen === name ? null : name;
@@ -5702,7 +5768,7 @@ sse.onmessage = (e) => {
     toast(t('notesTaken'));
   } else if (e.data === 'chat') {
     loadChat();
-    if (!$('accAgentItem').classList.contains('open')) toast(t('chatNew'));
+    if (!$('right').classList.contains('tab-agent')) toast(t('chatNew'));
   } else { $('status').textContent = 'ready'; }
 };
 sse.onopen = () => { $('connDot').classList.remove('off'); $('connDot').title = t('connT'); };

@@ -74,7 +74,7 @@ export const dict: Record<string, string> = {
   addRectBtn: '+ Rectangle', addEllipseBtn: '+ Ellipse', addTextBtn: '+ Texte',
   speedL: 'Vitesse de lecture', kfDeleteMin: 'La dernière image clé ne peut pas être supprimée',
   undoDone: 'Annulé', redoDone: 'Rétabli', objDeleted: 'Objet supprimé',
-  undoA: 'Annuler (Ctrl+Z)', redoA: 'Rétablir (Ctrl+Y)', helpA: 'Aide', pauseA: 'Lecture / Pause',
+  undoA: 'Annuler (Ctrl+Z)', redoA: 'Rétablir (Ctrl+Y)', helpA: 'Aide', langA: 'Langue', pauseA: 'Lecture / Pause',
   connT: 'Connecté au serveur', connOffT: 'Déconnecté : reconnexion en attente', dirtyT: 'Modifications non enregistrées (reconstruction automatique en attente)',
   expL: 'Exporter', expPng: 'PNG', expPngT: 'Enregistrer l’image courante en PNG',
   expProg: 'Export en cours… ', expDone: 'Export terminé', expFail: 'Échec de l’export : ',

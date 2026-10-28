@@ -16,5 +16,5 @@ export const LANG_ORDER: string[] = ["ja", "en", "zh-CN", "ko", "es", "fr", "de"
 
 // 切替ボタンに出す各言語の名前（自国語表記）
 export const LANG_NAMES: Record<string, string> = {
-  ja: "日本語", en: "EN", "zh-CN": "简体中文", ko: "한국어", es: "Español", fr: "Français", de: "Deutsch", "pt-BR": "Português",
+  ja: "日本語", en: "English", "zh-CN": "简体中文", ko: "한국어", es: "Español", fr: "Français", de: "Deutsch", "pt-BR": "Português",
 };

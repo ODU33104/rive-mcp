@@ -74,7 +74,7 @@ export const dict: Record<string, string> = {
   addRectBtn: '+ Rechteck', addEllipseBtn: '+ Ellipse', addTextBtn: '+ Text',
   speedL: 'Wiedergabegeschwindigkeit', kfDeleteMin: 'Der letzte Keyframe kann nicht gelöscht werden',
   undoDone: 'Rückgängig gemacht', redoDone: 'Wiederholt', objDeleted: 'Objekt gelöscht',
-  undoA: 'Rückgängig (Strg+Z)', redoA: 'Wiederholen (Strg+Y)', helpA: 'Hilfe', pauseA: 'Abspielen / Pause',
+  undoA: 'Rückgängig (Strg+Z)', redoA: 'Wiederholen (Strg+Y)', helpA: 'Hilfe', langA: 'Sprache', pauseA: 'Abspielen / Pause',
   connT: 'Mit Server verbunden', connOffT: 'Getrennt, warte auf Wiederverbindung', dirtyT: 'Ungespeicherte Änderungen (automatisches Neu-Erstellen ausstehend)',
   expL: 'Export', expPng: 'PNG', expPngT: 'Das aktuelle Bild als PNG speichern',
   expProg: 'Export läuft … ', expDone: 'Export abgeschlossen', expFail: 'Export fehlgeschlagen: ',

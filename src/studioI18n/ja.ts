@@ -74,7 +74,7 @@ export const dict: Record<string, string> = {
   addRectBtn: '+ 四角形', addEllipseBtn: '+ 楕円', addTextBtn: '+ テキスト',
   speedL: '再生速度', kfDeleteMin: '最後のキーフレームは削除できません',
   undoDone: '元に戻しました', redoDone: 'やり直しました', objDeleted: 'オブジェクトを削除しました',
-  undoA: '元に戻す (Ctrl+Z)', redoA: 'やり直す (Ctrl+Y)', helpA: 'ヘルプ', pauseA: '再生 / 一時停止',
+  undoA: '元に戻す (Ctrl+Z)', redoA: 'やり直す (Ctrl+Y)', helpA: 'ヘルプ', langA: '言語', pauseA: '再生 / 一時停止',
   connT: 'サーバー接続中', connOffT: 'サーバー切断 — 再接続待ち', dirtyT: '未保存の変更（自動再ビルド待ち）',
   expL: 'エクスポート', expPng: 'PNG', expPngT: '表示中フレームをPNG保存',
   expProg: 'エクスポート中… ', expDone: 'エクスポート完了', expFail: 'エクスポート失敗: ',
