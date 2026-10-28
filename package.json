@@ -1,6 +1,6 @@
 {
   "name": "rive-mcp-server",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "mcpName": "io.github.ODU33104/rive-mcp",
   "description": "Free, editor-less MCP server for Rive: create, edit, inspect, render and live-preview .riv animations from Claude or any MCP client, plus a local Studio with a two-way AI chat panel",
   "keywords": [
