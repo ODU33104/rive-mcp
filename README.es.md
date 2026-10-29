@@ -27,7 +27,7 @@ El renderizado ejecuta el **runtime oficial de Rive** (WASM de `@rive-app/canvas
 - **Data binding y herramientas de pipeline**: `riv_inspect` decodifica las definiciones de ViewModel, las instancias (con sus valores resueltos), los enums, los converters y las conexiones de bind, una inspección de data binding que todavía pocas herramientas ofrecen. `riv_batch_render` exporta muchos archivos en varios formatos con una sola llamada compatible con globs, pensada para CI, y `riv_ab_compare` une dos archivos lado a lado en un único GIF/APNG con etiquetas para revisar el diseño.
 - **Probado de extremo a extremo**: `test/e2e.mjs` arranca el servidor y llama a sus herramientas por JSON-RPC sobre `samples/vehicles.riv`; los archivos generados se cargan, se renderizan y se controlan con la máquina de estados mediante el runtime oficial en esas pruebas.
 
-## Herramientas (32)
+## Herramientas (34)
 
 | Herramienta | Qué hace |
 |---|---|
@@ -51,6 +51,8 @@ El renderizado ejecuta el **runtime oficial de Rive** (WASM de `@rive-app/canvas
 | `riv_critique` | **Paquete de revisión en una sola llamada que hace visible el movimiento para un VLM**: una tira de fotogramas (de izquierda a derecha), una superposición de onion skin (estelas de movimiento), un informe de movimiento (vector de desplazamiento neto por objeto animado), métricas objetivas (proporción de Bézier, marcas de paleta, distribución de easings), hallazgos de lint y una lista fija de puntuación de 7 ejes, que incluye la coherencia espacial y direccional (¿cada elemento que se mueve avanza hacia el frente de su propio arte?, ¿la perspectiva es coherente?) |
 | `riv_edit` | Edición sin pérdidas de archivos `.riv` existentes: establece propiedades, sustituye texto con nombre, elimina subárboles y **añade, reemplaza o elimina fotogramas clave** |
 | `riv_optimize` | Reduce un `.riv` sin cambiar su salida visual: elimina interpoladores, eventos y pistas vacías sin referencias que quedan de ediciones anteriores, y reduce los fotogramas clave redundantes en tramos estrictamente lineales (Douglas-Peucker, respetando el easing: los segmentos cubic y hold nunca se tocan). Incluye un informe del plan con `dryRun` |
+| `riv_repair` | Corrige los hallazgos de lint que se pueden arreglar con seguridad, uno por uno. Cada candidato se compara píxel a píxel con el original, y un cambio que altere el render se omite indicando el motivo. Cubre entradas sin usar, easing muerto, referencias rotas e interpoladores sin usar. `dryRun` muestra el plan sin escribir nada. Escribe en `out`; sin `out`, se sobrescribe el archivo de origen |
+| `riv_export_lottie` | Exporta una animación de un `.riv` a JSON de Lottie. Las características que no se pueden convertir aparecen como `lost`, y las aproximadas como `approximated`. La comparación de píxeles se informa como no verificada |
 | `riv_extract_assets` | Extrae las imágenes y fuentes incrustadas de un `.riv` |
 | `riv_visual_diff` | Diferencia de píxeles entre dos archivos `.riv`, con una imagen de diferencias resaltada |
 | `riv_ab_compare` | Renderiza dos archivos `.riv` en las mismas condiciones y los combina en un único GIF/APNG, lado a lado o apilados, con etiquetas para la revisión humana. Mientras riv_visual_diff mide una diferencia a nivel de píxel, esta herramienta sirve para comparar a simple vista dos cosas distintas que se reproducen una junto a otra |
@@ -225,7 +227,7 @@ Ejemplos para un repositorio clonado. Con la versión de npm, el ejemplo está e
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 32 tools over JSON-RPC
+npm run test:e2e   # spawns the real server, exercises all 34 tools over JSON-RPC
 ```
 
 `docs/riv-format.md` documenta el conocimiento obtenido por ingeniería inversa del formato binario `.riv` que usa el escritor (typeKeys y propertyKeys resueltos a partir de las definiciones de tipos oficiales de `rive-runtime`, incorporadas en `vendor/rive-defs/defs.json`).
