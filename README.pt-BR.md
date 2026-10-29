@@ -27,7 +27,7 @@ A renderização usa o **runtime oficial da Rive** (`@rive-app/canvas-advanced`,
 - **Data binding e ferramentas de pipeline**: o `riv_inspect` decodifica definições de ViewModel, instâncias (com os valores resolvidos), enums, converters e as ligações de bind, uma inspeção de data binding que poucas ferramentas oferecem ainda; o `riv_batch_render` exporta muitos arquivos em muitos formatos com uma só chamada, com suporte a glob, feito para CI; e o `riv_ab_compare` monta dois arquivos lado a lado em um único GIF/APNG com rótulos, para revisão de design
 - **Testado de ponta a ponta**: `test/e2e.mjs` inicia o servidor e chama suas ferramentas por JSON-RPC em `samples/vehicles.riv`; os arquivos gerados são carregados, renderizados e controlados pela máquina de estados pelo runtime oficial nesses testes
 
-## Ferramentas (34)
+## Ferramentas (35)
 
 | Ferramenta | O que faz |
 |---|---|
@@ -53,6 +53,7 @@ A renderização usa o **runtime oficial da Rive** (`@rive-app/canvas-advanced`,
 | `riv_optimize` | Reduz um `.riv` sem alterar a saída visual: remove interpoladores, eventos e trilhas vazias sem referência que sobraram de edições anteriores, e afina keyframes redundantes em trechos estritamente lineares (Douglas-Peucker, seguro para easing: segmentos cubic e hold nunca são tocados), com um relatório do plano via dryRun |
 | `riv_repair` | Corrige os achados de lint que podem ser consertados com segurança, uma mudança de cada vez. Cada candidato é comparado pixel a pixel com o original, e uma mudança que altere a renderização é ignorada, com o motivo informado. Cobre entradas não usadas, easing morto, referências quebradas e interpoladores não usados. `dryRun` mostra o plano sem gravar nada. Grava em `out`; sem `out`, `<nome>.repaired.riv` é criado ao lado da origem |
 | `riv_export_lottie` | Exporta uma animação de um `.riv` para JSON do Lottie. Recursos que não podem ser convertidos aparecem em `lost` e os aproximados em `approximated`. A comparação de pixels é informada como não verificada |
+| `riv_preflight` | Verifica quais runtimes podem executar um `.riv`. Detecta os recursos usados pelo arquivo e retorna `ok` / `warn` / `unsupported` / `unknown` para cada alvo (web, iOS, Android, Flutter, Unity, React Native). A tabela de compatibilidade cobre apenas combinações com fonte documentada; as demais ficam como `unknown`. Também tenta carregar o arquivo no runtime WASM oficial incluído |
 | `riv_extract_assets` | Extrai imagens e fontes embutidas de um `.riv` |
 | `riv_visual_diff` | Diff de pixels entre dois arquivos `.riv`, com uma imagem de diferenças destacada |
 | `riv_ab_compare` | Renderiza dois arquivos `.riv` nas mesmas condições e junta os dois em um único GIF/APNG rotulado, lado a lado (ou empilhados), para revisão humana. Enquanto o riv_visual_diff mede uma diferença em nível de pixel, esta ferramenta serve para comparar a olho duas coisas diferentes reproduzidas lado a lado |
@@ -227,7 +228,7 @@ Exemplos para um repositório clonado. Com a versão do npm, o exemplo fica no p
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 34 tools over JSON-RPC
+npm run test:e2e   # spawns the real server, exercises all 35 tools over JSON-RPC
 ```
 
 `docs/riv-format.md` documenta o conhecimento obtido por engenharia reversa sobre o formato binário `.riv` usado pelo writer (typeKeys/propertyKeys resolvidos a partir das definições de tipo do `rive-runtime` oficial, incluídas em `vendor/rive-defs/defs.json`).
