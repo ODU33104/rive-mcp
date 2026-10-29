@@ -39,9 +39,14 @@ import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
 
 const host = new RiveHost(PAGE_SCRIPT);
 
+// serverInfo.version は package.json を正本にする（dist/ でも src/ でも ../package.json を指す）
+const PACKAGE_VERSION: string = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"),
+).version;
+
 const server = new McpServer({
   name: "rive-mcp",
-  version: "0.3.0",
+  version: PACKAGE_VERSION,
 });
 
 type ToolResult = {

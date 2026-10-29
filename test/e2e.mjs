@@ -171,6 +171,8 @@ try {
     clientInfo: { name: "e2e-test", version: "0.0.1" },
   });
   check("initialize", init.serverInfo?.name === "rive-mcp", init.serverInfo?.name);
+  const pkgVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+  check("serverInfo.version matches package.json", init.serverInfo?.version === pkgVersion, `${init.serverInfo?.version} vs ${pkgVersion}`);
   notify("notifications/initialized", {});
 
   const tools = await rpc("tools/list", {});
