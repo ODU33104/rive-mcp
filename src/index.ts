@@ -18,6 +18,7 @@ import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
 import { decodeDataBinding } from "./dataBinding.js";
 import { lintRiv } from "./rivLint.js";
+import { preflightRiv, preflightTargets } from "./rivPreflight.js";
 import { repairRiv, type RepairFix } from "./rivRepair.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
@@ -526,6 +527,36 @@ server.registerTool(
       objects: full ? dump.objects : dump.objects.slice(0, 50),
     };
     return { content: [{ type: "text", text: JSON.stringify(body, null, 1) }] };
+  })
+);
+
+// ---- riv_preflight ------------------------------------------------------
+server.registerTool(
+  "riv_preflight",
+  {
+    title: "Check .riv runtime compatibility",
+    description: "Detect features from .riv object typeKeys, check evidenced target-runtime support and minimum versions, and try loading the file in the bundled official WASM runtime. Unverified compatibility remains unknown.",
+    inputSchema: {
+      path: z.string().describe("Path to the .riv file"),
+      targets: z.array(z.string()).optional().describe("Target runtimes (default: all supported target names)"),
+      strict: z.boolean().optional().describe("Count unverified compatibility as a warning (default false)"),
+    },
+  },
+  wrap(async ({ path, targets, strict }: { path: string; targets?: string[]; strict?: boolean }) => {
+    try {
+      const requested = preflightTargets(targets);
+      const { bytes } = loadRiv(path);
+      const report = await preflightRiv(bytes, requested, strict ?? false, (input) => host.inspect(input));
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [{
+          type: "text",
+          text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
+        }],
+      };
+    }
   })
 );
 

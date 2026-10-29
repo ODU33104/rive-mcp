@@ -189,7 +189,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 34 tools", names.length === 34, names.join(","));
+  check("tools/list has 35 tools", names.length === 35, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -459,6 +459,112 @@ try {
       coords.every(([x, y], i) => JSON.stringify(pixel(x, y)) === JSON.stringify(colors[i])),
       coords.map(([x, y]) => pixel(x, y).join(",")).join(" / "));
   }
+
+  // riv_preflight: detect binary object families and check the bundled official runtime.
+  const preflightVehiclesCall = await callTool("riv_preflight", { path: RIV });
+  const preflightVehicles = preflightVehiclesCall.isError ? null : JSON.parse(textOf(preflightVehiclesCall));
+  check("riv_preflight vehicles detects state machines",
+    !!preflightVehicles && preflightVehicles.features.some((entry) => entry.feature === "State Machine" && entry.count > 0),
+    textOf(preflightVehiclesCall).slice(0, 240));
+  check("riv_preflight vehicles loads in the official WASM runtime",
+    preflightVehicles?.runtimeCheck.officialWasm === "loaded" &&
+    preflightVehicles?.file.bytes === statSync(RIV).size);
+  check("riv_preflight defaults to all target runtimes",
+    preflightVehicles?.targets.length === 6 && preflightVehicles?.targets.every(
+      (entry) => ["ok", "warn", "unsupported", "unknown"].includes(entry.verdict)
+    ));
+
+  const preflightShapePath = join(root, "test", "tmp", "preflight-shapes.riv");
+  mkdirSync(dirname(preflightShapePath), { recursive: true });
+  const preflightShapeCreated = await callTool("riv_create", {
+    outPath: preflightShapePath,
+    scene: {
+      artboard: { name: "PreflightShape", width: 80, height: 80 },
+      shapes: [{ id: "square", type: "rect", x: 40, y: 40,
+        width: 30, height: 30, fill: { color: "#ff2200" } }],
+    },
+  });
+  check("riv_preflight shape fixture validated by official runtime",
+    !preflightShapeCreated.isError && textOf(preflightShapeCreated).includes("validated"),
+    textOf(preflightShapeCreated).slice(0, 220));
+  const preflightShapeCall = await callTool("riv_preflight", { path: preflightShapePath });
+  const preflightShape = preflightShapeCall.isError ? null : JSON.parse(textOf(preflightShapeCall));
+  check("riv_preflight simple shape has few features and no unsupported targets",
+    !!preflightShape && preflightShape.features.length <= 4 &&
+    preflightShape.targets.length === 6 &&
+    preflightShape.targets.every((entry) => ["ok", "unknown"].includes(entry.verdict)) &&
+    preflightShape.runtimeCheck.officialWasm === "loaded",
+    textOf(preflightShapeCall).slice(0, 320));
+
+  const preflightBindingPath = join(root, "test", "tmp", "preflight-binding.riv");
+  const preflightBindingCreated = await callTool("riv_create", {
+    outPath: preflightBindingPath,
+    scene: {
+      artboard: { name: "PreflightBinding", width: 100, height: 100 },
+      viewModels: [{ name: "PreflightModel", properties: [{ name: "value", type: "number" }] }],
+      viewModelInstances: [{ name: "PreflightInstance", viewModel: "PreflightModel", values: { value: 8 } }],
+      viewModel: "PreflightModel",
+      viewModelInstance: "PreflightInstance",
+      shapes: [{ id: "disk", type: "ellipse", x: 50, y: 50, width: 30, height: 30,
+        fill: { color: "#0066ff" } }],
+    },
+  });
+  check("riv_preflight binding fixture validated by official runtime",
+    !preflightBindingCreated.isError && textOf(preflightBindingCreated).includes("validated"),
+    textOf(preflightBindingCreated).slice(0, 220));
+  const preflightBindingCall = await callTool("riv_preflight", { path: preflightBindingPath });
+  const preflightBinding = preflightBindingCall.isError ? null : JSON.parse(textOf(preflightBindingCall));
+  check("riv_preflight detects ViewModel and Data Binding typeKeys",
+    !!preflightBinding && preflightBinding.features.some((entry) =>
+      entry.feature === "Data Binding" && entry.count > 0) &&
+    preflightBinding.runtimeCheck.officialWasm === "loaded",
+    textOf(preflightBindingCall).slice(0, 300));
+
+  const preflightLayoutCall = await callTool("riv_preflight", {
+    path: join(root, "test", "tmp", "flex-row.riv"),
+  });
+  const preflightLayout = preflightLayoutCall.isError ? null : JSON.parse(textOf(preflightLayoutCall));
+  check("riv_preflight detects Layout typeKeys from riv_create",
+    !!preflightLayout && preflightLayout.features.some((entry) =>
+      entry.feature === "Layout" && entry.count >= 4) &&
+    preflightLayout.runtimeCheck.officialWasm === "loaded",
+    textOf(preflightLayoutCall).slice(0, 300));
+
+  const preflightBrokenPath = join(root, "test", "tmp", "preflight-truncated.riv");
+  writeFileSync(preflightBrokenPath, Buffer.from([0x52, 0x49, 0x56, 0x45, 7, 0, 0]));
+  const preflightBrokenCall = await callTool("riv_preflight", { path: preflightBrokenPath });
+  let preflightBrokenJson = null;
+  try { preflightBrokenJson = JSON.parse(textOf(preflightBrokenCall)); } catch {}
+  check("riv_preflight truncated file returns JSON error without crashing",
+    !!preflightBrokenCall.isError && typeof preflightBrokenJson?.error === "string");
+
+  const preflightLimitedCall = await callTool("riv_preflight", {
+    path: preflightShapePath, targets: ["ios", "web", "ios"],
+  });
+  const preflightLimited = preflightLimitedCall.isError ? null : JSON.parse(textOf(preflightLimitedCall));
+  check("riv_preflight selected targets are filtered and deduplicated",
+    JSON.stringify(preflightLimited?.targets.map((entry) => entry.target)) === JSON.stringify(["ios", "web"]));
+  const preflightInvalidCall = await callTool("riv_preflight", {
+    path: preflightShapePath, targets: ["unrecognized-runtime"],
+  });
+  let preflightInvalidJson = null;
+  try { preflightInvalidJson = JSON.parse(textOf(preflightInvalidCall)); } catch {}
+  check("riv_preflight unknown target returns a JSON error",
+    !!preflightInvalidCall.isError && preflightInvalidJson?.error.includes("Unknown target"));
+
+  const preflightStrictCall = await callTool("riv_preflight", {
+    path: preflightShapePath, targets: ["ios"], strict: true,
+  });
+  const preflightStrict = preflightStrictCall.isError ? null : JSON.parse(textOf(preflightStrictCall));
+  check("riv_preflight strict counts unknown support as a warning",
+    preflightShape?.targets.find((entry) => entry.target === "ios")?.verdict === "unknown" &&
+    preflightStrict?.targets[0]?.verdict === "warn" && preflightStrict?.summary.warn === 1);
+  const { PREFLIGHT_MATRIX: preflightMatrixRows } =
+    await import(pathToFileURL(join(root, "dist", "preflightMatrix.js")).href);
+  check("riv_preflight every compatibility matrix entry has evidence",
+    preflightMatrixRows.length > 0 && preflightMatrixRows.every((entry) =>
+      typeof entry.source === "string" && entry.source.startsWith("https://") &&
+      typeof entry.feature === "string" && typeof entry.target === "string"));
 
   // riv_create: 画像埋め込み + グループ + メッシュ頂点アニメ
   const tinyPng = Buffer.from(
