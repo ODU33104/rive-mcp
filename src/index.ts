@@ -18,6 +18,7 @@ import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
 import { decodeDataBinding } from "./dataBinding.js";
 import { lintRiv } from "./rivLint.js";
+import { repairRiv, type RepairFix } from "./rivRepair.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
 import { optimizeRiv } from "./rivOptimize.js";
@@ -543,6 +544,81 @@ server.registerTool(
       findings,
     };
     return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
+  })
+);
+
+// ---- riv_repair ----------------------------------------------------------
+server.registerTool(
+  "riv_repair",
+  {
+    title: "Repair safe .riv lint findings",
+    description: "Repair provably harmless lint findings in a .riv file. Preview with dryRun, choose fixes, and compare all sampled frames with the official runtime before writing. Unsafe findings are skipped with reasons.",
+    inputSchema: {
+      path: z.string().describe("Source .riv path"),
+      out: z.string().optional().describe("Output path (default: overwrite source)"),
+      dryRun: z.boolean().optional().describe("Inspect and validate without writing (default false)"),
+      fixes: z.array(z.enum(["unused-input", "dead-easing", "broken-reference", "unused-interpolator"])).optional()
+        .describe("Selected fix types (default all supported types)"),
+    },
+  },
+  wrap(async ({ path, out, dryRun, fixes }: {
+    path: string;
+    out?: string;
+    dryRun?: boolean;
+    fixes?: RepairFix[];
+  }) => {
+    const { bytes, abs } = loadRiv(path);
+    const result = repairRiv(bytes, fixes);
+    const next = Buffer.from(result.bytes);
+    const current = Buffer.from(bytes);
+    if (result.report.applied.length > 0) {
+      if (result.report.before.findings.some((finding) => finding.rule === "infinite-loop-risk")) {
+        throw new Error("Cannot validate rendering safely while an unconditional state-machine loop remains");
+      }
+      const beforeInfo = await host.inspect(current);
+      const afterInfo = await host.inspect(next);
+      if (beforeInfo.artboardCount !== afterInfo.artboardCount) {
+        throw new Error("Repair changed artboard count; no file was written");
+      }
+      let frames = 0;
+      for (let index = 0; index < beforeInfo.artboards.length; index++) {
+        const original = beforeInfo.artboards[index];
+        const updated = afterInfo.artboards[index];
+        if (!updated || original.name !== updated.name ||
+            original.animations.map((item) => item.name).join("\u0000") !== updated.animations.map((item) => item.name).join("\u0000") ||
+            original.stateMachines.map((item) => item.name).join("\u0000") !== updated.stateMachines.map((item) => item.name).join("\u0000")) {
+          throw new Error("Repair changed scene structure; no file was written");
+        }
+        const scenes: Array<Record<string, unknown>> = [{ artboard: original.name }];
+        for (const item of original.animations) scenes.push({ artboard: original.name, animation: item.name });
+        for (const item of original.stateMachines) scenes.push({ artboard: original.name, stateMachine: item.name });
+        for (const scene of scenes) {
+          for (const startTime of [0, 0.25, 0.75]) {
+            const opts = { ...scene, width: 160, height: 160, format: "rgba", frameCount: 2, fps: 60, startTime };
+            const [first, second] = await Promise.all([
+              host.renderFrames(current, opts),
+              host.renderFrames(next, opts),
+            ]);
+            if (first.width !== second.width || first.height !== second.height ||
+                first.frames.length !== second.frames.length ||
+                JSON.stringify(first.states) !== JSON.stringify(second.states)) {
+              throw new Error("Repair changed rendered scene state; no file was written");
+            }
+            for (let n = 0; n < first.frames.length; n++) {
+              const a = Buffer.from(first.frames[n], "base64");
+              const b = Buffer.from(second.frames[n], "base64");
+              if (a.length !== b.length || !a.equals(b)) {
+                throw new Error("Repair changed rendered pixels; no file was written");
+              }
+              frames++;
+            }
+          }
+        }
+      }
+      result.report.visual = { frames, identical: true };
+    }
+    if (!dryRun) writeFileSync(resolve(out ?? abs), next);
+    return { content: [{ type: "text", text: JSON.stringify(result.report, null, 2) }] };
   })
 );
 
