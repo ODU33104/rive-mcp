@@ -102,6 +102,7 @@ claude mcp add --scope user rive -- node /absolute/path/to/rive-mcp/dist/index.j
 | `riv_optimize` | **見た目を変えずに.rivを軽量化**: 過去の編集で残った未参照interpolator/event/空トラックの除去、全区間linearのトラックに限定した冗長キーフレーム間引き（Douglas-Peucker、easing安全 — cubic/holdの区間には一切触れない）。`dryRun` で書き込み前に削減プランだけ確認可能 |
 | `riv_repair` | **lint の指摘を 1 件ずつ安全に修復**: 候補ごとに元と**ピクセル比較**し、見た目が変わるものは理由を付けてスキップ。対象は未使用 input・無効な easing・壊れた参照・未使用 interpolator。`dryRun` は書き込まず計画だけ返す。`out` 指定先へ書き出し、省略時は元ファイルの隣に `<名前>.repaired.riv` を作る（元ファイルは上書きしない） |
 | `riv_export_lottie` | **.riv アニメーションを Lottie JSON に書き出し**: 変換できない要素は `lost`、近似した要素は `approximated` として報告。画素比較は未確認と返す |
+| `riv_preflight` | **.riv の実行互換性を確認**: 使われている機能を検出し、web / iOS / Android / Flutter / Unity / React Native ごとに `ok` / `warn` / `unsupported` / `unknown` を返す。対応表は出典のある組み合わせだけで、それ以外は `unknown`。同梱の公式 WASM ランタイムで実際に読み込めるかも確かめる |
 | `riv_extract_assets` | .riv 埋め込み画像/フォントの抽出 |
 | `riv_visual_diff` | 2つの .riv のピクセル差分（一致率 + 相違箇所を赤表示した差分画像） |
 | `riv_ab_compare` | 2つの .riv を同条件でレンダリングし、ラベル付き横並び/縦並びの GIF/APNG を1本に合成（レビュー用）。riv_visual_diff がピクセル単位の定量差分なのに対し、こちらは別々のファイルを並べて目視比較するためのツール |

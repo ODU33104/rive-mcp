@@ -27,7 +27,7 @@ rive-mcp 是一个免费的 MCP（Model Context Protocol，模型上下文协议
 - **数据绑定与管线工具**：`riv_inspect` 可解析 ViewModel 定义、实例（含解析后的值）、枚举、转换器以及绑定连线，目前支持数据绑定检查的工具还不多，它是其中之一；`riv_batch_render` 支持通配符，可在一次调用中为 CI 批量导出多个文件、多种格式；`riv_ab_compare` 可将两个文件并排合成一个带标签的 GIF/APNG，便于设计评审
 - **端到端测试**：`test/e2e.mjs` 会启动服务器，并通过 JSON-RPC 在 `samples/vehicles.riv` 上调用其工具；生成的文件在这些测试中由官方运行时加载、渲染，并由状态机驱动
 
-## 工具（34 个）
+## 工具（35 个）
 
 | 工具 | 功能 |
 |---|---|
@@ -53,6 +53,7 @@ rive-mcp 是一个免费的 MCP（Model Context Protocol，模型上下文协议
 | `riv_optimize` | 在不改变视觉输出的前提下缩小 `.riv`：删除之前编辑留下的未被引用的插值器、事件和空轨道，对严格线性段上的冗余关键帧进行抽稀（Douglas-Peucker 算法，保证缓动安全：三次段与 hold 段绝不改动），并可通过 `dryRun` 输出计划报告 |
 | `riv_repair` | 逐项修复可以安全修复的 lint 问题，每次只改一处。每个候选项都会与原文件逐像素比较，若会改变渲染结果则跳过并说明原因。涵盖未使用的输入、失效的缓动、断开的引用和未使用的插值器。`dryRun` 只输出计划，不写入任何内容。写入 `out`；未指定 `out` 时在源文件旁生成 `<名称>.repaired.riv` |
 | `riv_export_lottie` | 将 `.riv` 中的一个动画导出为 Lottie JSON。无法转换的功能列在 `lost` 中，近似处理的功能列在 `approximated` 中。像素比对结果标记为未验证 |
+| `riv_preflight` | 检查 `.riv` 能否在各目标运行时中运行。检测文件使用的功能，并为每个目标（web、iOS、Android、Flutter、Unity、React Native）返回 `ok` / `warn` / `unsupported` / `unknown`。兼容性表只覆盖有明确来源依据的组合，其余结果为 `unknown`。同时尝试用随附的官方 WASM 运行时加载该文件 |
 | `riv_extract_assets` | 从 `.riv` 中提取内嵌的图片和字体 |
 | `riv_visual_diff` | 对两个 `.riv` 文件做像素级比对，并生成高亮差异图 |
 | `riv_ab_compare` | 在相同条件下渲染两个 `.riv` 文件，合成为一个带标签的左右并排（或上下堆叠）GIF/APNG，供人工评审。riv_visual_diff 衡量的是像素级差异，而这个工具用于并排对比两段不同的动画，靠肉眼判断 |
@@ -227,7 +228,7 @@ claude mcp add --scope user rive -- node /absolute/path/to/rive-mcp/dist/index.j
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 34 tools over JSON-RPC
+npm run test:e2e   # spawns the real server, exercises all 35 tools over JSON-RPC
 ```
 
 `docs/riv-format.md` 记录了写入器所用 `.riv` 二进制格式的逆向工程成果（typeKeys/propertyKeys 取自随附于 `vendor/rive-defs/defs.json` 的官方 `rive-runtime` 类型定义）。

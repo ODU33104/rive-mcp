@@ -27,7 +27,7 @@ rive-mcp는 Claude(또는 임의의 MCP 클라이언트)가 `.riv` 파일을 완
 - **데이터 바인딩과 파이프라인 도구**: `riv_inspect`는 ViewModel 정의, 해석된 값을 가진 인스턴스, 열거형, 컨버터, 바인드 연결을 디코딩합니다. 이처럼 데이터 바인딩을 검사하는 도구는 아직 드뭅니다. `riv_batch_render`는 글롭을 지원하는 호출 한 번으로 여러 파일을 여러 형식으로 내보내 CI에 쓰기 좋고, `riv_ab_compare`는 두 파일을 나란히 합쳐 라벨이 붙은 GIF/APNG 하나로 만들어 디자인 검토에 씁니다
 - **처음부터 끝까지 테스트**: `test/e2e.mjs`가 서버를 띄우고 `samples/vehicles.riv`에 대해 JSON-RPC로 도구를 호출합니다. 생성된 파일은 이 테스트에서 공식 런타임으로 로드, 렌더링, 스테이트 머신 구동까지 확인합니다
 
-## 도구 (34)
+## 도구 (35)
 
 | 도구 | 기능 |
 |---|---|
@@ -53,6 +53,7 @@ rive-mcp는 Claude(또는 임의의 MCP 클라이언트)가 `.riv` 파일을 완
 | `riv_optimize` | 시각 결과를 바꾸지 않고 `.riv`를 줄입니다. 이전 편집 후 남은 미참조 인터폴레이터, 이벤트, 빈 트랙을 제거하고, 엄격하게 선형인 구간의 중복 키프레임을 솎아냅니다(Douglas-Peucker 방식이며 이징을 보존합니다. cubic/hold 구간은 건드리지 않습니다). `dryRun`으로 계획 보고서만 먼저 볼 수 있습니다 |
 | `riv_repair` | 린트 지적 사항 중 안전하게 고칠 수 있는 것을 한 번에 하나씩 고칩니다. 각 후보는 원본과 픽셀 단위로 비교하며, 렌더링이 달라지면 이유와 함께 건너뜁니다. 사용되지 않는 입력, 죽은 이징, 깨진 참조, 사용되지 않는 인터폴레이터를 다룹니다. `dryRun`은 아무것도 쓰지 않고 계획만 보고합니다. `out`에 씁니다. `out`을 생략하면 원본 옆에 `<이름>.repaired.riv`를 만듭니다 |
 | `riv_export_lottie` | `.riv`의 애니메이션 하나를 Lottie JSON으로 내보냅니다. 변환할 수 없는 기능은 `lost`, 근사한 기능은 `approximated`로 보고합니다. 픽셀 비교는 미검증으로 보고됩니다 |
+| `riv_preflight` | `.riv`을 어느 런타임에서 실행할 수 있는지 확인합니다. 파일이 쓰는 기능을 찾아 웹, iOS, Android, Flutter, Unity, React Native 각 대상에 대해 `ok` / `warn` / `unsupported` / `unknown`을 반환합니다. 호환성 표는 출처가 있는 조합만 다루며, 나머지는 `unknown`입니다. 함께 번들된 공식 WASM 런타임으로 파일을 실제로 불러와 봅니다 |
 | `riv_extract_assets` | `.riv`에서 내장 이미지와 폰트를 추출합니다 |
 | `riv_visual_diff` | 두 `.riv` 파일의 픽셀 차이를 비교하고, 차이를 강조한 이미지를 만듭니다 |
 | `riv_ab_compare` | 두 `.riv` 파일을 같은 조건으로 렌더링해 사람이 검토할 수 있도록, 라벨이 붙은 나란히 놓인(또는 위아래로 쌓인) GIF/APNG 하나로 만듭니다. riv_visual_diff가 픽셀 단위 차이를 측정한다면, 이 도구는 서로 다른 두 결과가 나란히 재생되는 모습을 눈으로 비교하는 용도입니다 |
@@ -227,7 +228,7 @@ Studio 도구 모음에서 PNG / APNG / GIF / WebM을 클릭하면 현재 애니
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 34 tools over JSON-RPC
+npm run test:e2e   # spawns the real server, exercises all 35 tools over JSON-RPC
 ```
 
 `docs/riv-format.md`에는 작성기가 쓰는 `.riv` 바이너리 포맷을 역공학으로 정리한 내용이 있습니다(typeKey/propertyKey는 `vendor/rive-defs/defs.json`에 포함된 공식 `rive-runtime` 타입 정의에서 가져왔습니다).

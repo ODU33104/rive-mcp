@@ -27,7 +27,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 - **Data binding & pipeline tooling** — `riv_inspect` decodes ViewModel definitions, instances (with resolved values), enums, converters and bind wiring — data binding inspection that few tools support yet; `riv_batch_render` exports many files × formats in one glob-aware call for CI, and `riv_ab_compare` composites two files side by side into one labeled GIF/APNG for design review
 - **Tested end to end** — `test/e2e.mjs` starts the server and calls its tools over JSON-RPC on `samples/vehicles.riv`; generated files are loaded, rendered and state-machine-driven by the official runtime in those tests
 
-## Tools (34)
+## Tools (35)
 
 | Tool | What it does |
 |---|---|
@@ -53,6 +53,7 @@ Rendering runs the **official Rive runtime** (`@rive-app/canvas-advanced` WASM) 
 | `riv_optimize` | Shrink a `.riv` without changing its visual output: remove unreferenced interpolators/events/empty tracks left over from prior edits, thin redundant keyframes on strictly-linear runs (Douglas-Peucker, easing-safe — cubic/hold segments are never touched), with a `dryRun` report of the plan |
 | `riv_repair` | Repair lint findings that can be fixed safely, one change at a time. Each candidate is compared pixel by pixel with the original, and a change that alters the rendering is skipped with the reason. Covers unused inputs, dead easing, broken references and unused interpolators. `dryRun` reports the plan without writing anything. Writes to `out`; without `out`, `<name>.repaired.riv` is created next to the source |
 | `riv_export_lottie` | Export one animation of a `.riv` to Lottie JSON. Features that cannot be converted are listed as `lost`, approximated ones as `approximated`. Pixel comparison is reported as unverified |
+| `riv_preflight` | Check which runtimes can run a `.riv`. Detects the features the file uses and returns `ok` / `warn` / `unsupported` / `unknown` for each target (web, iOS, Android, Flutter, Unity, React Native). The compatibility table covers only combinations with a documented source; everything else is `unknown`. Also tries loading the file in the bundled official WASM runtime |
 | `riv_extract_assets` | Extract embedded images/fonts from a `.riv` |
 | `riv_visual_diff` | Pixel diff of two `.riv` files with a highlighted diff image |
 | `riv_ab_compare` | Render two `.riv` files under identical conditions into one labeled side-by-side (or stacked) GIF/APNG for human review — where riv_visual_diff measures a pixel-level delta, this one is for eyeballing two different things playing next to each other |
@@ -246,7 +247,7 @@ Examples for a cloned repository. With the npm version, the sample is in the pac
 
 ```bash
 npm run build      # vendor runtime assets + tsc
-npm run test:e2e   # spawns the real server, exercises all 34 tools over JSON-RPC
+npm run test:e2e   # spawns the real server, exercises all 35 tools over JSON-RPC
 ```
 
 `docs/riv-format.md` documents the reverse-engineered knowledge of the `.riv` binary format used by the writer (typeKeys/propertyKeys resolved from the official `rive-runtime` type definitions vendored in `vendor/rive-defs/defs.json`).
