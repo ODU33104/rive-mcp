@@ -66,19 +66,6 @@ function valueOf(object: RivObject, key: number): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
-function put(object: RivObject, key: number, value: number): void {
-  const old = object.raw.find((p) => p.key === key);
-  if (old) old.value = value;
-  else object.raw.push({ key, fieldType: 0, value });
-  const defs = loadDefs();
-  if (defs) {
-    for (const t of Object.values(defs.types)) {
-      const name = Object.entries(t.properties).find(([, p]) => p.key === key)?.[0];
-      if (name) { object.properties[name] = value; break; }
-    }
-  }
-}
-
 function erase(object: RivObject, key: number, name: string): void {
   object.raw = object.raw.filter((p) => p.key !== key);
   delete object.properties[name];
@@ -156,23 +143,6 @@ export function repairRiv(
       }
     }
 
-    if (selected.has("dead-easing")) {
-      for (let i = start; i < end; i++) {
-        if (objects[i].typeName !== "KeyedProperty") continue;
-        const track: RivObject[] = [];
-        let j = i + 1;
-        while (j < end && objects[j].typeName.startsWith("KeyFrame")) track.push(objects[j++]);
-        if (track.length === 0) continue;
-        const last = track.reduce((a, b) =>
-          Number(a.properties.frame ?? 0) > Number(b.properties.frame ?? 0) ? a : b);
-        if (!KEYFRAMES.has(last.typeName) || valueOf(last, interpType) !== 2) continue;
-        if (!allowed("dead-easing", last.index)) continue;
-        put(last, interpType, 1);
-        erase(last, interpId, "interpolatorId");
-        actions.push({ rule: "dead-easing", objectIndex: last.index, detail: "Changed unused final cubic interpolation to linear" });
-      }
-    }
-
     if (selected.has("unused-input")) {
       for (let i = start; i < end; i++) {
         if (objects[i].typeName !== "StateMachine") continue;
@@ -198,23 +168,23 @@ export function repairRiv(
       }
     }
 
-    if (selected.has("unused-interpolator") && canRemove) {
+    // A final keyframe's cubic settings remain intact. Only truly orphaned
+    // interpolator objects may be removed; all local references are counted.
+    if ((selected.has("dead-easing") || selected.has("unused-interpolator")) && canRemove) {
       const referenced = new Set<number>();
       for (let i = start; i < end; i++) {
         if (removed.has(i)) continue;
-        const id = valueOf(objects[i], interpId);
-        if (id !== undefined) referenced.add(start + id);
+        const rawId = valueOf(objects[i], interpId);
+        const propertyId = objects[i].properties.interpolatorId;
+        if (rawId !== undefined) referenced.add(start + rawId);
+        if (typeof propertyId === "number") referenced.add(start + propertyId);
       }
-      // Remove only objects orphaned by a dead-easing edit in this run.
-      const changedEasing = actions.some((a) => a.rule === "dead-easing" &&
-        a.objectIndex >= start && a.objectIndex < end);
-      if (changedEasing || target?.rule === "unused-interpolator") {
-        for (let i = start; i < end; i++) {
-          if (INTERPOLATORS.has(objects[i].typeName) && !referenced.has(i) &&
-              allowed("unused-interpolator", objects[i].index)) {
-            removed.add(i);
-            actions.push({ rule: "unused-interpolator", objectIndex: objects[i].index, detail: "Removed unreferenced easing object" });
-          }
+      const rule: RepairFix = selected.has("unused-interpolator") ? "unused-interpolator" : "dead-easing";
+      for (let i = start; i < end; i++) {
+        if (INTERPOLATORS.has(objects[i].typeName) && !referenced.has(i) &&
+            allowed(rule, objects[i].index)) {
+          removed.add(i);
+          actions.push({ rule, objectIndex: objects[i].index, detail: "Removed unreferenced easing object" });
         }
       }
     }
@@ -246,7 +216,11 @@ export function repairRiv(
       skips.push({
         rule: f.rule,
         reason: (f.objectIndex !== undefined ? "Object #" + f.objectIndex + ": " : "") +
-          (selected.has(f.rule as RepairFix) ? "Not provably safe to change automatically" : "Fix not selected or requires manual review"),
+          (f.rule === "dead-easing" && selected.has("dead-easing")
+            ? "final keyframe easing is not applied; not rewritten"
+            : selected.has(f.rule as RepairFix)
+              ? "Not provably safe to change automatically"
+              : "Fix not selected or requires manual review"),
       });
     }
   }

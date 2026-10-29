@@ -1658,17 +1658,27 @@ try {
     const preview = await callTool("riv_repair", { path: sourcePath, out: previewPath, dryRun: true });
     const previewReport = preview.isError ? null : JSON.parse(textOf(preview));
     check("riv_repair dryRun never writes", !preview.isError && !existsSync(previewPath) &&
-      previewReport?.applied.length >= 2 && previewReport?.skipped.some(
+      previewReport?.applied.length >= 1 && previewReport?.skipped.some(
         (entry) => entry.rule === "broken-reference" && entry.reason.includes("removal changes rendered output")
       ), textOf(preview).slice(0, 500));
 
     const repaired = await callTool("riv_repair", { path: sourcePath, out: outputPath });
     const report = repaired.isError ? null : JSON.parse(textOf(repaired));
-    check("riv_repair applies visually safe fixes",
+    check("riv_repair applies the private unused input fix",
       !repaired.isError &&
-      ["unused-input", "dead-easing"].every((fix) =>
-        report?.applied.some((entry) => entry.fix === fix && entry.count === 1 && !!entry.detail)),
+      report?.applied.some((entry) => entry.fix === "unused-input" && entry.count === 1 && !!entry.detail),
       textOf(repaired).slice(0, 900));
+    check("riv_repair preserves referenced final easing",
+      !repaired.isError &&
+      !report?.applied.some((entry) => entry.fix === "dead-easing") &&
+      report?.skipped.some((entry) => entry.rule === "dead-easing" &&
+        entry.reason.includes("final keyframe easing is not applied; not rewritten")),
+      textOf(repaired).slice(0, 900));
+    const finalKeys = readRiv(readFileSync(outputPath)).objects.filter((o) => o.typeName === "KeyFrameDouble");
+    check("riv_repair leaves final interpolation properties unchanged",
+      finalKeys.length === keyframes.length &&
+      finalKeys[finalKeys.length - 1].raw.find((p) => p.key === typeKey)?.value === 2 &&
+      finalKeys[finalKeys.length - 1].raw.find((p) => p.key === idKey)?.value === firstId);
     check("riv_repair skips reference removal that changes pixels",
       !repaired.isError && !report?.applied.some((entry) => entry.fix === "broken-reference") &&
       report?.skipped.some((entry) =>
@@ -1725,10 +1735,19 @@ try {
       ), textOf(hugeResult).slice(0, 400));
 
     const originalVehicles = readFileSync(RIV);
+    const { repairRiv } = await import("../dist/rivRepair.js");
+    const plannedVehicles = repairRiv(originalVehicles);
+    check("riv_repair plans no edits for healthy vehicles",
+      plannedVehicles.report.applied.length === 0 &&
+      plannedVehicles.candidates.length === 0 &&
+      Buffer.from(plannedVehicles.bytes).equals(originalVehicles),
+      JSON.stringify(plannedVehicles.report.applied).slice(0, 400));
     const vehiclesResult = await callTool("riv_repair", { path: RIV, out: vehiclesPath });
+    const vehiclesReport = vehiclesResult.isError ? null : JSON.parse(textOf(vehiclesResult));
     check("riv_repair preserves healthy vehicles byte for byte",
-      !vehiclesResult.isError && JSON.parse(textOf(vehiclesResult)).applied.length === 0 &&
-      readFileSync(vehiclesPath).equals(originalVehicles),
+      !vehiclesResult.isError && vehiclesReport?.applied.length === 0 &&
+      vehiclesReport?.visual.frames === 0 &&
+      existsSync(vehiclesPath) && readFileSync(vehiclesPath).equals(originalVehicles),
       textOf(vehiclesResult).slice(0, 400));
   }
 
