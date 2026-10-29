@@ -33,6 +33,7 @@ import { overlayLabels } from "./uiOverlay.js";
 import { computeMetrics, CRITIQUE_CHECKLIST, composeFilmstrip, composeOnionSkin, encodePng, motionReport } from "./critique.js";
 import { importSvg } from "./svgImport.js";
 import { importLottie } from "./lottieImport.js";
+import { exportLottie } from "./lottieExport.js";
 import { decompileRiv } from "./rivDecompile.js";
 import { runBatchRender, type BatchJobSpec } from "./batchRender.js";
 import { runAbCompare, type AbCompareOptions } from "./abCompare.js";
@@ -779,6 +780,51 @@ server.registerTool(
       `Splice into riv_create: scene.groups = [...scene.groups, ...fragment.groups], scene.shapes = [...scene.shapes, ...fragment.shapes], ` +
       `scene.animations = [...scene.animations, ...fragment.animations] (fragment loaded from "${specPath}") — do NOT use "imports" for this fragment, it only merges shapes.`;
     return { content: [{ type: "text", text: text2 }, { type: "image", data: r.frames[0], mimeType: "image/png" }] };
+  })
+);
+
+// ---- riv_export_lottie ------------------------------------------------
+server.registerTool(
+  "riv_export_lottie",
+  {
+    title: "Export a .riv animation to Lottie JSON",
+    description:
+      "Export one .riv animation to Lottie JSON. Reports unsupported and approximated features, and indicates whether pixel comparison was available.",
+    inputSchema: {
+      path: z.string().describe("Path to a .riv file"),
+      out: z.string().optional().describe("Output JSON path (default: adjacent .lottie.json)"),
+      artboard: z.string().optional().describe("Artboard name (default: first)"),
+      animation: z.string().optional().describe("Animation name (default: first; all unsupported)"),
+      fps: z.number().positive().optional().describe("Output FPS (default: animation FPS)"),
+    },
+  },
+  wrap(async ({
+    path, out, artboard, animation, fps,
+  }: {
+    path: string;
+    out?: string;
+    artboard?: string;
+    animation?: string;
+    fps?: number;
+  }) => {
+    const { bytes, abs } = loadRiv(path);
+    const result = exportLottie(bytes, { artboard, animation, fps });
+    const outPath = resolve(out ?? (abs.replace(/\.riv$/i, "") + ".lottie.json"));
+    writeFileSync(outPath, result.json, "utf8");
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          out: outPath,
+          bytes: Buffer.byteLength(result.json, "utf8"),
+          layers: result.layers,
+          supported: result.supported,
+          lost: result.lost,
+          approximated: result.approximated,
+          verify: result.verify,
+        }),
+      }],
+    };
   })
 );
 
