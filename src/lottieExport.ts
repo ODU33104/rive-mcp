@@ -33,7 +33,7 @@ export interface LottieExportResult {
   supported: string[];
   lost: LottieExportIssue[];
   approximated: LottieExportApproximation[];
-  verify: { frames: number; maxDiffPercent: number | "未確認" };
+  verify: { frames: number; maxDiffPercent: number | "unverified" };
 }
 
 type JsonObject = Record<string, unknown>;
@@ -543,6 +543,6 @@ export function exportLottie(
     layers: layers.length,
     supported: [...supported].sort(),
     lost, approximated,
-    verify: { frames: 0, maxDiffPercent: "未確認" },
+    verify: { frames: 0, maxDiffPercent: "unverified" },
   };
 }

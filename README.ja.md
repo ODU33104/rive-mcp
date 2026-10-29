@@ -100,7 +100,7 @@ claude mcp add --scope user rive -- node /absolute/path/to/rive-mcp/dist/index.j
 | `riv_slice_image` | キャラクターPNGをポリゴン領域でパーツ切り出し（カットアウトリグ用）。各パーツPNG + 消去済みbase + 配置情報を出力 |
 | `riv_edit` | 既存.rivの**無損失編集**: 任意プロパティ変更・名前付きテキスト差し替え・オブジェクト削除（サブツリー+参照自動再マップ）・**キーフレーム追加/置換/削除**。roundtripはvehicles.rivでピクセル完全一致を検証済み |
 | `riv_optimize` | **見た目を変えずに.rivを軽量化**: 過去の編集で残った未参照interpolator/event/空トラックの除去、全区間linearのトラックに限定した冗長キーフレーム間引き（Douglas-Peucker、easing安全 — cubic/holdの区間には一切触れない）。`dryRun` で書き込み前に削減プランだけ確認可能 |
-| `riv_repair` | **lint の指摘を 1 件ずつ安全に修復**: 候補ごとに元と**ピクセル比較**し、見た目が変わるものは理由を付けてスキップ。対象は未使用 input・無効な easing・壊れた参照・未使用 interpolator。`dryRun` は書き込まず計画だけ返す。`out` 指定先へ書き出し、省略時は元ファイルを上書き |
+| `riv_repair` | **lint の指摘を 1 件ずつ安全に修復**: 候補ごとに元と**ピクセル比較**し、見た目が変わるものは理由を付けてスキップ。対象は未使用 input・無効な easing・壊れた参照・未使用 interpolator。`dryRun` は書き込まず計画だけ返す。`out` 指定先へ書き出し、省略時は元ファイルの隣に `<名前>.repaired.riv` を作る（元ファイルは上書きしない） |
 | `riv_export_lottie` | **.riv アニメーションを Lottie JSON に書き出し**: 変換できない要素は `lost`、近似した要素は `approximated` として報告。画素比較は未確認と返す |
 | `riv_extract_assets` | .riv 埋め込み画像/フォントの抽出 |
 | `riv_visual_diff` | 2つの .riv のピクセル差分（一致率 + 相違箇所を赤表示した差分画像） |

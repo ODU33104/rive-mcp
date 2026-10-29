@@ -1848,7 +1848,7 @@ try {
   } else {
     check("riv_export_lottie explicitly marks pixel comparison unverified",
       lottieExpReport?.verify?.frames === 0 &&
-      lottieExpReport?.verify?.maxDiffPercent === "未確認");
+      lottieExpReport?.verify?.maxDiffPercent === "unverified");
   }
 
   // エラー処理: 存在しないアニメ名 → 候補列挙

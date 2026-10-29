@@ -561,7 +561,7 @@ server.registerTool(
     description: "Repair lint findings one change at a time. Compare pixels for each candidate, skip visual changes with reasons, and validate the final result before writing. dryRun never writes.",
     inputSchema: {
       path: z.string().describe("Source .riv path"),
-      out: z.string().optional().describe("Output path (default: overwrite source)"),
+      out: z.string().optional().describe("Output path (default: <name>.repaired.riv next to the source; the source is never overwritten)"),
       dryRun: z.boolean().optional().describe("Inspect and validate without writing (default false)"),
       fixes: z.array(z.enum(["unused-input", "dead-easing", "broken-reference", "unused-interpolator"])).optional()
         .describe("Selected fix types (default all supported types)"),
@@ -700,7 +700,7 @@ server.registerTool(
       bytes: { before: original.length, after: current.length },
       visual: finalVisual,
     };
-    if (!dryRun) writeFileSync(resolve(out ?? abs), current);
+    if (!dryRun) writeFileSync(resolve(out ?? join(dirname(abs), `${basename(abs, extname(abs))}.repaired.riv`)), current);
     return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
   })
 );
