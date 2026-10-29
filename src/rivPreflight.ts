@@ -130,11 +130,18 @@ export async function preflightRiv(
         });
         continue;
       }
+      if (entry.minimumVersion === null) {
+        uncertain = true;
+        issues.push({
+          feature: item.feature,
+          reason: entry.note ?? "The official table does not specify a minimum runtime version.",
+          source: entry.source,
+        });
+        continue;
+      }
       if (entry.support === "conditional") warning = true;
       else uncertain = true;
-      const threshold = entry.minimumVersion === null
-        ? "a version not specified by the official table"
-        : `version ${entry.minimumVersion}`;
+      const threshold = `version ${entry.minimumVersion}`;
       issues.push({
         feature: item.feature,
         reason: entry.support === "conditional"
@@ -151,8 +158,9 @@ export async function preflightRiv(
       });
     }
     const verdict = unsupported ? "unsupported"
-      : warning || (strict && uncertain) ? "warn"
-      : uncertain ? "unknown" : "ok";
+      : strict && uncertain ? "warn"
+      : uncertain ? "unknown"
+      : warning ? "warn" : "ok";
     return { target, verdict, issues };
   });
   const summary = { ok: 0, warn: 0, unsupported: 0, unknown: 0 };

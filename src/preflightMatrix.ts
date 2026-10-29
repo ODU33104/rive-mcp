@@ -7,8 +7,7 @@ export const PREFLIGHT_TARGETS = [
 export type PreflightTarget = (typeof PREFLIGHT_TARGETS)[number];
 export type PreflightFeature =
   | "Data Binding" | "Layout" | "Vector Feathering" | "Scripting"
-  | "Audio" | "Text" | "Text Follow Path" | "N-Slicing"
-  | "Joystick" | "Mesh Deformation";
+  | "Audio" | "Text" | "Text Follow Path" | "N-Slicing";
 
 export interface PreflightMatrixEntry {
   feature: PreflightFeature;
@@ -83,20 +82,6 @@ const releases: Array<{
       flutter: "0.14.0-dev.1", unity: "0.2.2-canary.22+", "react-native": "0.1.4+",
     },
   },
-  {
-    feature: "Joystick",
-    versions: {
-      web: "2.11.0+", ios: "4.0.1+", android: "5.0.0+",
-      flutter: "0.11.1+", unity: null, "react-native": "0.1.4+",
-    },
-  },
-  {
-    feature: "Mesh Deformation",
-    versions: {
-      web: "2.11.0+", ios: "1.0.18+", android: "2.0.24+",
-      flutter: "0.8.4+", unity: null, "react-native": "0.1.4+",
-    },
-  },
 ];
 
 export const PREFLIGHT_MATRIX: ReadonlyArray<PreflightMatrixEntry> =
@@ -108,6 +93,9 @@ export const PREFLIGHT_MATRIX: ReadonlyArray<PreflightMatrixEntry> =
       support: feature === "Vector Feathering" && target === "web"
         ? "conditional" as const : "supported" as const,
       source: SOURCE,
+      ...(versions[target] === null
+        ? { note: "The official table lists Supported but does not specify a minimum runtime version." }
+        : {}),
       ...(feature === "Vector Feathering" && target === "web"
         ? { note: "Requires the WebGL2 Rive Renderer; Canvas2D does not support feathering." }
         : {}),

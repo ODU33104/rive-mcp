@@ -596,6 +596,21 @@ try {
     textOf(imgCreated).slice(0, 250)
   );
 
+  const preflightMeshCall = await callTool("riv_preflight", {
+    path: join(root, "samples", "e2e-image.riv"),
+  });
+  const preflightMesh = preflightMeshCall.isError ? null : JSON.parse(textOf(preflightMeshCall));
+  check("riv_preflight reports unknown for mesh without compatibility evidence",
+    !preflightMeshCall.isError &&
+    preflightMesh?.features.some((entry) => entry.feature === "Mesh Deformation" && entry.count > 0) &&
+    !preflightMatrixRows.some((entry) => entry.feature === "Mesh Deformation") &&
+    preflightMesh.runtimeCheck.officialWasm === "loaded" &&
+    preflightMesh.targets.length === 6 &&
+    preflightMesh.targets.every((entry) =>
+      entry.verdict === "unknown" &&
+      entry.issues.some((issue) => issue.feature === "Mesh Deformation" && issue.source === "unverified")),
+    textOf(preflightMeshCall).slice(0, 320));
+
   // 回帰: Mesh.triangleIndexBytes は varuint 列（uint16 固定長だと 128 頂点以上で崩れる）。14x14 = 225 頂点で index>=128 を含める
   {
     const cols = 14, rows = 14;
