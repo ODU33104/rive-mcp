@@ -1053,7 +1053,7 @@ Character animation (images/groups/mesh):
     {"target":"chara#v0_3","property":"x","keyframes":[{"frame":0,"value":0},{"frame":120,"value":40,"easing":"ease-in-out"},{"frame":240,"value":0,"easing":"ease-in-out"}]}
   ]}]
 }
-- layouts[]: fixed Flex nodes {id,parent?,width,height,direction?:"row"|"column",justifyContent?:"start"|"center"|"end"|"space-between",alignItems?:"start"|"center"|"end",gap?,padding?,wrap?,fillColor?:"#RRGGBB"}. parent must be an earlier layout id. No Hug/Fill.
+- layouts[]: Flex nodes {id,parent?,width?,height?,widthMode?,heightMode?,widthWeight?,heightWeight?,direction?,justifyContent?,alignItems?,gap?,padding?,margin?,wrap?,fillColor?}. Modes: fixed (default), percent (width/height is 0-100 percentage), auto (hug contents), fill (remaining space; optional positive weight per axis). gap: number or {horizontal?,vertical?}; padding/margin: number or {left?,right?,top?,bottom?}. Parent must be an earlier layout id. Shapes themselves do not become Flex items.
 - images[].pngPath: PNG file embedded into the .riv. mesh enables vertex deformation; vertices addressed as "<imageId>#v<row>_<col>" (row 0 = top), coordinates in the image's natural pixel space centered at origin. Mesh vertex tracks support x/y only.
 - texts[].followPath {"path":"<shapes[].id>","start":0,"end":1,"offset":0,"strength":1,"orient":true} bends the text along that shape's path (text on path; start/end/offset are 0-1 fractions of the path length). Needs fonts[] like any text.
 - groups are Nodes usable as parents (parent) of shapes/images for rig hierarchies and pivots; animatable like shapes.
@@ -1072,7 +1072,35 @@ Shape z-order: later in array = on top; images render above shapes. properties f
 Audio: "audio":[{"id":"beep","path":"./beep.wav"}] embeds a WAV/MP3/FLAC file (path resolved relative to cwd, or pass bytes directly). "events":[{"id":"beepEvent","type":"audio","audio":"beep"}] declares an AudioEvent bound to that clip. Trigger it either from a state machine state ("states":[{"name":"s1","fireEvent":"beepEvent"}]) or at specific frames inside a timeline via animations[].events: {"name":"anim1","duration":60,"tracks":[...],"events":[{"event":"beepEvent","frame":0},{"event":"beepEvent","frame":30}]}. NOTE: this server's preview (Canvas2D) does not play audio, so PNG/GIF/video previews and riv_studio stay silent. The AudioAsset/AudioEvent are still written correctly and play in a GPU-backed Rive runtime (WebGL/Skia).`,
     inputSchema: {
       outPath: z.string().describe("Output .riv path"),
-      scene: z.record(z.unknown()).describe("Scene spec (see tool description for schema)"),
+      scene: z.object({
+        layouts: z.array(z.object({
+          id: z.string(),
+          parent: z.string().optional(),
+          width: z.number().nonnegative().optional(),
+          height: z.number().nonnegative().optional(),
+          widthMode: z.enum(["fixed", "percent", "auto", "fill"]).optional(),
+          heightMode: z.enum(["fixed", "percent", "auto", "fill"]).optional(),
+          widthWeight: z.number().positive().optional(),
+          heightWeight: z.number().positive().optional(),
+          direction: z.enum(["row", "column"]).optional(),
+          justifyContent: z.enum(["start", "center", "end", "space-between"]).optional(),
+          alignItems: z.enum(["start", "center", "end"]).optional(),
+          wrap: z.boolean().optional(),
+          gap: z.union([z.number().nonnegative(), z.object({
+            horizontal: z.number().nonnegative().optional(),
+            vertical: z.number().nonnegative().optional(),
+          })]).optional(),
+          padding: z.union([z.number().nonnegative(), z.object({
+            left: z.number().nonnegative().optional(), right: z.number().nonnegative().optional(),
+            top: z.number().nonnegative().optional(), bottom: z.number().nonnegative().optional(),
+          })]).optional(),
+          margin: z.union([z.number().nonnegative(), z.object({
+            left: z.number().nonnegative().optional(), right: z.number().nonnegative().optional(),
+            top: z.number().nonnegative().optional(), bottom: z.number().nonnegative().optional(),
+          })]).optional(),
+          fillColor: z.string().optional(),
+        }).passthrough()).optional(),
+      }).passthrough().describe("Scene spec with optional Flex layouts (see tool description)"),
       previewTime: z.number().optional().describe("Seconds into first animation for the preview frame (default 0.4)"),
     },
   },

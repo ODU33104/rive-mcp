@@ -157,14 +157,19 @@ export interface GradientSpec {
 export interface LayoutSpec {
   id: string;
   parent?: string; // 先に定義した layouts[].id（省略時は Artboard）
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
+  widthMode?: "fixed" | "percent" | "auto" | "fill";
+  heightMode?: "fixed" | "percent" | "auto" | "fill";
+  widthWeight?: number;
+  heightWeight?: number;
   direction?: "row" | "column";
   justifyContent?: "start" | "center" | "end" | "space-between";
   alignItems?: "start" | "center" | "end";
   wrap?: boolean;
-  gap?: number; // px。横・縦両方の gap に設定
-  padding?: number; // px。四辺共通
+  gap?: number | { horizontal?: number; vertical?: number };
+  padding?: number | { left?: number; right?: number; top?: number; bottom?: number };
+  margin?: number | { left?: number; right?: number; top?: number; bottom?: number };
   fillColor?: string;
 }
 export interface GroupSpec {
@@ -999,9 +1004,26 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
         if (!l.id || layoutIds.has(l.id) || occupied.has(l.id)) {
           throw new Error(`Layout id '${l.id}' is empty or duplicated`);
         }
-        for (const [key, value] of Object.entries({ width: l.width, height: l.height, gap: l.gap, padding: l.padding })) {
-          if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
-            throw new Error(`Layout '${l.id}' ${key} must be a non-negative finite number`);
+        for (const axis of ["width", "height"] as const) {
+          const mode = l[axis === "width" ? "widthMode" : "heightMode"] ?? "fixed";
+          const size = l[axis];
+          if (size === undefined && (mode === "fixed" || mode === "percent")) {
+            throw new Error(`Layout '${l.id}' ${axis} is required for ${mode} sizing`);
+          }
+          if (size !== undefined && (!Number.isFinite(size) || size < 0)) {
+            throw new Error(`Layout '${l.id}' ${axis} must be a non-negative finite number`);
+          }
+          const weight = l[axis === "width" ? "widthWeight" : "heightWeight"];
+          if (weight !== undefined && (!Number.isFinite(weight) || weight <= 0 || mode !== "fill")) {
+            throw new Error(`Layout '${l.id}' ${axis}Weight requires fill sizing and a positive finite number`);
+          }
+        }
+        for (const [key, value] of Object.entries({ gap: l.gap, padding: l.padding, margin: l.margin })) {
+          const entries = typeof value === "number" ? [[key, value]] : Object.entries(value ?? {});
+          for (const [edge, amount] of entries) {
+            if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
+              throw new Error(`Layout '${l.id}' ${key}.${edge} must be a non-negative finite number`);
+            }
           }
         }
         const parentId = l.parent === undefined ? 0 : layoutIds.get(l.parent);
@@ -1016,10 +1038,30 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
           : alignIndex[main] * 3 + cross;
         const component: WriterObject = {
           type: "LayoutComponent",
-          props: { name: l.id, parentId, width: l.width, height: l.height },
+          props: {
+            name: l.id, parentId, width: l.width ?? 0, height: l.height ?? 0,
+            ...(l.widthWeight !== undefined ? { fractionalWidth: l.widthWeight } : {}),
+            ...(l.heightWeight !== undefined ? { fractionalHeight: l.heightWeight } : {}),
+          },
         };
         const id = push(component);
         layoutIds.set(l.id, id);
+        const sizeMode = (mode: "fixed" | "percent" | "auto" | "fill") =>
+          mode === "percent" ? { scale: 0, units: 2 } :
+          mode === "fill" ? { scale: 1, units: 3 } :
+          { scale: 2, units: 3 };
+        const widthMode = l.widthMode && l.widthMode !== "fixed" ? sizeMode(l.widthMode) : null;
+        const heightMode = l.heightMode && l.heightMode !== "fixed" ? sizeMode(l.heightMode) : null;
+        const edgeProps = (
+          prefix: "margin" | "padding",
+          value?: number | { left?: number; right?: number; top?: number; bottom?: number },
+        ): Record<string, number> => {
+          if (value === undefined) return {};
+          const edges = typeof value === "number"
+            ? { left: value, right: value, top: value, bottom: value } : value;
+          return Object.fromEntries(Object.entries(edges).map(([side, amount]) =>
+            [prefix + side[0].toUpperCase() + side.slice(1), amount as number]));
+        };
         component.props.styleId = push({
           type: "LayoutComponentStyle",
           props: {
@@ -1027,11 +1069,15 @@ export function buildScene(spec: SceneSpec): { objects: WriterObject[]; warnings
             flexDirectionValue: dir === "row" ? 2 : 0,
             layoutAlignmentType: alignment,
             ...(l.wrap ? { flexWrapValue: 1 } : {}),
-            ...(l.gap !== undefined ? { gapHorizontal: l.gap, gapVertical: l.gap } : {}),
-            ...(l.padding !== undefined ? {
-              paddingLeft: l.padding, paddingRight: l.padding,
-              paddingTop: l.padding, paddingBottom: l.padding,
-            } : {}),
+            ...(typeof l.gap === "number" ? { gapHorizontal: l.gap, gapVertical: l.gap } :
+              l.gap ? {
+                ...(l.gap.horizontal !== undefined ? { gapHorizontal: l.gap.horizontal } : {}),
+                ...(l.gap.vertical !== undefined ? { gapVertical: l.gap.vertical } : {}),
+              } : {}),
+            ...edgeProps("padding", l.padding),
+            ...edgeProps("margin", l.margin),
+            ...(widthMode ? { layoutWidthScaleType: widthMode.scale, widthUnitsValue: widthMode.units } : {}),
+            ...(heightMode ? { layoutHeightScaleType: heightMode.scale, heightUnitsValue: heightMode.units } : {}),
           },
         });
         if (l.fillColor !== undefined) {

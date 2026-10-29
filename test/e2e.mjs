@@ -460,6 +460,190 @@ try {
       coords.map(([x, y]) => pixel(x, y).join(",")).join(" / "));
   }
 
+  // Additional Flex cases use the official runtime and read the rendered pixels.
+  {
+    const t3Canvas = { width: 160, height: 80 };
+    const t3Colors = {
+      red: [255, 0, 0, 255],
+      green: [0, 255, 0, 255],
+      blue: [0, 0, 255, 255],
+      gray: [128, 128, 128, 255],
+    };
+    const t3Box = (pixel, color) => {
+      let left = t3Canvas.width, top = t3Canvas.height, right = -1, bottom = -1;
+      const expected = t3Colors[color];
+      for (let y = 0; y < t3Canvas.height; y++) {
+        for (let x = 0; x < t3Canvas.width; x++) {
+          const rgba = pixel(x, y);
+          if (rgba.every((channel, i) => channel === expected[i])) {
+            left = Math.min(left, x);
+            top = Math.min(top, y);
+            right = Math.max(right, x);
+            bottom = Math.max(bottom, y);
+          }
+        }
+      }
+      return right < 0 ? null : [left, top, right - left + 1, bottom - top + 1];
+    };
+    const t3Near = (actual, expected, tolerance = 1) =>
+      !!actual && expected.every((n, i) => Math.abs(actual[i] - n) <= tolerance);
+    const t3Create = async (tag, layouts) => {
+      const outPath = join(root, "test", "tmp", "flex-t3-" + tag + ".riv");
+      const pngPath = join(root, "test", "tmp", "flex-t3-" + tag + ".png");
+      const created = await callTool("riv_create", {
+        outPath, scene: { artboard: { name: "T3", ...t3Canvas }, layouts },
+      });
+      check("T3 " + tag + ": official runtime accepts file",
+        !created.isError && textOf(created).includes("validated"), textOf(created).slice(0, 200));
+      if (created.isError) return null;
+      const inspected = await callTool("riv_inspect", { path: outPath });
+      check("T3 " + tag + ": runtime inspect loads artboard",
+        !inspected.isError && JSON.parse(textOf(inspected)).artboardCount === 1);
+      const lint = await callTool("riv_lint", { path: outPath });
+      const counts = !lint.isError ? JSON.parse(textOf(lint)) : null;
+      check("T3 " + tag + ": no lint errors or warnings",
+        counts?.errorCount === 0 && counts?.warningCount === 0, textOf(lint).slice(0, 200));
+      const frame = await callTool("riv_render_frame", {
+        path: outPath, outPath: pngPath, ...t3Canvas,
+      });
+      check("T3 " + tag + ": runtime renders pixels", !frame.isError, textOf(frame).slice(0, 200));
+      if (frame.isError) return null;
+      const pixel = pngPixelReader(pngPath);
+      return { outPath, box: (color) => t3Box(pixel, color) };
+    };
+    const t3Child = (id, color, extra = {}) =>
+      ({ id, width: 20, height: 20, fillColor: "#" + color, parent: "root", ...extra });
+    const fixed = await t3Create("fixed", [
+      { id: "root", width: 160, height: 80, direction: "row", gap: 10 },
+      t3Child("red", "ff0000"), t3Child("green", "00ff00"), t3Child("blue", "0000ff"),
+    ]);
+    if (fixed) {
+      check("T3 fixed row: three child top-left coordinates from pixels",
+        t3Near(fixed.box("red"), [0, 0, 20, 20], 0) &&
+        t3Near(fixed.box("green"), [30, 0, 20, 20], 0) &&
+        t3Near(fixed.box("blue"), [60, 0, 20, 20], 0),
+        JSON.stringify(["red", "green", "blue"].map((c) => fixed.box(c))));
+    }
+
+    const t3SpacingScene = (padding, gap, margin) => [
+      { id: "root", width: 160, height: 80, direction: "row", padding, gap },
+      t3Child("red", "ff0000", margin === undefined ? {} : { margin }),
+      t3Child("green", "00ff00"),
+    ];
+    const baseline = await t3Create("spacing-base", t3SpacingScene(10, 5));
+    const padded = await t3Create("spacing-padding", t3SpacingScene(14, 5));
+    const gapped = await t3Create("spacing-gap", t3SpacingScene(10, { horizontal: 12, vertical: 0 }));
+    const margined = await t3Create("spacing-margin", t3SpacingScene(10, 5, { left: 6, top: 3 }));
+    if (baseline && padded && gapped && margined) {
+      const bR = baseline.box("red"), bG = baseline.box("green");
+      const pR = padded.box("red"), pG = padded.box("green");
+      const gR = gapped.box("red"), gG = gapped.box("green");
+      const mR = margined.box("red"), mG = margined.box("green");
+      check("T3 padding: both children shift four pixels",
+        !!bR && !!bG && !!pR && !!pG &&
+        pR[0] - bR[0] === 4 && pG[0] - bG[0] === 4 &&
+        pR[1] - bR[1] === 4 && pG[1] - bG[1] === 4);
+      check("T3 gap: second child shifts seven pixels",
+        !!bR && !!bG && !!gR && !!gG &&
+        gR[0] === bR[0] && gG[0] - bG[0] === 7);
+      check("T3 margin: first child and following sibling move by six pixels",
+        !!bR && !!bG && !!mR && !!mG &&
+        mR[0] - bR[0] === 6 && mG[0] - bG[0] === 6 &&
+        mR[1] - bR[1] === 3);
+    }
+
+    const percent = await t3Create("percent", [
+      { id: "root", width: 160, height: 80, direction: "row" },
+      t3Child("red", "ff0000", { width: 50, widthMode: "percent" }),
+    ]);
+    if (percent) {
+      check("T3 percent: child width is half parent within one pixel",
+        t3Near(percent.box("red"), [0, 0, 80, 20]));
+      const dump = JSON.parse(textOf(await callTool("riv_dump", { path: percent.outPath, full: true })));
+      check("T3 percent: registered width unit and scale type serialized",
+        dump.objects.some((o) => o.typeName === "LayoutComponentStyle" &&
+          o.properties.widthUnitsValue === 2 && o.properties.layoutWidthScaleType === 0));
+    }
+    const filled = await t3Create("fill", [
+      { id: "root", width: 160, height: 80, direction: "row" },
+      t3Child("blue", "0000ff", { width: 40 }),
+      t3Child("red", "ff0000", { widthMode: "fill", width: 0, widthWeight: 1 }),
+      t3Child("green", "00ff00", { widthMode: "fill", width: 0, widthWeight: 2 }),
+    ]);
+    if (filled) {
+      const blue = filled.box("blue"), red = filled.box("red"), green = filled.box("green");
+      check("T3 fill: remaining width divides in 1-to-2 ratio",
+        t3Near(blue, [0, 0, 40, 20]) &&
+        t3Near(red, [40, 0, 40, 20]) &&
+        t3Near(green, [80, 0, 80, 20]), JSON.stringify({ blue, red, green }));
+      const dump = JSON.parse(textOf(await callTool("riv_dump", { path: filled.outPath, full: true })));
+      check("T3 fill: fractionalWidth weight and fill mode serialized",
+        dump.objects.some((o) => o.typeName === "LayoutComponent" &&
+          o.properties.name === "green" && o.properties.fractionalWidth === 2) &&
+        dump.objects.filter((o) => o.typeName === "LayoutComponentStyle" &&
+          o.properties.layoutWidthScaleType === 1).length === 2);
+    }
+    const hugged = await t3Create("hug", [
+      { id: "root", widthMode: "auto", height: 40, direction: "row", gap: 10,
+        padding: 5, fillColor: "#808080" },
+      t3Child("red", "ff0000", { width: 30 }),
+      t3Child("green", "00ff00", { width: 20 }),
+    ]);
+    if (hugged) {
+      check("T3 auto hug: parent width equals child content plus gap and padding",
+        t3Near(hugged.box("gray"), [0, 0, 70, 40]) &&
+        t3Near(hugged.box("red"), [5, 5, 30, 20]) &&
+        t3Near(hugged.box("green"), [45, 5, 20, 20]));
+    }
+
+    const justifyPositions = {
+      start: [0, 20], center: [60, 80], end: [120, 140], "space-between": [0, 140],
+    };
+    for (const [justifyContent, xPositions] of Object.entries(justifyPositions)) {
+      const frame = await t3Create("justify-" + justifyContent, [
+        { id: "root", width: 160, height: 80, direction: "row", justifyContent },
+        t3Child("red", "ff0000"), t3Child("green", "00ff00"),
+      ]);
+      if (frame) {
+        check("T3 justify " + justifyContent + ": measured main-axis positions",
+          t3Near(frame.box("red"), [xPositions[0], 0, 20, 20]) &&
+          t3Near(frame.box("green"), [xPositions[1], 0, 20, 20]));
+      }
+    }
+    for (const [alignItems, y] of Object.entries({ start: 0, center: 30, end: 60 })) {
+      const frame = await t3Create("align-" + alignItems, [
+        { id: "root", width: 160, height: 80, direction: "row", alignItems },
+        t3Child("red", "ff0000"),
+      ]);
+      if (frame) {
+        check("T3 align " + alignItems + ": measured cross-axis position",
+          t3Near(frame.box("red"), [0, y, 20, 20]));
+      }
+    }
+
+    const nested = await t3Create("nested", [
+      { id: "root", width: 160, height: 80, direction: "row", gap: 10 },
+      { id: "inner", parent: "root", width: 50, height: 60, direction: "column", gap: 5 },
+      { id: "red", parent: "inner", width: 20, height: 15, fillColor: "#ff0000" },
+      { id: "green", parent: "inner", width: 20, height: 15, fillColor: "#00ff00" },
+      t3Child("blue", "0000ff"),
+    ]);
+    if (nested) {
+      check("T3 nested layouts: inner column and outer row positions",
+        t3Near(nested.box("red"), [0, 0, 20, 15]) &&
+        t3Near(nested.box("green"), [0, 20, 20, 15]) &&
+        t3Near(nested.box("blue"), [60, 0, 20, 20]));
+    }
+    const v08Scene = flexScene("row");
+    const v08Bytes = Buffer.from(createRiv(v08Scene).bytes);
+    const explicitFixed = Buffer.from(createRiv({
+      ...v08Scene,
+      layouts: v08Scene.layouts.map((item) => ({ ...item, widthMode: "fixed", heightMode: "fixed" })),
+    }).bytes);
+    check("T3 legacy fixed layout: explicit default modes are byte-identical",
+      v08Bytes.equals(explicitFixed));
+  }
+
   // riv_create: 画像埋め込み + グループ + メッシュ頂点アニメ
   const tinyPng = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",

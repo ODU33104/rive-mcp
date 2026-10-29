@@ -30,7 +30,14 @@ ToC: varuint propertyKey... 0終端
 - `gap` は horizontal(498)/vertical(499) に同じ数値を設定。`padding` は四辺(512–515)に同じ数値を設定する。
 - `fillColor` は `Fill(parentId=LayoutComponent)` → `SolidColor(parentId=Fill)` で背景色を付ける。
 - Layout 指定なし、空配列では追加オブジェクトも Artboard.styleId も出さない。既存経路はそのまま。
-- 未対応: Hug/Fill、percent/auto サイズ、独立した `alignItemsValue`/`justifyContentValue` の直接指定、grid/stack、7.3 の未登録型 1058/1059/1066。Shape を Layout の子に置けるが、Shape 自身は Flex item にはならない。
+- `widthMode`/`heightMode` は `fixed`（省略時、既存バイト列維持）、`percent`、`auto`（hug）、`fill`。各軸で独立して指定できる。fixed/percent は数値 `width`/`height` が必須。percent 値は 0–100 を 0–100% として指定する（50 = 親寸法の 50%）。
+- 登録キーは `layoutWidthScaleType(655)`/`layoutHeightScaleType(656)` と `widthUnitsValue(607)`/`heightUnitsValue(608)`。Rive Runtime の `include/rive/layout/layout_enums.hpp` で `LayoutScaleType fixed=0, fill=1, hug=2`。Yoga `YGUnit point=1, percent=2, auto=3`。percent は scale=fixed(0), units=percent(2)、auto は scale=hug(2), units=auto(3)、fill は scale=fill(1), units=auto(3) として記録する。
+- fill の分配比は `LayoutComponent.fractionalWidth(706)`/`fractionalHeight(707)` で指定する（`widthWeight`/`heightWeight`）。公式 Runtime の既定値は各 1、正の値のみ受け付ける。親の主軸と同じ軸の fill では余剰領域を比率で分割する。
+- `margin` は `marginLeft(508)`, `marginRight(509)`, `marginTop(510)`, `marginBottom(511)`、`padding` は 512–515。いずれも数値（四辺共通）または `{left?,right?,top?,bottom?}`。単位は point=1（margin は 613–616、padding は 617–620）。
+- `gap` は数値（両方向同一）または `{horizontal?,vertical?}`。キー 498/499、単位キー 625/626 は point=1。従来の数値 `gap`/`padding`、整列 `justifyContent`/`alignItems`、定義順の入れ子 `parent` は変えない。
+- `riv_dump(full:true)` では `LayoutComponent` と `LayoutComponentStyle` のキー値・親子参照が確認可能。`riv_inspect` は公式 Runtime の artboard メタデータを返し、Layout の個別配置一覧は返さない。
+- `test/e2e.mjs` に公式 Runtime の PNG を RGBA 画素から走査するテストを追加。固定 row、margin/padding/gap の座標差、percent 幅、fill 分配、auto 幅、主軸/交差軸整列、入れ子、リントと固定モードのバイト一致を検査する。これらの合否はテスト実行結果で判断する。
+- 未対応: `alignItemsValue`/`justifyContentValue` の直接指定、grid/stack、7.3 の未登録型 1058/1059/1066。Shape を Layout の子に置けるが、Shape 自身は Flex item にはならない。
 
 ## 参照 semantics（vehicles.riv で実証）
 
