@@ -1,4 +1,4 @@
-import { loadDefs, readRiv, writeRawRiv, type RivObject } from "./rivBinary.js";
+import { loadDefs, readRiv, writeRawRiv, type DefType, type RivObject } from "./rivBinary.js";
 import { removeAtPositions } from "./rivEdit.js";
 import { lintRiv, type LintFinding } from "./rivLint.js";
 
@@ -54,7 +54,7 @@ function propertyKey(typeName: string, name: string): number {
   const byFile = new Map(Object.entries(defs.types).map(([n, t]) => [t.file.split("/").pop(), n]));
   let current: string | undefined = typeName;
   while (current) {
-    const definition = defs.types[current];
+    const definition: DefType | undefined = defs.types[current];
     if (!definition) break;
     const key = definition.properties[name]?.key;
     if (typeof key === "number") return key;
