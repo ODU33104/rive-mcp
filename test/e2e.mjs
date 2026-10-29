@@ -736,11 +736,11 @@ try {
     !!preflightInvalidCall.isError && preflightInvalidJson?.error.includes("Unknown target"));
 
   const preflightStrictCall = await callTool("riv_preflight", {
-    path: preflightShapePath, targets: ["ios"], strict: true,
+    path: RIV, targets: ["ios"], strict: true,
   });
   const preflightStrict = preflightStrictCall.isError ? null : JSON.parse(textOf(preflightStrictCall));
   check("riv_preflight strict counts unknown support as a warning",
-    preflightShape?.targets.find((entry) => entry.target === "ios")?.verdict === "unknown" &&
+    preflightVehicles?.targets.find((entry) => entry.target === "ios")?.verdict === "unknown" &&
     preflightStrict?.targets[0]?.verdict === "warn" && preflightStrict?.summary.warn === 1);
   const { PREFLIGHT_MATRIX: preflightMatrixRows } =
     await import(pathToFileURL(join(root, "dist", "preflightMatrix.js")).href);
