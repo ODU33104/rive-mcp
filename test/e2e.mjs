@@ -777,10 +777,12 @@ try {
       !preflightVersionHigh?.targets[0]?.issues.some((issue) => issue.feature === "Data Binding") &&
       preflightVersionHigh?.features.some((entry) => entry.feature === "Data Binding"),
       textOf(preflightVersionHighCall).slice(0, 350));
-    check("riv_preflight unknown matrix entries stay unknown with a version",
-      preflightVersionHigh?.targets[0]?.verdict === "unknown" &&
-      preflightVersionHigh.targets[0].issues.some((issue) =>
-        issue.feature === "Core vector graphics" && issue.source === "unverified"));
+    check("riv_preflight core vector graphics do not create unknown issues",
+      preflightVersionHigh?.features.some((entry) => entry.feature === "Core vector graphics") &&
+      !preflightVersionHigh?.targets[0]?.issues.some((issue) =>
+        issue.feature === "Core vector graphics") &&
+      preflightVersionHigh?.targets[0]?.baseline ===
+        "core vector graphics assumed supported by every runtime; not covered by the evidence table");
 
     const preflightVersionLowCall = await callTool("riv_preflight", {
       path: preflightBindingPath, targets: ["web"], versions: { web: "2.0.0" },
@@ -841,6 +843,86 @@ try {
     check("riv_preflight version outside selected targets returns JSON error",
       !!preflightVersionOutsideCall.isError &&
       preflightVersionOutsideJson?.error.includes("not selected"));
+  }
+
+
+  // The compact fixture contains Core vector graphics and documented Data Binding only.
+  {
+    const preflightCoveredR2Path = join(root, "test", "tmp", "preflight-covered-r2.riv");
+    const preflightCoveredR2Created = await callTool("riv_create", {
+      outPath: preflightCoveredR2Path,
+      scene: {
+        artboard: { name: "PreflightCovered", width: 80, height: 80 },
+        viewModels: [{ name: "CoveredModel", properties: [{ name: "count", type: "number" }] }],
+        viewModelInstances: [{ name: "CoveredInstance", viewModel: "CoveredModel", values: { count: 3 } }],
+        viewModel: "CoveredModel",
+        viewModelInstance: "CoveredInstance",
+        shapes: [{ id: "square", type: "rect", x: 40, y: 40,
+          width: 24, height: 24, fill: { color: "#0066ff" } }],
+      },
+    });
+    check("riv_preflight covered fixture validates in official runtime",
+      !preflightCoveredR2Created.isError && textOf(preflightCoveredR2Created).includes("validated"),
+      textOf(preflightCoveredR2Created).slice(0, 250));
+
+    const preflightCoveredR2Targets = ["web", "ios", "android", "flutter", "unity", "react-native"];
+    const preflightCoveredR2Versions = Object.fromEntries(
+      preflightCoveredR2Targets.map((target) => [target, "99.0.0"])
+    );
+    const preflightCoveredR2Call = await callTool("riv_preflight", {
+      path: preflightCoveredR2Path, versions: preflightCoveredR2Versions,
+    });
+    const preflightCoveredR2 = preflightCoveredR2Call.isError ? null :
+      JSON.parse(textOf(preflightCoveredR2Call));
+    check("riv_preflight covered fixture has no features outside the evidence table and Core",
+      !!preflightCoveredR2 &&
+      preflightCoveredR2.features.some((entry) => entry.feature === "Data Binding") &&
+      preflightCoveredR2.features.some((entry) => entry.feature === "Core vector graphics") &&
+      preflightCoveredR2.features.every((entry) =>
+        entry.feature === "Core vector graphics" ||
+        preflightMatrixRows.some((row) => row.feature === entry.feature)),
+      textOf(preflightCoveredR2Call).slice(0, 450));
+    check("riv_preflight real covered file reaches ok on all six target versions",
+      !!preflightCoveredR2 &&
+      preflightCoveredR2.runtimeCheck.officialWasm === "loaded" &&
+      preflightCoveredR2.targets.length === 6 &&
+      preflightCoveredR2.targets.every((entry) =>
+        preflightCoveredR2Targets.includes(entry.target) &&
+        entry.version === "99.0.0" && entry.verdict === "ok" &&
+        entry.issues.length === 0) &&
+      preflightCoveredR2.summary.ok === 6 &&
+      preflightCoveredR2.summary.warn === 0 &&
+      preflightCoveredR2.summary.unsupported === 0 &&
+      preflightCoveredR2.summary.unknown === 0,
+      textOf(preflightCoveredR2Call).slice(0, 550));
+    check("riv_preflight Core feature has a baseline string on every target",
+      preflightCoveredR2?.targets.length === 6 &&
+      preflightCoveredR2.targets.every((entry) =>
+        entry.baseline === "core vector graphics assumed supported by every runtime; not covered by the evidence table"),
+      textOf(preflightCoveredR2Call).slice(0, 350));
+
+    const preflightCoreOnlyR2Call = await callTool("riv_preflight", {
+      path: preflightShapePath,
+      versions: preflightCoveredR2Versions,
+    });
+    const preflightCoreOnlyR2 = preflightCoreOnlyR2Call.isError ? null :
+      JSON.parse(textOf(preflightCoreOnlyR2Call));
+    check("riv_preflight Core-only file is ok with runtime versions",
+      !!preflightCoreOnlyR2 &&
+      preflightCoreOnlyR2.features.every((entry) => entry.feature === "Core vector graphics") &&
+      preflightCoreOnlyR2.targets.length === 6 &&
+      preflightCoreOnlyR2.targets.every((entry) =>
+        entry.verdict === "ok" && entry.issues.length === 0 &&
+        entry.baseline === "core vector graphics assumed supported by every runtime; not covered by the evidence table"),
+      textOf(preflightCoreOnlyR2Call).slice(0, 350));
+
+    const { coreBaseline: preflightCoreBaselineR2 } =
+      await import(pathToFileURL(join(root, "dist", "rivPreflight.js")).href);
+    check("riv_preflight baseline is null when Core is absent",
+      preflightCoreBaselineR2([{ feature: "Data Binding" }]) === null &&
+      preflightCoreBaselineR2([]) === null &&
+      preflightCoreBaselineR2([{ feature: "Core vector graphics" }]) ===
+        "core vector graphics assumed supported by every runtime; not covered by the evidence table");
   }
 
   // riv_create: 画像埋め込み + グループ + メッシュ頂点アニメ

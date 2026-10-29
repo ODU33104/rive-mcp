@@ -16,6 +16,7 @@ export interface PreflightResult {
   targets: Array<{
     target: PreflightTarget;
     version: string | null;
+    baseline: string | null;
     verdict: "ok" | "warn" | "unsupported" | "unknown";
     issues: PreflightIssue[];
   }>;
@@ -94,6 +95,12 @@ export function compareRuntimeVersion(
   return minimum[2] ? "unknown" : "ok";
 }
 
+export function coreBaseline(features: ReadonlyArray<{ feature: string }>): string | null {
+  return features.some((item) => item.feature === "Core vector graphics")
+    ? "core vector graphics assumed supported by every runtime; not covered by the evidence table"
+    : null;
+}
+
 export async function preflightRiv(
   bytes: Buffer,
   selectedTargets: readonly PreflightTarget[],
@@ -110,6 +117,7 @@ export async function preflightRiv(
     throw new Error("Invalid or truncated .riv: no artboard found");
   }
   const features = detectFeatures(dump.objects);
+  const baseline = coreBaseline(features);
   let runtimeCheck: PreflightResult["runtimeCheck"];
   try {
     const result = await inspectOfficial(bytes);
@@ -131,6 +139,7 @@ export async function preflightRiv(
     let warning = runtimeCheck.officialWasm === "failed";
     let unsupported = false;
     for (const item of features) {
+      if (item.feature === "Core vector graphics") continue;
       const entry = matrixIndex.get(`${item.feature}:\0${target}`);
       if (!entry) {
         uncertain = true;
@@ -207,7 +216,7 @@ export async function preflightRiv(
       : strict && uncertain ? "warn"
       : uncertain ? "unknown"
       : warning ? "warn" : "ok";
-    return { target, version, verdict, issues };
+    return { target, version, baseline, verdict, issues };
   });
   const summary = { ok: 0, warn: 0, unsupported: 0, unknown: 0 };
   for (const item of targets) summary[item.verdict]++;
