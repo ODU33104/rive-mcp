@@ -749,6 +749,100 @@ try {
       typeof entry.source === "string" && entry.source.startsWith("https://") &&
       typeof entry.feature === "string" && typeof entry.target === "string"));
 
+  // Runtime version comparisons use the existing Data Binding fixture.
+  {
+    const { compareRuntimeVersion: preflightVersionCompare } =
+      await import(pathToFileURL(join(root, "dist", "rivPreflight.js")).href);
+    check("riv_preflight accepts numeric versions at or above the minimum",
+      preflightVersionCompare("2.26.6", "2.26.6+") === "ok" &&
+      preflightVersionCompare("2.26.7", "2.26.6+") === "ok" &&
+      preflightVersionCompare("10.0.4", "10.0.4") === "ok" &&
+      preflightVersionCompare("2.26.6.0", "2.26.6+") === "ok");
+    check("riv_preflight compares numeric segments without lexical ordering",
+      preflightVersionCompare("2.9.0", "2.26.6+") === "unsupported" &&
+      preflightVersionCompare("10.0.0", "9.99.99+") === "ok");
+    check("riv_preflight leaves equal prerelease numeric versions unverified",
+      preflightVersionCompare("0.14.0", "0.14.0-dev.1") === "unknown" &&
+      preflightVersionCompare("0.3.3", "0.3.3-canary.72+") === "unknown" &&
+      preflightVersionCompare("0.14.1", "0.14.0-dev.1") === "ok" &&
+      preflightVersionCompare("0.13.9", "0.14.0-dev.1") === "unsupported");
+
+    const preflightVersionHighCall = await callTool("riv_preflight", {
+      path: preflightBindingPath, targets: ["web"], versions: { web: "99.0.0" },
+    });
+    const preflightVersionHigh = preflightVersionHighCall.isError ? null : JSON.parse(textOf(preflightVersionHighCall));
+    check("riv_preflight sufficient web version clears the Data Binding issue",
+      !preflightVersionHighCall.isError &&
+      preflightVersionHigh?.targets[0]?.version === "99.0.0" &&
+      !preflightVersionHigh?.targets[0]?.issues.some((issue) => issue.feature === "Data Binding") &&
+      preflightVersionHigh?.features.some((entry) => entry.feature === "Data Binding"),
+      textOf(preflightVersionHighCall).slice(0, 350));
+    check("riv_preflight unknown matrix entries stay unknown with a version",
+      preflightVersionHigh?.targets[0]?.verdict === "unknown" &&
+      preflightVersionHigh.targets[0].issues.some((issue) =>
+        issue.feature === "Core vector graphics" && issue.source === "unverified"));
+
+    const preflightVersionLowCall = await callTool("riv_preflight", {
+      path: preflightBindingPath, targets: ["web"], versions: { web: "2.0.0" },
+    });
+    const preflightVersionLow = preflightVersionLowCall.isError ? null : JSON.parse(textOf(preflightVersionLowCall));
+    check("riv_preflight older web runtime is unsupported with compared minimum",
+      !preflightVersionLowCall.isError &&
+      preflightVersionLow?.targets[0]?.verdict === "unsupported" &&
+      preflightVersionLow.targets[0].issues.some((issue) =>
+        issue.feature === "Data Binding" &&
+        issue.reason.includes("2.0.0") && issue.reason.includes("2.26.6+")),
+      textOf(preflightVersionLowCall).slice(0, 350));
+
+    check("riv_preflight unspecified target retains unknown minimum evidence",
+      preflightBinding?.targets.find((entry) => entry.target === "web")?.version === null &&
+      preflightBinding?.targets.find((entry) => entry.target === "web")?.verdict === "unknown" &&
+      preflightBinding.targets.find((entry) => entry.target === "web").issues.some((issue) =>
+        issue.feature === "Data Binding" && issue.reason.includes("2.26.6+")));
+
+    const preflightVersionPrereleaseCall = await callTool("riv_preflight", {
+      path: preflightBindingPath, targets: ["flutter"], versions: { flutter: "0.14.0" },
+    });
+    const preflightVersionPrerelease = preflightVersionPrereleaseCall.isError ? null :
+      JSON.parse(textOf(preflightVersionPrereleaseCall));
+    check("riv_preflight matching prerelease numeric version stays unknown",
+      !preflightVersionPrereleaseCall.isError &&
+      preflightVersionPrerelease?.targets[0]?.verdict === "unknown" &&
+      preflightVersionPrerelease.targets[0].issues.some((issue) =>
+        issue.feature === "Data Binding" && issue.reason.includes("prerelease ordering not verified")),
+      textOf(preflightVersionPrereleaseCall).slice(0, 350));
+
+    for (const invalidRuntimeVersion of ["2.x", "2.20.0-beta", ""]) {
+      const preflightVersionInvalidCall = await callTool("riv_preflight", {
+        path: preflightBindingPath, targets: ["web"], versions: { web: invalidRuntimeVersion },
+      });
+      let preflightVersionInvalidJson = null;
+      try { preflightVersionInvalidJson = JSON.parse(textOf(preflightVersionInvalidCall)); } catch {}
+      check(`riv_preflight rejects invalid version ${JSON.stringify(invalidRuntimeVersion)} as JSON`,
+        !!preflightVersionInvalidCall.isError &&
+        typeof preflightVersionInvalidJson?.error === "string" &&
+        preflightVersionInvalidJson.error.includes("Invalid version"),
+        textOf(preflightVersionInvalidCall).slice(0, 250));
+    }
+    const preflightVersionUnknownTargetCall = await callTool("riv_preflight", {
+      path: preflightShapePath, targets: ["web"], versions: { "unrecognized-runtime": "2.0.0" },
+    });
+    let preflightVersionUnknownTargetJson = null;
+    try { preflightVersionUnknownTargetJson = JSON.parse(textOf(preflightVersionUnknownTargetCall)); } catch {}
+    check("riv_preflight unknown version target returns JSON error",
+      !!preflightVersionUnknownTargetCall.isError &&
+      preflightVersionUnknownTargetJson?.error.includes("Unknown target"));
+
+    const preflightVersionOutsideCall = await callTool("riv_preflight", {
+      path: preflightShapePath, targets: ["web"], versions: { ios: "6.0.0" },
+    });
+    let preflightVersionOutsideJson = null;
+    try { preflightVersionOutsideJson = JSON.parse(textOf(preflightVersionOutsideCall)); } catch {}
+    check("riv_preflight version outside selected targets returns JSON error",
+      !!preflightVersionOutsideCall.isError &&
+      preflightVersionOutsideJson?.error.includes("not selected"));
+  }
+
   // riv_create: 画像埋め込み + グループ + メッシュ頂点アニメ
   const tinyPng = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",

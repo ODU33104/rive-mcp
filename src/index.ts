@@ -18,7 +18,7 @@ import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
 import { decodeDataBinding } from "./dataBinding.js";
 import { lintRiv } from "./rivLint.js";
-import { preflightRiv, preflightTargets } from "./rivPreflight.js";
+import { preflightRiv, preflightTargets, preflightVersions } from "./rivPreflight.js";
 import { repairRiv, type RepairFix } from "./rivRepair.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
@@ -535,18 +535,20 @@ server.registerTool(
   "riv_preflight",
   {
     title: "Check .riv runtime compatibility",
-    description: "Detect features from .riv object typeKeys, check evidenced target-runtime support and minimum versions, and try loading the file in the bundled official WASM runtime. Unverified compatibility remains unknown.",
+    description: "Detect .riv features and compare optional target runtime versions with documented minimums. Report unsupported, conditional, or unverified support, and inspect the file with bundled official WASM.",
     inputSchema: {
       path: z.string().describe("Path to the .riv file"),
       targets: z.array(z.string()).optional().describe("Target runtimes (default: all supported target names)"),
+      versions: z.record(z.string(), z.string()).optional().describe("Target runtime versions as numeric dotted strings"),
       strict: z.boolean().optional().describe("Count unverified compatibility as a warning (default false)"),
     },
   },
-  wrap(async ({ path, targets, strict }: { path: string; targets?: string[]; strict?: boolean }) => {
+  wrap(async ({ path, targets, versions, strict }: { path: string; targets?: string[]; versions?: Record<string, string>; strict?: boolean }) => {
     try {
       const requested = preflightTargets(targets);
+      const validatedVersions = preflightVersions(versions, requested);
       const { bytes } = loadRiv(path);
-      const report = await preflightRiv(bytes, requested, strict ?? false, (input) => host.inspect(input));
+      const report = await preflightRiv(bytes, requested, strict ?? false, (input) => host.inspect(input), validatedVersions);
       return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
     } catch (e) {
       return {

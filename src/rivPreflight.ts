@@ -1,7 +1,7 @@
 import { readRiv, type RivObject } from "./rivBinary.js";
 import {
   PREFLIGHT_MATRIX, PREFLIGHT_TARGETS, type PreflightTarget,
-  type PreflightMatrixEntry,
+  type PreflightMatrixEntry, type PreflightVersions,
 } from "./preflightMatrix.js";
 
 export interface PreflightIssue {
@@ -15,6 +15,7 @@ export interface PreflightResult {
   features: Array<{ feature: string; count: number; where?: string[] }>;
   targets: Array<{
     target: PreflightTarget;
+    version: string | null;
     verdict: "ok" | "warn" | "unsupported" | "unknown";
     issues: PreflightIssue[];
   }>;
@@ -76,11 +77,29 @@ const matrixIndex = new Map<string, PreflightMatrixEntry>(
   PREFLIGHT_MATRIX.map((row) => [`${row.feature}:\0${row.target}`, row]),
 );
 
+export function compareRuntimeVersion(
+  version: string,
+  minimumVersion: string,
+): "ok" | "unsupported" | "unknown" {
+  const minimum = /^(\d+(?:\.\d+)*)(-[0-9A-Za-z.-]+)?\+?$/.exec(minimumVersion);
+  if (!minimum) return "unknown";
+  const actualParts = version.split(".").map((part) => BigInt(part));
+  const minimumParts = minimum[1].split(".").map((part) => BigInt(part));
+  for (let i = 0; i < Math.max(actualParts.length, minimumParts.length); i++) {
+    const actualPart = actualParts[i] ?? 0n;
+    const minimumPart = minimumParts[i] ?? 0n;
+    if (actualPart > minimumPart) return "ok";
+    if (actualPart < minimumPart) return "unsupported";
+  }
+  return minimum[2] ? "unknown" : "ok";
+}
+
 export async function preflightRiv(
   bytes: Buffer,
   selectedTargets: readonly PreflightTarget[],
   strict: boolean,
   inspectOfficial: (bytes: Buffer) => Promise<{ artboardCount: number }>,
+  versions: PreflightVersions = {},
 ): Promise<PreflightResult> {
   if (bytes.length < 8 || bytes.toString("latin1", 0, 4) !== "RIVE") {
     throw new Error("Invalid or truncated .riv header");
@@ -106,6 +125,7 @@ export async function preflightRiv(
   }
 
   const targets: PreflightResult["targets"] = selectedTargets.map((target) => {
+    const version = Object.prototype.hasOwnProperty.call(versions, target) ? versions[target] ?? null : null;
     const issues: PreflightIssue[] = [];
     let uncertain = false;
     let warning = runtimeCheck.officialWasm === "failed";
@@ -139,6 +159,32 @@ export async function preflightRiv(
         });
         continue;
       }
+      if (version !== null) {
+        const comparison = compareRuntimeVersion(version, entry.minimumVersion);
+        if (comparison === "unsupported") {
+          unsupported = true;
+          issues.push({
+            feature: item.feature,
+            reason: `Runtime version ${version} is below minimum version ${entry.minimumVersion}.`,
+            source: entry.source,
+          });
+        } else if (comparison === "unknown") {
+          uncertain = true;
+          issues.push({
+            feature: item.feature,
+            reason: `Runtime version ${version} and minimum version ${entry.minimumVersion}: prerelease ordering not verified.`,
+            source: entry.source,
+          });
+        } else if (entry.support === "conditional") {
+          warning = true;
+          issues.push({
+            feature: item.feature,
+            reason: `${entry.note} Runtime version ${version} meets minimum version ${entry.minimumVersion}; renderer support remains unverified.`,
+            source: entry.source,
+          });
+        }
+        continue;
+      }
       if (entry.support === "conditional") warning = true;
       else uncertain = true;
       const threshold = `version ${entry.minimumVersion}`;
@@ -161,7 +207,7 @@ export async function preflightRiv(
       : strict && uncertain ? "warn"
       : uncertain ? "unknown"
       : warning ? "warn" : "ok";
-    return { target, verdict, issues };
+    return { target, version, verdict, issues };
   });
   const summary = { ok: 0, warn: 0, unsupported: 0, unknown: 0 };
   for (const item of targets) summary[item.verdict]++;
@@ -178,4 +224,26 @@ export function preflightTargets(value?: string[]): PreflightTarget[] {
     throw new Error(`Unknown target(s): ${invalid.join(", ")}. Supported: ${PREFLIGHT_TARGETS.join(", ")}`);
   }
   return [...new Set(value)] as PreflightTarget[];
+}
+
+export function preflightVersions(
+  value: Record<string, string> | undefined,
+  selectedTargets: readonly PreflightTarget[],
+): PreflightVersions {
+  if (value === undefined) return {};
+  const keys = Object.keys(value);
+  const invalid = keys.filter((key) => !PREFLIGHT_TARGETS.some((target) => target === key));
+  if (invalid.length) {
+    throw new Error(`Unknown target(s): ${invalid.join(", ")}. Supported: ${PREFLIGHT_TARGETS.join(", ")}`);
+  }
+  const outside = keys.filter((key) => !selectedTargets.some((target) => target === key));
+  if (outside.length) {
+    throw new Error(`Version target(s) not selected: ${outside.join(", ")}. Selected: ${selectedTargets.join(", ")}`);
+  }
+  for (const [target, version] of Object.entries(value)) {
+    if (typeof version !== "string" || !/^\d+(?:\.\d+)*$/.test(version)) {
+      throw new Error(`Invalid version for target ${target}: ${JSON.stringify(version)}. Expected numeric dotted version.`);
+    }
+  }
+  return value as PreflightVersions;
 }

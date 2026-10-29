@@ -5,6 +5,7 @@ export const PREFLIGHT_TARGETS = [
 ] as const;
 
 export type PreflightTarget = (typeof PREFLIGHT_TARGETS)[number];
+export type PreflightVersions = Partial<Record<PreflightTarget, string>>;
 export type PreflightFeature =
   | "Data Binding" | "Layout" | "Vector Feathering" | "Scripting"
   | "Audio" | "Text" | "Text Follow Path" | "N-Slicing";
