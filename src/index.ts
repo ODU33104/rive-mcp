@@ -18,6 +18,7 @@ import { generateCode, type Framework } from "./codegen.js";
 import { readRiv } from "./rivBinary.js";
 import { decodeDataBinding } from "./dataBinding.js";
 import { lintRiv } from "./rivLint.js";
+import { repairRiv, type RepairFix } from "./rivRepair.js";
 import { createRiv, type SceneSpec } from "./rivWriter.js";
 import { editRiv, type EditOp } from "./rivEdit.js";
 import { optimizeRiv } from "./rivOptimize.js";
@@ -548,6 +549,158 @@ server.registerTool(
       findings,
     };
     return { content: [{ type: "text", text: JSON.stringify(summary, null, 2) }] };
+  })
+);
+
+// ---- riv_repair ----------------------------------------------------------
+server.registerTool(
+  "riv_repair",
+  {
+    title: "Repair safe .riv lint findings",
+    description: "Repair lint findings one change at a time. Compare pixels for each candidate, skip visual changes with reasons, and validate the final result before writing. dryRun never writes.",
+    inputSchema: {
+      path: z.string().describe("Source .riv path"),
+      out: z.string().optional().describe("Output path (default: overwrite source)"),
+      dryRun: z.boolean().optional().describe("Inspect and validate without writing (default false)"),
+      fixes: z.array(z.enum(["unused-input", "dead-easing", "broken-reference", "unused-interpolator"])).optional()
+        .describe("Selected fix types (default all supported types)"),
+    },
+  },
+  wrap(async ({ path, out, dryRun, fixes }: {
+    path: string;
+    out?: string;
+    dryRun?: boolean;
+    fixes?: RepairFix[];
+  }) => {
+    const { bytes, abs } = loadRiv(path);
+    const original = Buffer.from(bytes);
+    const planned = repairRiv(original, fixes);
+    let current = original;
+    const applied: Array<{ fix: RepairFix; count: number; detail: string }> = [];
+    const skipped = [...planned.report.skipped];
+    const removedPositions: number[] = [];
+    const priority: RepairFix[] = ["broken-reference", "dead-easing", "unused-input", "unused-interpolator"];
+    const candidates = [...planned.candidates].sort((a, b) =>
+      priority.indexOf(a.rule) - priority.indexOf(b.rule) || b.objectIndex - a.objectIndex);
+
+    const compare = async (firstBytes: Buffer, nextBytes: Buffer): Promise<{
+      frames: number;
+      maxDiffPixels: number;
+      identical: boolean;
+      reason?: string;
+    }> => {
+      const beforeInfo = await host.inspect(firstBytes);
+      const afterInfo = await host.inspect(nextBytes);
+      if (beforeInfo.artboardCount !== afterInfo.artboardCount) {
+        return { frames: 0, maxDiffPixels: 0, identical: false, reason: "artboard count changed" };
+      }
+      let frames = 0;
+      let maxDiffPixels = 0;
+      for (let index = 0; index < beforeInfo.artboards.length; index++) {
+        const before = beforeInfo.artboards[index];
+        const after = afterInfo.artboards[index];
+        if (!after || before.name !== after.name ||
+            before.animations.map((a) => a.name).join("\u0000") !== after.animations.map((a) => a.name).join("\u0000") ||
+            before.stateMachines.map((s) => s.name).join("\u0000") !== after.stateMachines.map((s) => s.name).join("\u0000")) {
+          return { frames, maxDiffPixels, identical: false, reason: "scene structure changed" };
+        }
+        const scenes: Array<Record<string, unknown>> = [{ artboard: before.name }];
+        for (const anim of before.animations) scenes.push({ artboard: before.name, animation: anim.name });
+        for (const sm of before.stateMachines) scenes.push({ artboard: before.name, stateMachine: sm.name });
+        for (const scene of scenes) {
+          for (const startTime of [0, 0.25, 0.75]) {
+            const opts = { ...scene, width: 160, height: 160, format: "rgba", frameCount: 2, fps: 60, startTime };
+            const [first, second] = await Promise.all([
+              host.renderFrames(firstBytes, opts),
+              host.renderFrames(nextBytes, opts),
+            ]);
+            if (first.width !== second.width || first.height !== second.height ||
+                first.frames.length !== second.frames.length ||
+                JSON.stringify(first.states) !== JSON.stringify(second.states)) {
+              return { frames, maxDiffPixels, identical: false, reason: "rendered state or dimensions changed" };
+            }
+            for (let n = 0; n < first.frames.length; n++) {
+              const a = Buffer.from(first.frames[n], "base64");
+              const b = Buffer.from(second.frames[n], "base64");
+              if (a.length !== b.length || a.length !== first.width * first.height * 4) {
+                return { frames, maxDiffPixels, identical: false, reason: "RGBA frame dimensions changed" };
+              }
+              let diffPixels = 0;
+              for (let pixel = 0; pixel < a.length; pixel += 4) {
+                if (a[pixel] !== b[pixel] || a[pixel + 1] !== b[pixel + 1] ||
+                    a[pixel + 2] !== b[pixel + 2] || a[pixel + 3] !== b[pixel + 3]) {
+                  diffPixels++;
+                }
+              }
+              maxDiffPixels = Math.max(maxDiffPixels, diffPixels);
+              frames++;
+            }
+          }
+        }
+      }
+      return { frames, maxDiffPixels, identical: maxDiffPixels === 0,
+        ...(maxDiffPixels > 0 ? { reason: "rendered pixels changed" } : {}) };
+    };
+
+    for (const action of candidates) {
+      const currentIndex = action.objectIndex -
+        removedPositions.filter((position) => position < action.objectIndex).length;
+      let trial: ReturnType<typeof repairRiv>;
+      try {
+        trial = repairRiv(current, [action.rule], { rule: action.rule, objectIndex: currentIndex });
+      } catch (error) {
+        skipped.push({ rule: action.rule, reason: "Object #" + action.objectIndex +
+          ": repair validation failed: " + (error instanceof Error ? error.message : String(error)) });
+        continue;
+      }
+      if (trial.candidates.length !== 1) {
+        skipped.push({ rule: action.rule, reason: "Object #" + action.objectIndex +
+          ": candidate is no longer eligible for safe repair" });
+        continue;
+      }
+      if (planned.report.before.byRule["infinite-loop-risk"]) {
+        skipped.push({ rule: action.rule, reason: "Object #" + action.objectIndex +
+          ": cannot validate rendering with an unconditional state-machine loop" });
+        continue;
+      }
+      let visual: Awaited<ReturnType<typeof compare>>;
+      try {
+        visual = await compare(current, Buffer.from(trial.bytes));
+      } catch (error) {
+        skipped.push({ rule: action.rule, reason: "Object #" + action.objectIndex +
+          ": rendering could not be verified: " + (error instanceof Error ? error.message : String(error)) });
+        continue;
+      }
+      if (!visual.identical) {
+        skipped.push({ rule: action.rule, reason: "Object #" + action.objectIndex + ": " +
+          (action.rule === "broken-reference" ? "removal changes rendered output" : "repair changes rendered output") +
+          " (" + (visual.reason ?? "pixel mismatch") + ", maxDiffPixels=" + visual.maxDiffPixels +
+          ", frames=" + visual.frames + ")" });
+        continue;
+      }
+      current = Buffer.from(trial.bytes);
+      applied.push({ fix: action.rule, count: 1, detail: "Object #" + action.objectIndex + ": " + action.detail });
+      if (action.rule === "unused-input" || action.rule === "unused-interpolator") {
+        removedPositions.push(action.objectIndex);
+      }
+    }
+
+    let finalVisual = { frames: 0, maxDiffPixels: 0, identical: true };
+    if (applied.length > 0) {
+      finalVisual = await compare(original, current);
+      if (!finalVisual.identical) throw new Error("Final repair changes rendered output; no file was written");
+    }
+    const after = repairRiv(current, []);
+    const report = {
+      applied,
+      skipped,
+      before: planned.report.before,
+      after: after.report.before,
+      bytes: { before: original.length, after: current.length },
+      visual: finalVisual,
+    };
+    if (!dryRun) writeFileSync(resolve(out ?? abs), current);
+    return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
   })
 );
 

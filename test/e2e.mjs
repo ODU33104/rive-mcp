@@ -1,6 +1,6 @@
 // stdio JSON-RPC で実サーバーを spawn し全ツールを実呼び出しする E2E テスト
 import { spawn } from "node:child_process";
-import { existsSync, statSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, statSync, readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { connect as netConnect } from "node:net";
@@ -10,6 +10,17 @@ import { inflateSync } from "node:zlib";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const RIV = join(root, "samples", "vehicles.riv");
+
+function listSampleEntries(dir) {
+  const entries = [];
+  for (const item of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, item.name);
+    entries.push(path);
+    if (item.isDirectory()) entries.push(...listSampleEntries(path));
+  }
+  return entries;
+}
+const originalSampleEntries = new Set(listSampleEntries(join(root, "samples")));
 
 // ---- 共有(読み取り専用)テスト用の小道具 ----
 function firstLanIp() {
@@ -178,7 +189,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 32 tools", names.length === 32, names.join(","));
+  check("tools/list has 33 tools", names.length === 33, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -1574,6 +1585,174 @@ try {
     }
   }
 
+
+  // riv_repair: safe structural edits, visual equality, and idempotence.
+  {
+    const { readRiv, writeRawRiv, loadDefs } = await import("../dist/rivBinary.js");
+    const defs = loadDefs();
+    if (!defs) throw new Error("Rive definitions missing");
+    const fixtureDir = join(root, "local");
+    mkdirSync(fixtureDir, { recursive: true });
+    const sourcePath = join(fixtureDir, "e2e-repair-source.riv");
+    const outputPath = join(fixtureDir, "e2e-repair-output.riv");
+    const previewPath = join(fixtureDir, "e2e-repair-preview.riv");
+    const secondPath = join(fixtureDir, "e2e-repair-second.riv");
+    const vehiclesPath = join(fixtureDir, "e2e-repair-vehicles.riv");
+    const hugePath = join(fixtureDir, "e2e-repair-large.riv");
+    const createResult = await callTool("riv_create", {
+      outPath: sourcePath,
+      scene: {
+        artboard: { width: 120, height: 120 },
+        shapes: [{ id: "dot", type: "rect", x: 24, y: 35, width: 20, height: 20, fill: { color: "#e94560" } }],
+        animations: [{
+          name: "Move", duration: 60, loop: "oneShot",
+          tracks: [{
+            target: "dot", property: "x",
+            keyframes: [
+              { frame: 0, value: 15 },
+              { frame: 20, value: 40, easing: "ease-in" },
+              { frame: 40, value: 65, easing: "ease-out" },
+              { frame: 60, value: 25 },
+            ],
+          }],
+        }],
+        stateMachine: {
+          name: "Switch",
+          inputs: [{ name: "internalFlag", type: "bool" }],
+          states: [{ name: "still", animation: "Move" }],
+          transitions: [{ from: "entry", to: "still" }],
+        },
+      },
+    });
+    check("riv_repair source creation", !createResult.isError, textOf(createResult).slice(0, 250));
+    const dump = readRiv(readFileSync(sourcePath));
+    const keyframes = dump.objects.filter((o) => o.typeName === "KeyFrameDouble");
+    const input = dump.objects.find((o) => o.typeName === "StateMachineBool");
+    if (keyframes.length !== 4 || !input) throw new Error("Repair source structure differs from expectations");
+    const typeKey = defs.types.InterpolatingKeyFrame.properties.interpolationType.key;
+    const idKey = defs.types.InterpolatingKeyFrame.properties.interpolatorId.key;
+    const publicKey = defs.types.StateMachineInput.properties.public.key;
+    const firstId = keyframes[0].raw.find((p) => p.key === idKey)?.value;
+    if (typeof firstId !== "number") throw new Error("Cubic easing reference missing");
+    input.raw.push({ key: publicKey, fieldType: 0, value: 0 });
+    // A linear segment may carry an unused invalid easing reference.
+    keyframes[1].raw = keyframes[1].raw.filter((p) => p.key !== idKey);
+    const secondKind = keyframes[1].raw.find((p) => p.key === typeKey);
+    if (!secondKind) throw new Error("Second interpolation missing");
+    secondKind.value = 1;
+    keyframes[2].raw.push({ key: idKey, fieldType: 0, value: 999999 });
+    const finalKind = keyframes[3].raw.find((p) => p.key === typeKey);
+    if (!finalKind) throw new Error("Final interpolation missing");
+    finalKind.value = 2;
+    keyframes[3].raw.push({ key: idKey, fieldType: 0, value: firstId });
+    writeFileSync(sourcePath, writeRawRiv(dump));
+
+    const lintBefore = await callTool("riv_lint", { path: sourcePath });
+    const baselineFindings = JSON.parse(textOf(lintBefore)).findings;
+    check("riv_repair fixture contains safe findings",
+      !lintBefore.isError &&
+      baselineFindings.some((f) => f.rule === "broken-reference") &&
+      baselineFindings.some((f) => f.rule === "dead-easing") &&
+      baselineFindings.some((f) => f.rule === "unused-input"),
+      JSON.stringify(baselineFindings).slice(0, 500));
+
+    rmSync(previewPath, { force: true });
+    const preview = await callTool("riv_repair", { path: sourcePath, out: previewPath, dryRun: true });
+    const previewReport = preview.isError ? null : JSON.parse(textOf(preview));
+    check("riv_repair dryRun never writes", !preview.isError && !existsSync(previewPath) &&
+      previewReport?.applied.length >= 1 && previewReport?.skipped.some(
+        (entry) => entry.rule === "broken-reference" && entry.reason.includes("removal changes rendered output")
+      ), textOf(preview).slice(0, 500));
+
+    const repaired = await callTool("riv_repair", { path: sourcePath, out: outputPath });
+    const report = repaired.isError ? null : JSON.parse(textOf(repaired));
+    check("riv_repair applies the private unused input fix",
+      !repaired.isError &&
+      report?.applied.some((entry) => entry.fix === "unused-input" && entry.count === 1 && !!entry.detail),
+      textOf(repaired).slice(0, 900));
+    check("riv_repair preserves referenced final easing",
+      !repaired.isError &&
+      !report?.applied.some((entry) => entry.fix === "dead-easing") &&
+      report?.skipped.some((entry) => entry.rule === "dead-easing" &&
+        entry.reason.includes("final keyframe easing is not applied; not rewritten")),
+      textOf(repaired).slice(0, 900));
+    const finalKeys = readRiv(readFileSync(outputPath)).objects.filter((o) => o.typeName === "KeyFrameDouble");
+    check("riv_repair leaves final interpolation properties unchanged",
+      finalKeys.length === keyframes.length &&
+      finalKeys[finalKeys.length - 1].raw.find((p) => p.key === typeKey)?.value === 2 &&
+      finalKeys[finalKeys.length - 1].raw.find((p) => p.key === idKey)?.value === firstId);
+    check("riv_repair skips reference removal that changes pixels",
+      !repaired.isError && !report?.applied.some((entry) => entry.fix === "broken-reference") &&
+      report?.skipped.some((entry) =>
+        entry.rule === "broken-reference" && entry.reason.includes("removal changes rendered output")),
+      textOf(repaired).slice(0, 700));
+    check("riv_repair returns the specified report shape",
+      !repaired.isError &&
+      typeof report?.before.lintCount === "number" &&
+      typeof report?.before.byRule["broken-reference"] === "number" &&
+      typeof report?.after.lintCount === "number" &&
+      typeof report?.after.byRule === "object" &&
+      report?.bytes.before === readFileSync(sourcePath).length &&
+      report?.bytes.after === readFileSync(outputPath).length,
+      textOf(repaired).slice(0, 900));
+    check("riv_repair frame comparison is identical",
+      !repaired.isError && report?.visual.identical === true &&
+      report?.visual.frames > 0 && report?.visual.maxDiffPixels === 0,
+      JSON.stringify(report?.visual));
+    const afterLint = await callTool("riv_lint", { path: outputPath });
+    const afterCount = JSON.parse(textOf(afterLint)).findings.length;
+    check("riv_repair decreases lint findings", !afterLint.isError &&
+      afterCount < baselineFindings.length && report?.after.lintCount === afterCount,
+      `${baselineFindings.length} -> ${afterCount}`);
+    const inspected = await callTool("riv_inspect", { path: outputPath });
+    check("riv_repair result loads in the official runtime",
+      !inspected.isError && JSON.parse(textOf(inspected)).artboardCount === 1,
+      textOf(inspected).slice(0, 250));
+    for (const time of [0, 0.5]) {
+      const first = await callTool("riv_render_frame", { path: sourcePath, animation: "Move", time });
+      const next = await callTool("riv_render_frame", { path: outputPath, animation: "Move", time });
+      const firstPng = (first.content || []).find((c) => c.type === "image")?.data;
+      const nextPng = (next.content || []).find((c) => c.type === "image")?.data;
+      check("riv_repair rendered pixels match at " + time,
+        !first.isError && !next.isError && !!firstPng && firstPng === nextPng,
+        `time=${time} errors=${first.isError}/${next.isError}`);
+    }
+
+    const secondRun = await callTool("riv_repair", { path: outputPath, out: secondPath });
+    check("riv_repair is idempotent",
+      !secondRun.isError && JSON.parse(textOf(secondRun)).applied.length === 0 &&
+      readFileSync(secondPath).equals(readFileSync(outputPath)),
+      textOf(secondRun).slice(0, 350));
+
+    const hugeDump = readRiv(readFileSync(outputPath));
+    hugeDump.objects.push({
+      typeKey: defs.types.FileAssetContents.typeKey,
+      raw: [{ key: defs.types.FileAssetContents.properties.bytes.key, fieldType: 1, value: new Uint8Array(510000) }],
+    });
+    writeFileSync(hugePath, writeRawRiv(hugeDump));
+    const hugeResult = await callTool("riv_repair", { path: hugePath, dryRun: true, fixes: [] });
+    check("riv_repair reports huge assets as skipped with a reason",
+      !hugeResult.isError && JSON.parse(textOf(hugeResult)).skipped.some(
+        (entry) => entry.rule === "huge-asset" && !!entry.reason
+      ), textOf(hugeResult).slice(0, 400));
+
+    const originalVehicles = readFileSync(RIV);
+    const { repairRiv } = await import("../dist/rivRepair.js");
+    const plannedVehicles = repairRiv(originalVehicles);
+    check("riv_repair plans no edits for healthy vehicles",
+      plannedVehicles.report.applied.length === 0 &&
+      plannedVehicles.candidates.length === 0 &&
+      Buffer.from(plannedVehicles.bytes).equals(originalVehicles),
+      JSON.stringify(plannedVehicles.report.applied).slice(0, 400));
+    const vehiclesResult = await callTool("riv_repair", { path: RIV, out: vehiclesPath });
+    const vehiclesReport = vehiclesResult.isError ? null : JSON.parse(textOf(vehiclesResult));
+    check("riv_repair preserves healthy vehicles byte for byte",
+      !vehiclesResult.isError && vehiclesReport?.applied.length === 0 &&
+      vehiclesReport?.visual.frames === 0 &&
+      existsSync(vehiclesPath) && readFileSync(vehiclesPath).equals(originalVehicles),
+      textOf(vehiclesResult).slice(0, 400));
+  }
+
   // エラー処理: 存在しないアニメ名 → 候補列挙
   const bad = await callTool("riv_render_frame", { path: RIV, animation: "__nope__" });
   check(
@@ -1588,5 +1767,12 @@ try {
   failures++;
 } finally {
   child.kill();
+  for (const path of listSampleEntries(join(root, "samples"))
+    .filter((entry) => !originalSampleEntries.has(entry))
+    .sort((a, b) => b.length - a.length)) {
+    rmSync(path, { recursive: true, force: true });
+  }
+  check("samples contains no new test outputs",
+    listSampleEntries(join(root, "samples")).every((entry) => originalSampleEntries.has(entry)));
   process.exit(failures === 0 ? 0 : 1);
 }
