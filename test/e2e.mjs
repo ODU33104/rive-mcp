@@ -189,7 +189,7 @@ try {
   const tools = await rpc("tools/list", {});
   const names = tools.tools.map((t) => t.name).sort();
   console.log("tools:", names.join(", "));
-  check("tools/list has 33 tools", names.length === 33, names.join(","));
+  check("tools/list has 34 tools", names.length === 34, names.join(","));
 
   // riv_list
   const list = await callTool("riv_list", { dir: join(root, "samples") });
@@ -1751,6 +1751,104 @@ try {
       vehiclesReport?.visual.frames === 0 &&
       existsSync(vehiclesPath) && readFileSync(vehiclesPath).equals(originalVehicles),
       textOf(vehiclesResult).slice(0, 400));
+  }
+
+  // riv_export_lottie: basic shape animation, timing, losses, and import round-trip
+  const lottieExpPath = join(root, "samples", "e2e-lottie-export.riv");
+  const lottieExpOut = join(root, "samples", "e2e-lottie-export.lottie.json");
+  const lottieExpScene = {
+    artboard: { name: "LottieExport", width: 160, height: 120 },
+    shapes: [
+      { id: "box", type: "rect", x: 40, y: 60, width: 24, height: 30, fill: { color: "#ff3300" } },
+      { id: "disk", type: "ellipse", x: 110, y: 60, width: 24, height: 24, fill: { color: "#0066ff" } },
+    ],
+    animations: [{
+      name: "shift", fps: 24, duration: 48, loop: "oneShot",
+      tracks: [
+        { target: "box", property: "x", keyframes: [
+          { frame: 0, value: 40 },
+          { frame: 24, value: 80, easing: "ease-in-out" },
+          { frame: 48, value: 100, easing: "hold" },
+        ] },
+        { target: "disk", property: "opacity", keyframes: [
+          { frame: 0, value: 1 }, { frame: 24, value: 0.5 }, { frame: 48, value: 1 },
+        ] },
+      ],
+    }],
+  };
+  const lottieExpCreated = await callTool("riv_create", {
+    outPath: lottieExpPath, scene: lottieExpScene,
+  });
+  check("lottie export fixture validated by official runtime",
+    !lottieExpCreated.isError && textOf(lottieExpCreated).includes("validated"),
+    textOf(lottieExpCreated).slice(0, 180));
+  const lottieExpCall = await callTool("riv_export_lottie", {
+    path: lottieExpPath, out: lottieExpOut,
+  });
+  check("riv_export_lottie returns a JSON report", !lottieExpCall.isError,
+    textOf(lottieExpCall).slice(0, 180));
+  const lottieExpReport = !lottieExpCall.isError
+    ? JSON.parse(textOf(lottieExpCall)) : null;
+  const lottieExpDocument = existsSync(lottieExpOut)
+    ? JSON.parse(readFileSync(lottieExpOut, "utf8")) : null;
+  check("riv_export_lottie writes a nonempty JSON file",
+    !!lottieExpReport && lottieExpReport.out === lottieExpOut &&
+    lottieExpReport.bytes === statSync(lottieExpOut).size &&
+    lottieExpReport.bytes > 0);
+  check("riv_export_lottie preserves required Lottie document fields",
+    !!lottieExpDocument && typeof lottieExpDocument.v === "string" &&
+    ["fr", "ip", "op", "w", "h"].every((key) =>
+      Number.isFinite(lottieExpDocument[key])) &&
+    Array.isArray(lottieExpDocument.layers) && lottieExpDocument.layers.length === 2);
+  check("riv_export_lottie preserves source frame rate and duration",
+    !!lottieExpDocument && lottieExpDocument.fr === 24 &&
+    lottieExpDocument.ip === 0 && lottieExpDocument.op === 48);
+  const lottieExpBox = lottieExpDocument?.layers?.find((layer) => layer.nm === "box");
+  const lottieExpKeys = lottieExpBox?.ks?.p?.x?.k ?? [];
+  check("riv_export_lottie preserves keyframe count and times",
+    lottieExpKeys.length === 3 &&
+    JSON.stringify(lottieExpKeys.map((key) => key.t)) === JSON.stringify([0, 24, 48]));
+  check("riv_export_lottie writes easing on the correct interval",
+    lottieExpKeys[0]?.o?.x === 0.42 && lottieExpKeys[1]?.i?.x === 0.58 &&
+    lottieExpKeys[1]?.h === 1);
+  check("riv_export_lottie reports no loss for simple shapes",
+    !!lottieExpReport && Array.isArray(lottieExpReport.lost) &&
+    lottieExpReport.lost.length === 0,
+    JSON.stringify(lottieExpReport?.lost?.slice(0, 4)));
+  const lottieExpVehicle = await callTool("riv_export_lottie", {
+    path: RIV, out: join(root, "samples", "e2e-vehicles.lottie.json"),
+  });
+  const lottieExpVehicleReport = !lottieExpVehicle.isError
+    ? JSON.parse(textOf(lottieExpVehicle)) : null;
+  check("riv_export_lottie reports state machines in lost",
+    !!lottieExpVehicleReport && lottieExpVehicleReport.lost.some(
+      (entry) => entry.feature === "state machine"),
+    textOf(lottieExpVehicle).slice(0, 160));
+  const lottieExpImportPath = join(root, "samples", "e2e-lottie-roundtrip.scene.json");
+  const lottieExpImported = await callTool("riv_lottie_import", {
+    path: lottieExpOut, outSpec: lottieExpImportPath,
+  });
+  const lottieExpFragment = existsSync(lottieExpImportPath)
+    ? JSON.parse(readFileSync(lottieExpImportPath, "utf8")) : null;
+  check("riv_lottie_import accepts the exported Lottie and restores timing",
+    !lottieExpImported.isError && !!lottieExpFragment &&
+    lottieExpFragment.animations?.[0]?.tracks?.some((track) =>
+      track.property === "x" && track.keyframes.length === 3 &&
+      track.keyframes[1].frame === 24),
+    textOf(lottieExpImported).slice(0, 180));
+  const lottieExpAll = await callTool("riv_export_lottie", {
+    path: lottieExpPath, animation: "all",
+  });
+  check("riv_export_lottie rejects animation=all", !!lottieExpAll.isError);
+  if (lottieExpReport?.verify?.frames > 0) {
+    check("riv_export_lottie pixel difference stays within 2 percent",
+      typeof lottieExpReport.verify.maxDiffPercent === "number" &&
+      lottieExpReport.verify.maxDiffPercent <= 2,
+      JSON.stringify(lottieExpReport.verify));
+  } else {
+    check("riv_export_lottie explicitly marks pixel comparison unverified",
+      lottieExpReport?.verify?.frames === 0 &&
+      lottieExpReport?.verify?.maxDiffPercent === "未確認");
   }
 
   // エラー処理: 存在しないアニメ名 → 候補列挙
