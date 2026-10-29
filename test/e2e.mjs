@@ -1656,24 +1656,42 @@ try {
 
     rmSync(previewPath, { force: true });
     const preview = await callTool("riv_repair", { path: sourcePath, out: previewPath, dryRun: true });
-    const previewReport = JSON.parse(textOf(preview));
+    const previewReport = preview.isError ? null : JSON.parse(textOf(preview));
     check("riv_repair dryRun never writes", !preview.isError && !existsSync(previewPath) &&
-      previewReport.applied.length >= 3, textOf(preview).slice(0, 400));
+      previewReport?.applied.length >= 2 && previewReport?.skipped.some(
+        (entry) => entry.rule === "broken-reference" && entry.reason.includes("removal changes rendered output")
+      ), textOf(preview).slice(0, 500));
 
     const repaired = await callTool("riv_repair", { path: sourcePath, out: outputPath });
-    const report = JSON.parse(textOf(repaired));
-    check("riv_repair applies all four safe fix types",
+    const report = repaired.isError ? null : JSON.parse(textOf(repaired));
+    check("riv_repair applies visually safe fixes",
       !repaired.isError &&
-      ["unused-input", "dead-easing", "broken-reference", "unused-interpolator"]
-        .every((rule) => report.applied.some((entry) => entry.rule === rule)),
+      ["unused-input", "dead-easing"].every((fix) =>
+        report?.applied.some((entry) => entry.fix === fix && entry.count === 1 && !!entry.detail)),
+      textOf(repaired).slice(0, 900));
+    check("riv_repair skips reference removal that changes pixels",
+      !repaired.isError && !report?.applied.some((entry) => entry.fix === "broken-reference") &&
+      report?.skipped.some((entry) =>
+        entry.rule === "broken-reference" && entry.reason.includes("removal changes rendered output")),
+      textOf(repaired).slice(0, 700));
+    check("riv_repair returns the specified report shape",
+      !repaired.isError &&
+      typeof report?.before.lintCount === "number" &&
+      typeof report?.before.byRule["broken-reference"] === "number" &&
+      typeof report?.after.lintCount === "number" &&
+      typeof report?.after.byRule === "object" &&
+      report?.bytes.before === readFileSync(sourcePath).length &&
+      report?.bytes.after === readFileSync(outputPath).length,
       textOf(repaired).slice(0, 900));
     check("riv_repair frame comparison is identical",
-      !repaired.isError && report.visual.identical === true && report.visual.frames > 0,
-      JSON.stringify(report.visual));
+      !repaired.isError && report?.visual.identical === true &&
+      report?.visual.frames > 0 && report?.visual.maxDiffPixels === 0,
+      JSON.stringify(report?.visual));
     const afterLint = await callTool("riv_lint", { path: outputPath });
     const afterCount = JSON.parse(textOf(afterLint)).findings.length;
     check("riv_repair decreases lint findings", !afterLint.isError &&
-      afterCount < baselineFindings.length, `${baselineFindings.length} -> ${afterCount}`);
+      afterCount < baselineFindings.length && report?.after.lintCount === afterCount,
+      `${baselineFindings.length} -> ${afterCount}`);
     const inspected = await callTool("riv_inspect", { path: outputPath });
     check("riv_repair result loads in the official runtime",
       !inspected.isError && JSON.parse(textOf(inspected)).artboardCount === 1,

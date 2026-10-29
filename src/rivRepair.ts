@@ -4,24 +4,26 @@ import { lintRiv, type LintFinding } from "./rivLint.js";
 
 export type RepairFix = "unused-input" | "dead-easing" | "broken-reference" | "unused-interpolator";
 
-export interface RepairAction {
+export interface RepairCandidate {
   rule: RepairFix;
   objectIndex: number;
   detail: string;
 }
 
+export interface RepairAction {
+  fix: RepairFix;
+  count: number;
+  detail: string;
+}
+
 export interface RepairSkip {
   rule: string;
-  objectIndex?: number;
   reason: string;
 }
 
 export interface RepairSummary {
-  total: number;
-  errorCount: number;
-  warningCount: number;
-  infoCount: number;
-  findings: LintFinding[];
+  lintCount: number;
+  byRule: Record<string, number>;
 }
 
 export interface RepairReport {
@@ -29,8 +31,8 @@ export interface RepairReport {
   skipped: RepairSkip[];
   before: RepairSummary;
   after: RepairSummary;
-  bytes: { before: number; after: number; delta: number };
-  visual: { frames: number; identical: boolean };
+  bytes: { before: number; after: number };
+  visual: { frames: number; maxDiffPixels: number; identical: boolean };
 }
 
 const KEYFRAMES = new Set(["KeyFrameDouble", "KeyFrameColor", "KeyFrameId"]);
@@ -38,14 +40,10 @@ const INTERPOLATORS = new Set(["CubicEaseInterpolator", "ElasticInterpolator"]);
 const INPUTS = new Set(["StateMachineBool", "StateMachineNumber", "StateMachineTrigger"]);
 const AVAILABLE: RepairFix[] = ["unused-input", "dead-easing", "broken-reference", "unused-interpolator"];
 
-function summary(findings: LintFinding[]): RepairSummary {
-  return {
-    total: findings.length,
-    errorCount: findings.filter((f) => f.severity === "error").length,
-    warningCount: findings.filter((f) => f.severity === "warning").length,
-    infoCount: findings.filter((f) => f.severity === "info").length,
-    findings,
-  };
+export function repairSummary(findings: LintFinding[]): RepairSummary {
+  const byRule: Record<string, number> = {};
+  for (const finding of findings) byRule[finding.rule] = (byRule[finding.rule] ?? 0) + 1;
+  return { lintCount: findings.length, byRule };
 }
 
 function propertyKey(typeName: string, name: string): number {
@@ -114,7 +112,11 @@ function usedInputs(objects: RivObject[], start: number, end: number): Set<numbe
  * Propose only structural changes whose semantics are fixed by the Rive format.
  * The caller must compare rendered frames before writing any changed bytes.
  */
-export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint8Array; report: RepairReport } {
+export function repairRiv(
+  bytes: Uint8Array,
+  fixes?: RepairFix[],
+  target?: { rule: RepairFix; objectIndex: number }
+): { bytes: Uint8Array; candidates: RepairCandidate[]; report: RepairReport } {
   const selected = new Set(fixes ?? AVAILABLE);
   for (const fix of selected) {
     if (!AVAILABLE.includes(fix)) throw new Error("Unknown repair fix: " + fix);
@@ -127,7 +129,9 @@ export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint
   const dump = readRiv(bytes);
   if (dump.error) throw new Error("Cannot repair a file with a parse error: " + dump.error);
   let objects = dump.objects;
-  const actions: RepairAction[] = [];
+  const actions: RepairCandidate[] = [];
+  const allowed = (rule: RepairFix, index: number) =>
+    selected.has(rule) && (!target || (target.rule === rule && target.objectIndex === index));
   const skips: RepairSkip[] = [];
   const removed = new Set<number>();
   const interpType = propertyKey("InterpolatingKeyFrame", "interpolationType");
@@ -145,7 +149,7 @@ export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint
       if (!KEYFRAMES.has(obj.typeName)) continue;
       const kind = valueOf(obj, interpType) ?? 1;
       const id = valueOf(obj, interpId);
-      if (selected.has("broken-reference") && broken.has(obj.index) &&
+      if (allowed("broken-reference", obj.index) && broken.has(obj.index) &&
           (kind === 0 || kind === 1) && id !== undefined && (id < 0 || id >= end - start)) {
         erase(obj, interpId, "interpolatorId");
         actions.push({ rule: "broken-reference", objectIndex: obj.index, detail: "Discarded unused out-of-range interpolatorId" });
@@ -162,6 +166,7 @@ export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint
         const last = track.reduce((a, b) =>
           Number(a.properties.frame ?? 0) > Number(b.properties.frame ?? 0) ? a : b);
         if (!KEYFRAMES.has(last.typeName) || valueOf(last, interpType) !== 2) continue;
+        if (!allowed("dead-easing", last.index)) continue;
         put(last, interpType, 1);
         erase(last, interpId, "interpolatorId");
         actions.push({ rule: "dead-easing", objectIndex: last.index, detail: "Changed unused final cubic interpolation to linear" });
@@ -181,8 +186,9 @@ export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint
           const pos = inputs[ordinal];
           const inp = objects[pos];
           if (used.has(ordinal) || valueOf(inp, publicKey) !== 0) break;
+          if (target && !allowed("unused-input", inp.index)) break;
           if (!canRemove) {
-            skips.push({ rule: "unused-input", objectIndex: inp.index, reason: "Unknown references prevent safe local index remapping" });
+            skips.push({ rule: "unused-input", reason: "Input #" + inp.index + ": unknown references prevent safe local index remapping" });
             break;
           }
           removed.add(pos);
@@ -202,9 +208,10 @@ export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint
       // Remove only objects orphaned by a dead-easing edit in this run.
       const changedEasing = actions.some((a) => a.rule === "dead-easing" &&
         a.objectIndex >= start && a.objectIndex < end);
-      if (changedEasing) {
+      if (changedEasing || target?.rule === "unused-interpolator") {
         for (let i = start; i < end; i++) {
-          if (INTERPOLATORS.has(objects[i].typeName) && !referenced.has(i)) {
+          if (INTERPOLATORS.has(objects[i].typeName) && !referenced.has(i) &&
+              allowed("unused-interpolator", objects[i].index)) {
             removed.add(i);
             actions.push({ rule: "unused-interpolator", objectIndex: objects[i].index, detail: "Removed unreferenced easing object" });
           }
@@ -238,20 +245,21 @@ export function repairRiv(bytes: Uint8Array, fixes?: RepairFix[]): { bytes: Uint
       remaining.set(key, count - 1);
       skips.push({
         rule: f.rule,
-        ...(f.objectIndex !== undefined ? { objectIndex: f.objectIndex } : {}),
-        reason: selected.has(f.rule as RepairFix) ? "Not provably safe to change automatically" : "Fix not selected or requires manual review",
+        reason: (f.objectIndex !== undefined ? "Object #" + f.objectIndex + ": " : "") +
+          (selected.has(f.rule as RepairFix) ? "Not provably safe to change automatically" : "Fix not selected or requires manual review"),
       });
     }
   }
   return {
     bytes: result,
+    candidates: actions,
     report: {
-      applied: actions,
+      applied: actions.map((action) => ({ fix: action.rule, count: 1, detail: action.detail })),
       skipped: skips,
-      before: summary(originalFindings),
-      after: summary(newFindings),
-      bytes: { before: bytes.length, after: result.length, delta: result.length - bytes.length },
-      visual: { frames: 0, identical: true },
+      before: repairSummary(originalFindings),
+      after: repairSummary(newFindings),
+      bytes: { before: bytes.length, after: result.length },
+      visual: { frames: 0, maxDiffPixels: 0, identical: true },
     },
   };
 }
