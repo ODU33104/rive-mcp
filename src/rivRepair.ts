@@ -19,6 +19,7 @@ export interface RepairAction {
 export interface RepairSkip {
   rule: string;
   reason: string;
+  objectIndex?: number;
 }
 
 export interface RepairSummary {
@@ -129,6 +130,26 @@ export function repairRiv(
     .map((f) => f.objectIndex!));
 
   const bounds = artboards(objects);
+  const reportedDeadEasing = new Set<number>();
+  if (selected.has("dead-easing")) {
+    for (const finding of originalFindings) {
+      if (finding.rule !== "dead-easing" || finding.objectIndex === undefined) continue;
+      const frame = objects[finding.objectIndex];
+      const frameBounds = bounds.find(([start, end]) =>
+        finding.objectIndex! >= start && finding.objectIndex! < end);
+      const ref = frame ? valueOf(frame, interpId) : undefined;
+      if (!frameBounds || ref === undefined) continue;
+      const referenced = frameBounds[0] + ref;
+      if (referenced < frameBounds[0] || referenced >= frameBounds[1] ||
+          !INTERPOLATORS.has(objects[referenced].typeName)) continue;
+      skips.push({
+        rule: "dead-easing",
+        reason: "final keyframe easing is not applied; not rewritten",
+        objectIndex: finding.objectIndex,
+      });
+      reportedDeadEasing.add(finding.objectIndex);
+    }
+  }
   for (const [start, end] of bounds) {
     const canRemove = safeToReindex(objects, start, end);
     for (let i = start; i < end; i++) {
@@ -209,6 +230,8 @@ export function repairRiv(
     remaining.set(key, (remaining.get(key) ?? 0) + 1);
   }
   for (const f of originalFindings) {
+    if (f.rule === "dead-easing" && f.objectIndex !== undefined &&
+        reportedDeadEasing.has(f.objectIndex)) continue;
     const key = f.rule + ":" + (f.objectIndex ?? "") + ":" + f.message;
     const count = remaining.get(key) ?? 0;
     if (count > 0) {
